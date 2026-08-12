@@ -1,208 +1,369 @@
-use anyhow::{Context, Result};
-use aya::{
-    programs::TracePoint,
-    Bpf,
-};
-use aya::maps::perf::PerfBufferReader;
-use aya::maps::PerfEventArray;
-use chrono::Local;
+mod monitor;
+mod tui;
+
+use std::io::{self, IsTerminal, Write};
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::thread;
+use std::time::Duration;
+
+use anyhow::{bail, Context, Result};
 use clap::Parser;
-use colored::*;
-use log::{info, warn, error};
-use std::{
-    collections::HashMap,
-    sync::Arc,
-    time::{Duration, Instant},
-};
-use tokio::sync::Mutex;
+use monitor::{Kind, Monitor, Output};
+use serde_json::json;
 
-const EVENT_EXECVE: u8 = 0;
-const EVENT_OPENAT: u8 = 1;
-const EVENT_COMM_LEN: usize = 16;
-const EVENT_FILENAME_LEN: usize = 64;
+static QUIT: AtomicBool = AtomicBool::new(false);
 
-#[repr(C)]
-struct ProcessEvent {
-    event_type: u8,
-    pid: u32,
-    uid: u32,
-    comm: [i8; EVENT_COMM_LEN],
-    filename: [i8; EVENT_FILENAME_LEN],
-}
-
-unsafe impl aya::Pod for ProcessEvent {}
-
+const BPF_CANDIDATES: &[&str] = &[
+    "target/bpfel-unknown-none/release/process-monitor-ebpf",
+    "target/release/process-monitor-ebpf",
+    "process-monitor-ebpf/target/bpfel-unknown-none/release/process-monitor-ebpf",
+    "/usr/local/lib/halcyon/process-monitor-ebpf",
+];
 #[derive(Parser)]
-#[command(author, version, about = "Real-time process monitor using eBPF")]
+#[command(
+    author,
+    version,
+    about = "eBPF-based real-time process and file monitor",
+    long_about = "Traces execve and openat syscalls via eBPF and watches for \
+                  ransomware-style mass file opening. Runs as a TUI by default."
+)]
 struct Args {
-    #[arg(short, long, default_value = "target/release/process-monitor-ebpf")]
-    bpf: String,
+    /// Path to the compiled eBPF program
+    #[arg(short, long, value_name = "PATH")]
+    bpf: Option<PathBuf>,
 
-    #[arg(long, default_value = "50")]
+    /// Alert when a process opens N+ files within 1 second (0 disables alerts)
+    #[arg(long, default_value_t = 50, value_name = "N")]
     alert_threshold: u64,
 
+    /// Newline-delimited JSON output (no TUI)
     #[arg(long)]
     json: bool,
+
+    /// Plain text log output (no TUI)
+    #[arg(long, conflicts_with = "json")]
+    plain: bool,
+
+    /// Force the TUI even when stdout is not a terminal
+    #[arg(long)]
+    tui: bool,
+
+    /// Run a 5-second end-to-end self-diagnostic and exit
+    #[arg(long, conflicts_with_all = ["json", "plain", "tui"])]
+    diagnose: bool,
 }
 
-#[derive(Debug, Clone)]
-struct FileOpenTracker {
-    count: u64,
-    window_start: Instant,
-}
-
-#[tokio::main]
-async fn main() -> Result<()> {
-    env_logger::init();
+fn main() -> Result<()> {
     let args = Args::parse();
 
-    println!("{}", "Halcyon Process Monitor v0.1.0".bold().cyan());
-    println!("{}", "eBPF-based process and file operation monitoring".dimmed());
-    println!("Alert threshold: {} opens/sec\n", args.alert_threshold);
+    // Give the diagnose mode a clear, helpful non-root message before
+    // Monitor::start would bail with a generic error.
+    if args.diagnose && unsafe { libc::geteuid() } != 0 {
+        eprintln!("run with: sudo process-monitor --diagnose");
+        return Ok(());
+    }
 
-    let bpf = Bpf::load_file(&args.bpf)
-        .context("Failed to load eBPF program")?;
+    let bpf_path = resolve_bpf_path(args.bpf.as_ref())?;
+    let mut monitor = Monitor::start(&bpf_path, args.alert_threshold).with_context(|| {
+        format!(
+            "failed to initialize the eBPF monitor using '{}'",
+            bpf_path.display()
+        )
+    })?;
 
-    let program: &mut TracePoint = bpf
-        .program_mut("sys_enter_execve")
-        .context("Failed to get execve program")?
-        .try_into()?;
-    program.load()?;
-    program.attach("syscalls", "sys_enter_execve")
-        .context("Failed to attach execve")?;
-    println!("{} execve tracepoint", "✓".green());
+    install_signal_handler();
 
-    let program: &mut TracePoint = bpf
-        .program_mut("sys_enter_openat")
-        .context("Failed to get openat program")?
-        .try_into()?;
-    program.load()?;
-    program.attach("syscalls", "sys_enter_openat")
-        .context("Failed to attach openat")?;
-    println!("{} openat tracepoint", "✓".green());
+    let use_tui = args.tui || (!args.json && !args.plain && io::stdout().is_terminal());
 
-    let perf_map: PerfEventArray<ProcessEvent> = bpf
-        .map_mut("EVENTS")
-        .context("Failed to get EVENTS map")?
-        .try_into()?;
+    eprintln!("[halcyon] eBPF program: {}", bpf_path.display());
+    eprintln!("[halcyon] alert threshold: {} file opens/s", args.alert_threshold);
 
-    let tracker = Arc::new(Mutex::new(HashMap::<u32, FileOpenTracker>::new()));
+    if args.diagnose {
+        run_diagnose(&mut monitor)?;
+    } else if use_tui {
+        eprintln!("[halcyon] TUI mode (q quit, p pause, c clear, arrows scroll)");
+        tui::run(&mut monitor)?;
+    } else if args.json {
+        run_json(&mut monitor)?;
+    } else {
+        run_plain(&mut monitor)?;
+    }
 
-    let mut reader = perf_map
-        .reader(512)
-        .context("Failed to create perf buffer reader")?;
-    println!("{} Monitoring started. Press Ctrl+C to stop.\n", "▶".green());
-
-    let tracker_clone = tracker.clone();
-    let alert_threshold = args.alert_threshold;
-    let json_output = args.json;
-
-    tokio::spawn(async move {
-        loop {
-            match reader.read_events(&mut |events| {
-                for event in events.iter() {
-                    let ts = Local::now().format("%H:%M:%S%.3f");
-                    match event.event_type {
-                        EVENT_EXECVE => {
-                            let comm = c_char_array_to_string(&event.comm);
-                            if json_output {
-                                println!(
-                                    r#"{{"ts":"{}","type":"exec","pid":{},"uid":{},"comm":"{}"}}"#,
-                                    ts, event.pid, event.uid, comm
-                                );
-                            } else {
-                                println!(
-                                    "{} {} [{}] {} {} {}",
-                                    ts,
-                                    "EXEC".bold().green(),
-                                    event.pid,
-                                    comm.bold(),
-                                    "by uid".dimmed(),
-                                    event.uid
-                                );
-                            }
-                        }
-                        EVENT_OPENAT => {
-                            let comm = c_char_array_to_string(&event.comm);
-                            let filename = c_char_array_to_string(&event.filename);
-                            let truncated = if filename.len() > 60 {
-                                format!("{}...", &filename[..57])
-                            } else {
-                                filename.clone()
-                            };
-
-                            let mut track = tracker_clone.blocking_lock();
-                            let entry = track.entry(event.pid).or_insert(FileOpenTracker {
-                                count: 0,
-                                window_start: Instant::now(),
-                            });
-
-                            if entry.window_start.elapsed() > Duration::from_secs(1) {
-                                entry.count = 0;
-                                entry.window_start = Instant::now();
-                            }
-                            entry.count += 1;
-
-                            if entry.count >= alert_threshold {
-                                warn!(
-                                    "{} SUSPICIOUS: Process {} ({}) opened {} files in 1s!",
-                                    "⚠".yellow(),
-                                    event.pid,
-                                    comm,
-                                    entry.count
-                                );
-                                entry.count = 0;
-                                entry.window_start = Instant::now();
-                            }
-
-                            if json_output {
-                                let escaped: String = filename
-                                    .chars()
-                                    .flat_map(|c| c.escape_default())
-                                    .collect();
-                                println!(
-                                    r#"{{"ts":"{}","type":"open","pid":{},"uid":{},"comm":"{}","file":"{}"}}"#,
-                                    ts, event.pid, event.uid, comm, escaped
-                                );
-                            } else if !filename.is_empty() {
-                                println!(
-                                    "{} {} [{}] {} \u{2192} {}",
-                                    ts,
-                                    "OPEN".bold().blue(),
-                                    event.pid,
-                                    comm.dimmed(),
-                                    truncated.dimmed()
-                                );
-                            }
-                        }
-                        _ => {
-                            if json_output {
-                                println!(r#"{{"ts":"{}","type":"unknown","pid":{}}}"#, ts, event.pid);
-                            }
-                        }
-                    }
-                }
-            }) {
-                Ok(_) => {}
-                Err(e) => {
-                    error!("Perf buffer error: {}", e);
-                    tokio::time::sleep(Duration::from_millis(100)).await;
-                }
-            }
-        }
-    });
-
-    tokio::signal::ctrl_c().await?;
-    println!();
-    info!("Shutting down...");
+    eprintln!("[halcyon] shutdown complete");
     Ok(())
 }
 
-fn c_char_array_to_string(arr: &[i8]) -> String {
-    let bytes: Vec<u8> = arr
-        .iter()
-        .take_while(|&&c| c != 0)
-        .map(|&c| c as u8)
-        .collect();
-    String::from_utf8_lossy(&bytes).to_string()
+fn resolve_bpf_path(explicit: Option<&PathBuf>) -> Result<PathBuf> {
+    let mut tried: Vec<String> = Vec::new();
+
+    if let Some(path) = explicit {
+        if path.exists() {
+            return Ok(path.clone());
+        }
+        bail!(
+            "eBPF program not found at '{}' (build it with ./build.sh or install.sh)",
+            path.display()
+        );
+    }
+
+    // 1. Build tree (CARGO_TARGET_DIR is set by build.sh / install.sh).
+    if let Ok(dir) = std::env::var("CARGO_TARGET_DIR") {
+        let candidate = PathBuf::from(dir).join("bpfel-unknown-none/release/process-monitor-ebpf");
+        if candidate.exists() {
+            return Ok(candidate);
+        }
+        tried.push(candidate.display().to_string());
+    }
+
+    // 2. Relative to the running binary (checked before user-local installs so a
+    //    freshly built tree is preferred over a stale ~/.local copy):
+    //    - <root>/target/bpfel-unknown-none/... for <root>/target/release/process-monitor
+    //    - <bin>/../lib/halcyon/...             for ~/.local/bin/process-monitor
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            for candidate in [
+                dir.join("../bpfel-unknown-none/release/process-monitor-ebpf"),
+                dir.join("../lib/halcyon/process-monitor-ebpf"),
+            ] {
+                if candidate.exists() {
+                    return Ok(candidate);
+                }
+                tried.push(candidate.display().to_string());
+            }
+        }
+    }
+
+    // 3. User-local install, found through the invoking user's real home.
+    //    `sudo` resets $HOME to /root, so derive the home from SUDO_UID (set
+    //    by sudo) or the real uid via the passwd database, and also try $HOME.
+    let mut homes: Vec<PathBuf> = Vec::new();
+    if let Ok(home) = std::env::var("HOME") {
+        homes.push(PathBuf::from(home));
+    }
+    let uid = std::env::var("SUDO_UID")
+        .ok()
+        .and_then(|v| v.parse::<u32>().ok())
+        .unwrap_or_else(|| unsafe { libc::getuid() });
+    if let Some(dir) = passwd_dir(uid) {
+        homes.push(dir);
+    }
+    for home in homes {
+        let candidate = home.join(".local/lib/halcyon/process-monitor-ebpf");
+        if candidate.exists() {
+            return Ok(candidate);
+        }
+        tried.push(candidate.display().to_string());
+    }
+
+    // 4. Working-directory-relative candidates and the system install.
+    for candidate in BPF_CANDIDATES {
+        if Path::new(candidate).exists() {
+            return Ok(PathBuf::from(candidate));
+        }
+        tried.push(candidate.to_string());
+    }
+
+    bail!(
+        "could not locate the eBPF program; tried: {}. Build it with ./build.sh, \
+         install it with install.sh, or pass --bpf PATH",
+        tried.join(", ")
+    )
+}
+
+/// Resolves the home directory for `uid` from the passwd database.
+///
+/// Used to find user-local installs when running under `sudo` (where `$HOME`
+/// points at the target user's home, not the invoking user's).
+fn passwd_dir(uid: u32) -> Option<PathBuf> {
+    unsafe {
+        let mut pwd: libc::passwd = std::mem::zeroed();
+        let mut buf = vec![0u8; 4096];
+        let mut result: *mut libc::passwd = std::ptr::null_mut();
+        let rc = libc::getpwuid_r(
+            uid,
+            &mut pwd,
+            buf.as_mut_ptr().cast(),
+            buf.len(),
+            &mut result,
+        );
+        if rc == 0 && !result.is_null() && !pwd.pw_dir.is_null() {
+            let dir = std::ffi::CStr::from_ptr(pwd.pw_dir)
+                .to_string_lossy()
+                .into_owned();
+            Some(PathBuf::from(dir))
+        } else {
+            None
+        }
+    }
+}
+
+/// End-to-end self-diagnostic: verifies the environment, loads + attaches the
+/// eBPF programs, then listens for events for 5 seconds and reports counts.
+fn run_diagnose(monitor: &mut Monitor) -> Result<()> {
+    println!("=== Halcyon Process Monitor diagnostic ===");
+    println!();
+    println!("OK: running as root");
+
+    for (cat, name) in [
+        ("syscalls", "sys_enter_execve"),
+        ("syscalls", "sys_enter_openat"),
+    ] {
+        let id_path =
+            Path::new("/sys/kernel/tracing/events").join(cat).join(name).join("id");
+        match std::fs::read_to_string(&id_path) {
+            Ok(id) => println!("OK: tracepoint {cat}/{name} id={}", id.trim()),
+            Err(e) => println!("FAIL: cannot read {}: {e}", id_path.display()),
+        }
+    }
+
+    println!();
+    println!("Loading and attaching eBPF programs...");
+    println!("Listening for 5 seconds; generate events by running, in another terminal:");
+    println!("    ls -la /");
+    println!();
+
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    let mut last_report = std::time::Instant::now();
+    let mut execs = 0u64;
+    let mut opens = 0u64;
+    let mut alerts = 0u64;
+    while std::time::Instant::now() < deadline {
+        for output in monitor.poll() {
+            match output {
+                Output::Event(ev) => match ev.kind {
+                    Kind::Exec => execs += 1,
+                    Kind::Open => opens += 1,
+                },
+                Output::Alert(_) => alerts += 1,
+            }
+        }
+        if last_report.elapsed() >= Duration::from_secs(1) {
+            last_report = std::time::Instant::now();
+            println!(
+                "  t-{:.0}s  exec={execs}  open={opens}  alerts={alerts}  lost={}",
+                deadline.saturating_duration_since(std::time::Instant::now()).as_secs_f32(),
+                monitor.total_lost
+            );
+        }
+        thread::sleep(Duration::from_millis(50));
+    }
+
+    println!();
+    println!("=== RESULT ===");
+    println!("exec events: {execs}");
+    println!("open events: {opens}");
+    println!("alerts:      {alerts}");
+    println!("lost:        {}", monitor.total_lost);
+    if execs + opens > 0 {
+        println!("SUCCESS: events are flowing through the eBPF pipeline.");
+    } else {
+        println!("NO EVENTS RECEIVED within the diagnostic window.");
+        println!("Check the [halcyon] stderr lines above for attach/load errors.");
+    }
+    Ok(())
+}
+
+fn install_signal_handler() {
+    unsafe {
+        let handler = handle_signal as *const () as libc::sighandler_t;
+        libc::signal(libc::SIGINT, handler);
+        libc::signal(libc::SIGTERM, handler);
+    }
+}
+
+extern "C" fn handle_signal(_: libc::c_int) {
+    QUIT.store(true, Ordering::SeqCst);
+}
+
+fn run_json(monitor: &mut Monitor) -> Result<()> {
+    let stdout = io::stdout();
+    let mut out = io::BufWriter::new(stdout.lock());
+    loop {
+        for output in monitor.poll() {
+            match output {
+                Output::Event(ev) => {
+                    let kind = match ev.kind {
+                        Kind::Exec => "exec",
+                        Kind::Open => "open",
+                    };
+                    let value = json!({
+                        "ts": ev.ts,
+                        "type": kind,
+                        "pid": ev.pid,
+                        "uid": ev.uid,
+                        "comm": ev.comm,
+                        "file": ev.file,
+                    });
+                    writeln!(out, "{value}")?;
+                }
+                Output::Alert(al) => {
+                    let value = json!({
+                        "ts": al.ts,
+                        "type": "alert",
+                        "pid": al.pid,
+                        "uid": al.uid,
+                        "comm": al.comm,
+                        "opens_in_1s": al.opens,
+                    });
+                    writeln!(out, "{value}")?;
+                }
+            }
+        }
+        out.flush()?;
+        if QUIT.load(Ordering::SeqCst) {
+            break;
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
+    Ok(())
+}
+
+fn run_plain(monitor: &mut Monitor) -> Result<()> {
+    use colored::Colorize;
+    loop {
+        for output in monitor.poll() {
+            match output {
+                Output::Event(ev) => match ev.kind {
+                    Kind::Exec => {
+                        println!(
+                            "{} {} [{}] {} by uid {}",
+                            ev.ts,
+                            "EXEC".green().bold(),
+                            ev.pid,
+                            ev.comm.bold(),
+                            ev.uid
+                        );
+                    }
+                    Kind::Open => {
+                        if let Some(file) = ev.file {
+                            println!(
+                                "{} {} [{}] {} -> {}",
+                                ev.ts,
+                                "OPEN".blue().bold(),
+                                ev.pid,
+                                ev.comm.dimmed(),
+                                file.dimmed()
+                            );
+                        }
+                    }
+                },
+                Output::Alert(al) => {
+                    println!(
+                        "{} {} [{}] {} opened {} files in 1s!",
+                        al.ts,
+                        "SUSPICIOUS".yellow().bold(),
+                        al.pid,
+                        al.comm.bold(),
+                        al.opens
+                    );
+                }
+            }
+        }
+        if QUIT.load(Ordering::SeqCst) {
+            break;
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
+    Ok(())
 }

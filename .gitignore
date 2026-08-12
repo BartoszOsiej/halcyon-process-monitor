@@ -3,3 +3,6 @@ target/
 *.swp
 *.swo
 *.o
+
+# aurora-os is its own repo (BartoszOsiej/AURORA-OS)
+aurora-os/
