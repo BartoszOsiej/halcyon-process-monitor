@@ -3,6 +3,10 @@ members = [
     "process-monitor",
     "process-monitor-ebpf",
 ]
+# Default to the userspace crate only. The eBPF crate targets
+# bpfel-unknown-none and cannot be built/tested for the host; build.sh
+# invokes it explicitly with --manifest-path and -Z build-std.
+default-members = ["process-monitor"]
 resolver = "2"
 
 [profile.release]

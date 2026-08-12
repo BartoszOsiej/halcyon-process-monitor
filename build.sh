@@ -1,50 +1,60 @@
 #!/usr/bin/env bash
+# Halcyon Process Monitor - build script.
+#
+# Builds the eBPF program (requires Rust nightly + rust-src) and the userspace
+# TUI binary (works on stable Rust). Does NOT require root. Use install.sh for
+# a full setup (toolchain, dependencies, install).
+
 set -euo pipefail
 
-echo "=== Halcyon Process Monitor - Build Script ==="
-echo ""
-
-# Prerequisites check
-command -v cargo >/dev/null 2>&1 || { echo "Rust not installed. Install: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh"; exit 1; }
-
-if ! command -v cc >/dev/null 2>&1; then
-  echo "C compiler not found. Installing build dependencies..."
-  if command -v apt >/dev/null 2>&1; then
-    sudo apt install -y build-essential
-  elif command -v zypper >/dev/null 2>&1; then
-    sudo zypper install -y gcc gcc-c++ kernel-devel
-  elif command -v dnf >/dev/null 2>&1; then
-    sudo dnf install -y gcc gcc-c++ kernel-devel
-  else
-    echo "Package manager not recognized. Install C compiler manually."
-    exit 1
-  fi
-fi
-
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$SCRIPT_DIR/target}"
 
-echo "[1/2] Building eBPF program (bpfel-unknown-none)..."
-cd "$SCRIPT_DIR/process-monitor-ebpf"
-RUSTFLAGS="-C link-arg=-z -C link-arg=note-got" \
-cargo +nightly build \
-  --release \
-  --target bpfel-unknown-none \
-  -Z build-std=core 2>&1
+die() {
+    echo "ERROR: $*" >&2
+    exit 1
+}
+info() { echo "==> $*"; }
 
-echo "[2/2] Building userspace loader..."
-cd "$SCRIPT_DIR/process-monitor"
-cargo build --release 2>&1
+command -v cargo >/dev/null 2>&1 || die "Rust/Cargo not found. Install it from https://rustup.rs"
+
+# The eBPF crate needs a nightly toolchain with rust-src to build core for
+# the bpfel-unknown-none target via -Z build-std.
+if ! cargo +nightly --version >/dev/null 2>&1; then
+    die "Nightly Rust toolchain not found.
+    Install it with:
+      rustup toolchain install nightly --profile minimal --component rust-src"
+fi
+
+if ! command -v bpf-linker >/dev/null 2>&1; then
+    die "bpf-linker not found (used to link eBPF programs).
+    Install it with:
+      cargo install bpf-linker"
+fi
+
+echo "=== Halcyon Process Monitor - build ==="
+echo "Target dir: $CARGO_TARGET_DIR"
+echo ""
+
+info "[1/2] Building eBPF program (bpfel-unknown-none)..."
+cargo +nightly build --release \
+    --target bpfel-unknown-none \
+    -Z build-std=core \
+    --manifest-path "$SCRIPT_DIR/process-monitor-ebpf/Cargo.toml"
+
+info "[2/2] Building userspace binary..."
+cargo build --release -p process-monitor --manifest-path "$SCRIPT_DIR/Cargo.toml"
 
 echo ""
 echo "=== Build complete ==="
 echo ""
-echo "Run:"
-echo "  sudo $CARGO_TARGET_DIR/release/process-monitor \\"
-echo "    --bpf $CARGO_TARGET_DIR/bpfel-unknown-none/release/process-monitor-ebpf \\"
-echo "    --alert-threshold 50"
+echo "  Binary: $CARGO_TARGET_DIR/release/process-monitor"
+echo "  eBPF:   $CARGO_TARGET_DIR/bpfel-unknown-none/release/process-monitor-ebpf"
 echo ""
-echo "Options:"
-echo "  --json                  JSON-formatted output"
-echo "  --alert-threshold N     File opens/sec before alert (default: 50)"
+echo "Run (requires root for eBPF):"
+echo "  sudo $CARGO_TARGET_DIR/release/process-monitor"
 echo ""
+echo "Other modes:"
+echo "  --json         newline-delimited JSON output"
+echo "  --plain        plain text log output"
+echo "  --threshold N  alert after N file opens in 1s (default: 50)"
