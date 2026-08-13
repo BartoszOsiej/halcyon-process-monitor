@@ -334,3 +334,114 @@ impl Monitor {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn open(pid: u32, uid: u32, file: &str) -> RecordedEvent {
+        RecordedEvent {
+            ts: "00:00:00.000".into(),
+            kind: Kind::Open,
+            pid,
+            uid,
+            comm: "probe".into(),
+            file: Some(file.into()),
+        }
+    }
+
+    #[test]
+    fn cstr_to_string_stops_at_nul() {
+        let mut buf = [b'a'; EVENT_FILENAME_LEN];
+        buf[3] = 0; // terminate early
+        let s = cstr_to_string(&buf);
+        assert_eq!(s, "aaa");
+        assert!(!s.contains('\0'));
+    }
+
+    #[test]
+    fn process_event_string_helpers_trim_nul_padding() {
+        let mut ev = ProcessEvent {
+            event_type: 1,
+            pid: 7,
+            uid: 1000,
+            comm: [0u8; EVENT_COMM_LEN],
+            filename: [0u8; EVENT_FILENAME_LEN],
+        };
+        ev.comm[..4].copy_from_slice(b"bash");
+        ev.filename[..11].copy_from_slice(b"/etc/passwd");
+        assert_eq!(ev.comm_str(), "bash");
+        assert_eq!(ev.filename_str(), "/etc/passwd");
+    }
+
+    #[test]
+    fn exec_events_update_stats_without_alerts() {
+        let mut monitor = Monitor::dummy();
+        let mut outputs = Vec::new();
+        monitor.handle_event(
+            &RecordedEvent {
+                ts: "00:00:00.000".into(),
+                kind: Kind::Exec,
+                pid: 9,
+                uid: 0,
+                comm: "init".into(),
+                file: None,
+            },
+            &mut outputs,
+        );
+        let stats = monitor.stats.get(&9).expect("stats recorded");
+        assert_eq!(stats.total_execs, 1);
+        assert_eq!(stats.total_opens, 0);
+        assert_eq!(stats.alerts, 0);
+        assert!(matches!(outputs[0], Output::Event(_)));
+    }
+
+    #[test]
+    fn opens_trigger_alert_at_threshold() {
+        let mut monitor = Monitor::dummy(); // threshold = 3
+        let mut outputs = Vec::new();
+        for _ in 0..3 {
+            monitor.handle_event(&open(42, 1000, "/tmp/x"), &mut outputs);
+        }
+        let alerts: Vec<_> = outputs.iter().filter(|o| matches!(o, Output::Alert(_))).collect();
+        assert_eq!(alerts.len(), 1, "exactly one alert at the threshold");
+        if let Output::Alert(a) = &outputs[2] {
+            assert_eq!(a.pid, 42);
+            assert_eq!(a.opens, 3);
+        } else {
+            panic!("third output must be the alert");
+        }
+        let stats = monitor.stats.get(&42).unwrap();
+        assert_eq!(stats.alerts, 1);
+        assert_eq!(stats.window_opens, 3);
+    }
+
+    #[test]
+    fn no_second_alert_above_threshold() {
+        let mut monitor = Monitor::dummy(); // threshold = 3
+        let mut outputs = Vec::new();
+        for _ in 0..5 {
+            monitor.handle_event(&open(42, 1000, "/tmp/x"), &mut outputs);
+        }
+        let alerts = outputs.iter().filter(|o| matches!(o, Output::Alert(_))).count();
+        assert_eq!(alerts, 1, "alert fires once, not repeatedly");
+        assert_eq!(monitor.stats.get(&42).unwrap().alerts, 1);
+    }
+
+    #[test]
+    fn stats_sorted_orders_by_window_opens_desc() {
+        let mut monitor = Monitor::dummy();
+        let mut outputs = Vec::new();
+        for _ in 0..2 {
+            monitor.handle_event(&open(1, 0, "/a"), &mut outputs);
+        }
+        for _ in 0..4 {
+            monitor.handle_event(&open(2, 0, "/b"), &mut outputs);
+        }
+        let sorted = monitor.stats_sorted();
+        assert_eq!(sorted[0].pid, 2);
+        assert_eq!(sorted[0].window_opens, 4);
+        assert_eq!(sorted[1].pid, 1);
+        assert_eq!(sorted[1].window_opens, 2);
+    }
+}
