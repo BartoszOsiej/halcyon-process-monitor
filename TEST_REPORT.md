@@ -5,14 +5,21 @@
 
 ## Whole project
 
-**✅ 3 tests · 0 failed** (userspace `process-monitor` crate).
+**✅ 9 tests · 0 failed** (userspace `process-monitor` crate).
 
 ## Per-crate
 
 | Crate | Status |
 |---|---|
-| `process-monitor` (userspace) | ✅ builds + 3 tests pass |
+| `process-monitor` (userspace) | ✅ builds + 9 tests pass |
 | `process-monitor-ebpf` | ⚠️ targets `bpfel-unknown-none` — not buildable on the host toolchain; `build.sh` invokes it with `-Z build-std` explicitly |
+
+## Coverage
+
+- TUI: rendering with events/alerts, key handling, alert tracking
+- Monitor: C-string decoding, event stats (exec/open), ransomware heuristic
+  (alert fires exactly once at the 1-second-window threshold), window expiry,
+  per-process stats sorting
 
 ## Static analysis
 
