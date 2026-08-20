@@ -1,201 +1,235 @@
-<img src="https://capsule-render.vercel.app/api?type=soft&color=0:0d1117,50:da3633,100:f0883e&height=140&section=header&text=Halcyon%20Process%20Monitor&fontSize=34&fontColor=fff&desc=eBPF%20ransomware%20behavior%20tracker%20%C2%B7%20kernel-level%20telemetry&descSize=15&descAlignY=72" width="100%" />
+# 🔬 Halcyon Process Monitor
 
-
-[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/BartoszOsiej/halcyon-process-monitor/badge)](https://scorecard.dev/viewer/?uri=github.com/BartoszOsiej/halcyon-process-monitor)
-
-<div align="center">
-
-[![crates.io](https://img.shields.io/crates/v/process-monitor?style=for-the-badge&logo=rust&label=process-monitor)](https://crates.io/crates/process-monitor)
-[![GHCR](https://img.shields.io/badge/GHCR-image-2496ED?style=for-the-badge&logo=docker)](https://github.com/BartoszOsiej/halcyon-process-monitor/pkgs/container/halcyon-process-monitor)
-[![Release](https://img.shields.io/badge/release-binary-8A2BE2?style=for-the-badge&logo=github)](https://github.com/BartoszOsiej/halcyon-process-monitor/releases)
-[![License](https://img.shields.io/badge/license-MIT-green?style=for-the-badge)](LICENSE)
+![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
+![Rust](https://img.shields.io/badge/Rust-2021-DEA584?style=flat-square&logo=rust)
+![crates.io](https://img.shields.io/crates/v/process-monitor?style=flat-square&label=process-monitor&logo=rust)
+![eBPF](https://img.shields.io/badge/eBPF-Linux%205.8+-FCD900?style=flat-square&logo=linux)
+![Docker](https://img.shields.io/badge/Docker-GHCR-2496ED?style=flat-square&logo=docker)
 
 **Real-time, eBPF-based process and file-operation telemetry for Linux.**
 
-</div>
+Halcyon Process Monitor traces `execve` and `openat` syscalls at the kernel
+level using eBPF tracepoints, streams the events into userspace through per-CPU
+perf buffers, and surfaces them in a live terminal TUI — while continuously
+scoring per-process file-open rates against a sliding window to flag
+ransomware-style mass file access.
 
-Halcyon traces `execve` and `openat` syscalls at the kernel level using eBPF
-tracepoints, streams events into userspace through per-CPU perf buffers, and
-surfaces them in a live terminal TUI — while continuously scoring per-process
-file-open rates against a sliding window to flag ransomware-style mass file access.
+> 🇵🇱 [Wersja polska](README.pl.md) · [Documentation](https://bartoszosiej.github.io/Docs/projects/halcyon-process-monitor/) · [Architecture](ARCHITECTURE.md)
 
-> [!IMPORTANT]
-> **Verified live**: eBPF loaded, events flowing through per-CPU perf buffers,
-> TCP alert fired when a process exceeded the 1-second window threshold.
+---
 
-## Architecture
+## Table of Contents
 
-```mermaid
-flowchart LR
-    E["execve"] --> K["sys_enter_execve"]
-    O["openat"] --> K2["sys_enter_openat"]
-    K --> M["ProcessEvent map"]
-    K2 --> M
-    M --> P["perf array: per-CPU buffers"]
-    P --> R["reader thread"]
-    R --> C["MPSC channel"]
-    C --> MO["monitor core"]
-    MO --> W["sliding window + alerting"]
-    MO --> T["TUI / JSON / plain / diagnose"]
-```
+- [Features](#features)
+- [Architecture](#architecture)
+- [Requirements](#requirements)
+- [Quick Start](#quick-start)
+- [Usage](#usage)
+- [JSON Output](#json-output)
+- [How It Works](#how-it-works)
+- [Project Structure](#project-structure)
+- [Security](#security)
+- [Docker](#docker)
+- [Troubleshooting](#troubleshooting)
+- [License](#license)
 
-## Screenshot
-
-![Halcyon Process Monitor — live TUI](screenshots/tui.png)
+---
 
 ## Features
 
 | Capability | Description |
 |---|---|
-| **Kernel-level tracing** | `execve` and `openat` tracepoints attached on every online CPU |
-| **Verifier-safe kernel code** | Userspace pointers read exclusively via `bpf_probe_read_user` — never dereferenced |
-| **Zero-copy event pipeline** | Fixed-size `ProcessEvent` records streamed through per-CPU `PerfEventArray` buffers |
-| **Live TUI** | Event log, per-process stats table, and alert panel rendered with `ratatui` |
-| **Sliding-window heuristic** | 1-second rolling window per PID; alerts when a process exceeds the configured open rate |
-| **Multiple output modes** | Human TUI, newline-delimited JSON, plain text log, built-in self-diagnostic |
-| **Lost-event accounting** | Perf-buffer overruns are counted and reported, never silently dropped |
-| **Single static binary** | Full LTO, `panic = "abort"`, symbol-stripped release profile |
+| **Kernel-level tracing** | `execve` and `openat` tracepoints on every online CPU |
+| **Verifier-safe** | Userspace pointers read via `bpf_probe_read_user` — never dereferenced |
+| **Zero-copy pipeline** | Fixed-size `ProcessEvent` through per-CPU `PerfEventArray` |
+| **Live TUI** | Cyberpunk dashboard: event log, process table, file ranking, sparklines, alerts |
+| **Sparkline charts** | Real-time exec/s, open/s, alert/s visualisations (120s rolling window) |
+| **File-type tracking** | Per-extension open frequency with colour-coded categories |
+| **Top-files leaderboard** | Most-accessed files with Shannon entropy scores |
+| **Sliding-window heuristic** | 1-second rolling window per PID; alerts at configurable threshold |
+| **Multiple output modes** | Human TUI, JSON, plain text, self-diagnostic |
+| **Lost-event accounting** | Perf-buffer overruns counted and reported |
+| **Single static binary** | Full LTO, `panic = "abort"`, symbol-stripped |
 
-<details>
-<summary><b>⚙️ Requirements</b></summary>
+---
+
+## Architecture
+
+```
+                 ┌──────────────────────────────────────────────┐
+                 │            Kernel space (eBPF)               │
+   execve  ──► sys_enter_execve ─┐                               │
+   openat  ──► sys_enter_openat ─┼──► ProcessEvent ──► EVENTS   │
+                                 │         (map)     (perf array)│
+                 └───────────────────────────┬──────────────────┘
+                                             │  per-CPU perf buffers
+                 ┌───────────────────────────▼──────────────────┐
+                 │           Userspace (Rust)                   │
+                 │  reader thread ──► channel ──► Monitor       │
+                 │        │                        │            │
+                 │        │                  sliding window     │
+                 │        │                  + alerting         │
+                 │        └──► TUI / JSON / plain / diagnose    │
+                 └──────────────────────────────────────────────┘
+```
+
+---
+
+## Requirements
 
 | Requirement | Notes |
 |---|---|
 | Linux kernel **5.8+** | eBPF + tracepoint support |
-| **root** (`CAP_BPF` / `CAP_SYS_ADMIN`) | Required to load and attach eBPF programs |
-| Rust **nightly** + `rust-src` | Builds the eBPF program with `-Z build-std` |
-| `bpf-linker`, `clang`, C compiler | eBPF linking toolchain |
-| BTF (`/sys/kernel/btf/vmlinux`) | Recommended for CO-RE compatibility |
+| **root** (`CAP_BPF` / `CAP_SYS_ADMIN`) | Required to load eBPF programs |
+| Rust **nightly** + `rust-src` | Builds eBPF program with `-Z build-std` |
+| `bpf-linker`, `clang` | eBPF linking toolchain |
+| BTF (`/sys/kernel/btf/vmlinux`) | Recommended for CO-RE |
 
-The userspace binary builds on stable Rust; only the eBPF crate needs nightly.
-
-</details>
+---
 
 ## Quick Start
 
-The fastest path is the distro-aware installer — it detects your package
-manager (apt, dnf, pacman, zypper, apk, xbps), installs build dependencies,
-provisions the Rust toolchain, builds, and installs:
-
 ```bash
-# System-wide install to /usr/local (prompts before every change):
-./install.sh --system
+# Distro-aware installer (detects apt/dnf/pacman/zypper/apk/xbps)
+./install.sh --system    # System-wide to /usr/local
+./install.sh             # User-local to ~/.local
 
-# User-local install to ~/.local (no sudo needed):
-./install.sh
-
-# Or build manually:
-./build.sh && sudo target/release/process-monitor
+# Or build manually
+./build.sh
+sudo target/release/process-monitor
 ```
+
+---
 
 ## Usage
 
 ```bash
-sudo process-monitor                          # TUI (default when stdout is a terminal)
-sudo process-monitor --alert-threshold 100    # raise the alert threshold
-sudo process-monitor --json | jq .            # machine-readable output
-sudo process-monitor --plain                  # plain text log
-sudo process-monitor --diagnose               # 5-second end-to-end self-diagnostic
+# TUI (default when stdout is a terminal)
+sudo process-monitor
+
+# Raise alert threshold
+sudo process-monitor --alert-threshold 100
+
+# Filter by file extension
+sudo process-monitor --filter-ext pdf
+
+# JSON output for pipelines
+sudo process-monitor --json | jq .
+
+# Plain text log (no TUI)
+sudo process-monitor --plain
+
+# Self-diagnostic
+sudo process-monitor --diagnose
 ```
 
-<details>
-<summary><b>⌨️ TUI keys & CLI reference</b></summary>
+### CLI Reference
+
+| Flag | Default | Description |
+|---|---|---|
+| `-b, --bpf <PATH>` | auto | Path to compiled eBPF object |
+| `--alert-threshold <N>` | `50` | Alert when N+ files opened within 1s |
+| `--filter-ext <EXT>` | all | Filter by file extension |
+| `--top-files <N>` | `8` | Top files in TUI |
+| `--json` | off | Newline-delimited JSON output |
+| `--plain` | off | Plain text log |
+| `--diagnose` | off | 5-second self-diagnostic |
+
+### TUI Keys
 
 | Key | Action |
 |---|---|
 | `q`, `Esc`, `Ctrl+C` | Quit |
-| `p` | Pause / resume the event stream |
-| `c` | Clear the event log |
-| `↑` / `↓`, `j` / `k` | Scroll the event log |
-| `PgUp` / `PgDn` | Scroll faster |
-
-| Flag | Default | Description |
-|---|---|---|
-| `-b, --bpf <PATH>` | auto-discovered | Path to the compiled eBPF object |
-| `--alert-threshold <N>` | `50` | Alert at N+ opens within 1 s (`0` disables) |
-| `--json` | off | Newline-delimited JSON output |
-| `--plain` | off | Plain text log output |
-| `--tui` | off | Force the TUI even without a terminal |
-| `--diagnose` | off | Run self-diagnostic and exit |
-
-</details>
-
-<details>
-<summary><b>📄 JSON output schema</b></summary>
-
-```jsonc
-// Process event
-{"ts": "14:09:16.531", "type": "open", "pid": 29645, "uid": 1000, "comm": "process-monitor", "file": "/dev/tty"}
-{"ts": "14:09:16.532", "type": "exec", "pid": 29645, "uid": 1000, "comm": "bash", "file": "/usr/bin/ls"}
-
-// Alert
-{"ts": "14:09:16.973", "type": "alert", "pid": 2126, "uid": 1000, "comm": "Cache2 I/O", "opens_in_1s": 50}
-```
-
-| Field | Present in | Meaning |
-|---|---|---|
-| `ts` | all | Local timestamp, `HH:MM:SS.mmm` |
-| `type` | all | `exec`, `open`, or `alert` |
-| `pid` / `uid` | all | Process ID / user ID that triggered the syscall |
-| `comm` | all | Process name (16-byte `comm`, truncated) |
-| `file` | exec/open | Target path (64-byte buffer, truncated) |
-| `opens_in_1s` | alert | File opens counted in the current sliding window |
-
-</details>
-
-<details>
-<summary><b>🔧 How it works & project structure</b></summary>
-
-1. Two kernel tracepoints (`sys_enter_execve`, `sys_enter_openat`) capture PID,
-   UID, `comm`, and target filename into a compact fixed-layout `ProcessEvent`
-   pushed into the `EVENTS` `PerfEventArray`.
-2. A dedicated reader thread opens one perf buffer per online CPU and forwards
-   decoded events over an MPSC channel to the monitor core.
-3. The monitor keeps a 1-second sliding window of file opens per PID and raises
-   an alert when a process crosses the threshold.
-4. Output renders according to mode: TUI, JSON, plain, or diagnostic report.
-
-Full design: **[ARCHITECTURE.md](ARCHITECTURE.md)**
-
-```
-halcyon-process-monitor/
-├── process-monitor/          # Userspace: monitor core + TUI + output modes
-│   └── src/
-│       ├── main.rs           # CLI, mode selection, signal handling
-│       ├── monitor.rs        # eBPF loading, perf reader, sliding-window tracker
-│       └── tui.rs            # ratatui interface (events / stats / alerts)
-├── process-monitor-ebpf/     # Kernel side (#![no_std], aya-ebpf)
-│   └── src/main.rs           # tracepoint hooks → PerfEventArray
-├── build.sh                  # Build script (nightly for eBPF, stable for TUI)
-└── install.sh                # Distro-aware installer / uninstaller
-```
-
-</details>
-
-> [!NOTE]
-> The installer never reads or logs tokens, credentials, or environment secrets,
-> and makes **no authenticated network requests**. Dependencies come only from
-> official distro repositories.
-
-## Troubleshooting
-
-Run the built-in self-diagnostic to verify toolchain, tracepoint availability,
-eBPF loading, and event flow end to end:
-
-```bash
-sudo process-monitor --diagnose
-```
-
-- **No events at all** → confirm tracepoints exist and perf buffers opened
-- **`failed to load eBPF program`** → pass `--bpf` explicitly or re-run `./install.sh`
-- **Not running as root** → `Monitor::start` bails with a clear `CAP_BPF` message
+| `p` | Pause / resume |
+| `c` | Clear event log |
+| `↑`/`↓`, `j`/`k` | Scroll |
+| `Tab` | Cycle panel focus |
 
 ---
 
-<div align="center">
+## JSON Output
 
-**Part of [BartoszOsiej](https://github.com/BartoszOsiej)'s systems toolkit** · [`externum`](https://github.com/BartoszOsiej/externum) · [`cybersec-tools`](https://github.com/BartoszOsiej/cybersec-tools) · [`NV2_ENGINE`](https://github.com/BartoszOsiej/NV2_ENGINE)
+```jsonc
+{"ts": "14:09:16.531", "type": "open", "pid": 29645, "uid": 1000, "comm": "process-monitor", "file": "/dev/tty"}
+{"ts": "14:09:16.973", "type": "alert", "pid": 2126, "uid": 1000, "comm": "Cache2 I/O", "opens_in_1s": 50}
+```
 
-MIT © 2026 Bartosz Osiej
+---
 
-</div>
+## How It Works
+
+1. Kernel tracepoints capture PID, UID, `comm`, target filename into `ProcessEvent`
+2. Reader thread opens perf buffer per CPU, forwards events over MPSC channel
+3. Monitor keeps 1-second sliding window per PID, alerts at threshold
+4. Output renders: TUI, JSON, plain, or diagnostic report
+
+---
+
+## Project Structure
+
+```
+halcyon-process-monitor/
+├── process-monitor/          # Userspace: monitor core + TUI
+│   └── src/
+│       ├── main.rs           # CLI, mode selection, signal handling
+│       ├── monitor.rs        # eBPF loading, perf reader, sliding window
+│       └── tui.rs            # ratatui cyberpunk interface
+├── process-monitor-ebpf/     # Kernel side (#![no_std], aya-ebpf)
+│   └── src/main.rs           # tracepoint hooks → PerfEventArray
+├── build.sh                  # Build script
+├── install.sh                # Distro-aware installer
+└── Cargo.toml                # Workspace definition
+```
+
+---
+
+## Security
+
+- Installer makes **no authenticated network requests**
+- Dependencies from distribution repos + official `rustup.rs`
+- Kernel code follows strict eBPF safety: `bpf_probe_read_user` only
+- eBPF programs require root
+
+---
+
+## Docker
+
+```bash
+# Build
+docker build -t halcyon-process-monitor .
+
+# Run (requires --privileged for eBPF)
+docker run --privileged -v /sys/kernel/btf:/sys/kernel/btf \
+    halcyon-process-monitor process-monitor
+```
+
+---
+
+## Troubleshooting
+
+```bash
+sudo process-monitor --diagnose    # 5-second self-diagnostic
+```
+
+- **No events** → check tracepoints exist in `/sys/kernel/tracing/events/syscalls/`
+- **Failed to load eBPF** → pass `--bpf` explicitly or re-run `./install.sh`
+- **Not root** → `CAP_BPF` or `CAP_SYS_ADMIN` required
+
+---
+
+## Uninstall
+
+```bash
+./install.sh --uninstall            # user-local
+./install.sh --uninstall --system   # system-wide
+```
+
+---
+
+## License
+
+MIT
+
+---
+
+> 🤖 Generated with [Codebuff](https://codebuff.com) · [Portfolio](https://bartoszosiej.github.io/Portfolio/)
