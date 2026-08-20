@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    name: Test (userspace)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Run tests
+        run: cargo test --verbose
+      - name: Clippy
+        run: cargo clippy -- -D warnings
+
+  ebpf-build:
+    name: Build kernel eBPF (nightly)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rust-src
+      - name: Install bpf-linker
+        run: cargo install bpf-linker
+      - name: Build eBPF (bpfel-unknown-none)
+        run: cargo build -Z build-std=core --target bpfel-unknown-none --release
