@@ -1,13 +1,10 @@
-## Co robi ta zmiana
+## Opis zmiany
 
 
-## Jak testowalem
+## Testy
 
-- [ ] cargo fmt --check
-- [ ] cargo clippy -- -D warnings
-- [ ] cargo test
-
-## Zrzuty ekranu (jezeli dotyczy)
-
+- [ ] format/lint
+- [ ] testy przechodza (CI zielony)
+- [ ] dodane testy jesli dotyczy
 
 Closes #
