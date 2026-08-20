@@ -1,4 +1,5 @@
 [package]
+repository = "https://github.com/BartoszOsiej/halcyon-process-monitor"
 name = "process-monitor"
 version = "0.2.0"
 edition = "2021"
