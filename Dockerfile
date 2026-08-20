@@ -1,9 +1,15 @@
-FROM rust:1-bookworm AS builder
-RUN apt-get update && apt-get install -y libclang-dev libpcap-dev pkg-config libx11-dev libxi-dev libxkbcommon-dev libwayland-dev libgl1-mesa-dev && rm -rf /var/lib/apt/lists/*
-WORKDIR /build
+# ── Stage 1: Build ──
+FROM rust:1.80-bookworm AS builder
+WORKDIR /src
 COPY . .
-RUN cargo build --release
+RUN cd process-monitor && cargo build --release
+
+# ── Stage 2: Runtime ──
 FROM debian:bookworm-slim
-RUN apt-get update && apt-get install -y ca-certificates libpcap0.8 libx11-6 libxkbcommon0 libwayland-client0 libgl1 && rm -rf /var/lib/apt/lists/*
-COPY --from=builder /build/target/release/ /usr/bin/
-ENTRYPOINT ["/usr/bin/process-monitor"]
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libssl3 ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
+COPY --from=builder /src/process-monitor/target/release/process-monitor /usr/local/bin/
+RUN chmod +x /usr/local/bin/process-monitor
+EXPOSE 0
+ENTRYPOINT ["process-monitor"]
