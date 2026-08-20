@@ -1,5 +1,7 @@
 # Halcyon Process Monitor
 
+[![CI](https://github.com/BartoszOsiej/halcyon-process-monitor/actions/workflows/ci.yml/badge.svg)](https://github.com/BartoszOsiej/halcyon-process-monitor/actions)
+
 > **Real-time, eBPF-based process and file-operation telemetry for Linux.**
 
 Halcyon Process Monitor traces `execve` and `openat` syscalls at the kernel level
