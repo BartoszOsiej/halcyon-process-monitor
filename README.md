@@ -1,7 +1,5 @@
 # Halcyon Process Monitor
 
-[![CI](https://github.com/BartoszOsiej/halcyon-process-monitor/actions/workflows/ci.yml/badge.svg)](https://github.com/BartoszOsiej/halcyon-process-monitor/actions)
-
 > **Real-time, eBPF-based process and file-operation telemetry for Linux.**
 
 Halcyon Process Monitor traces `execve` and `openat` syscalls at the kernel level
@@ -27,6 +25,13 @@ ransomware-style mass file access.
                  │        └──► TUI / JSON / plain / diagnose    │
                  └──────────────────────────────────────────────┘
 ```
+
+## Screenshot
+
+![Halcyon Process Monitor — live TUI](screenshots/tui.png)
+
+*Verified live: eBPF loaded, events flowing through per-CPU perf buffers, TCP
+alert fired when a process exceeded the 1-second window threshold.*
 
 ## Features
 
