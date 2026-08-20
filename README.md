@@ -231,5 +231,3 @@ sudo process-monitor --diagnose    # 5-second self-diagnostic
 MIT
 
 ---
-
-> 🤖 Generated with [Codebuff](https://codebuff.com) · [Portfolio](https://bartoszosiej.github.io/Portfolio/)

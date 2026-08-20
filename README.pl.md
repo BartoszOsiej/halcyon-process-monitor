@@ -33,7 +33,11 @@ wykrywać masowy dostęp do plików w stylu ransomware.
 | **Śledzenie na poziomie jądra** | Tracepointy `execve` i `openat` podpięte na każdym aktywnym CPU |
 | **Kod jądra bezpieczny dla verifiera** | Wskaźniki przestrzeni użytkownika czytane wyłącznie przez `bpf_probe_read_user` — nigdy przez dereferencję |
 | **Potok zdarzeń zero-copy** | Rekordy `ProcessEvent` o stałym rozmiarze strumieniowane przez bufory per-CPU `PerfEventArray` |
-| **TUI na żywo** | Dziennik zdarzeń, tabela statystyk per-proces i panel alertów renderowane przez `ratatui` |
+| **TUI na żywo** | Dashboard w stylu cyberpunk z dziennikiem zdarzeń, tabelą procesów, rankingiem plików, sparkline'ami i alertami |
+| **Sparkline'y tempa zdarzeń** | Wizualizacje exec/s, open/s i alert/s (okno 120-sekundowe) |
+| **Śledzenie typów plików** | Częstotliwość otwarć per rozszerzenie z kolorowymi kategoriami (dokumenty, archiwa, markery ransomware) |
+| **Ranking najczęściej otwieranych plików** | Pliki posortowane wg liczby otwarć, z wynikami znormalizowanej entropii Shannona |
+| **Entropia Shannona** | Znormalizowana (0–1) entropia nazw plików do wykrywania zaszyfrowanych lub podejrzanych ścieżek |
 | **Heurystyka ruchomego okna** | 1-sekundowe okno per PID; alert, gdy proces przekroczy skonfigurowane tempo otwierania |
 | **Wiele trybów wyjścia** | TUI dla człowieka, JSON z podziałem na linie, zwykły dziennik tekstowy i wbudowana autodiagnostyka |
 | **Liczenie utraconych zdarzeń** | Przepełnienia bufora perf są liczone i raportowane, nigdy cicho pomijane |
@@ -83,6 +87,9 @@ sudo process-monitor
 # Podnieś próg alertu (otwarcia plików na sekundę przed alertem)
 sudo process-monitor --alert-threshold 100
 
+# Filtruj wg rozszerzenia (pokaż tylko zdarzenia .pdf i .enc w TUI)
+sudo process-monitor --filter-ext pdf
+
 # Wyjście maszynowe do potoków / agregacji logów
 sudo process-monitor --json | jq .
 
@@ -102,6 +109,8 @@ sudo process-monitor --diagnose
 |---|---|---|
 | `-b, --bpf <PATH>` | auto-wykrywanie | Ścieżka do skompilowanego obiektu eBPF |
 | `--alert-threshold <N>` | `50` | Alert, gdy proces otworzy N+ plików w 1 s (`0` wyłącza alerty) |
+| `--filter-ext <EXT>` | wszystkie | Pokaż tylko zdarzenia pasujące do rozszerzenia (np. `pdf`, `enc`) |
+| `--top-files <N>` | `8` | Liczba górnych plików do wyświetlenia w TUI |
 | `--json` | wył. | Wyjście JSON z podziałem na linie (bez TUI) |
 | `--plain` | wył. | Zwykły dziennik tekstowy (bez TUI); koliduje z `--json` |
 | `--tui` | wył. | Wymuś TUI, nawet gdy stdout nie jest terminalem |
@@ -117,6 +126,7 @@ sudo process-monitor --diagnose
 | `↑` / `↓`, `j` / `k` | Przewijanie dziennika zdarzeń |
 | `PgUp` / `PgDn` | Szybsze przewijanie |
 | `Home` / `End` | Skok na górę / dół |
+| `Tab` | Przełącz fokus między panelami (Zdarzenia → Procesy → Pliki) |
 
 ## Schemat wyjścia JSON
 

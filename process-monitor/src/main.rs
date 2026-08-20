@@ -52,6 +52,14 @@ struct Args {
     /// Run a 5-second end-to-end self-diagnostic and exit
     #[arg(long, conflicts_with_all = ["json", "plain", "tui"])]
     diagnose: bool,
+
+    /// Only show events matching this extension filter (e.g. "pdf", "enc")
+    #[arg(long, value_name = "EXT")]
+    filter_ext: Option<String>,
+
+    /// Show top-N files in TUI (default: 8)
+    #[arg(long, default_value_t = 8, value_name = "N")]
+    top_files: usize,
 }
 
 fn main() -> Result<()> {
@@ -78,11 +86,14 @@ fn main() -> Result<()> {
 
     eprintln!("[halcyon] eBPF program: {}", bpf_path.display());
     eprintln!("[halcyon] alert threshold: {} file opens/s", args.alert_threshold);
+    if let Some(ref ext) = args.filter_ext {
+        eprintln!("[halcyon] extension filter: .{ext}");
+    }
 
     if args.diagnose {
         run_diagnose(&mut monitor)?;
     } else if use_tui {
-        eprintln!("[halcyon] TUI mode (q quit, p pause, c clear, arrows scroll)");
+        eprintln!("[halcyon] TUI mode (q quit, p pause, c clear, arrows scroll, Tab switch panel)");
         tui::run(&mut monitor)?;
     } else if args.json {
         run_json(&mut monitor)?;

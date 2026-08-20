@@ -130,21 +130,32 @@ one reader per online CPU.
 Holds:
 
 ```
-stats:   HashMap<u32, ProcStats>      // pid → cumulative stats
-windows: HashMap<u32, VecDeque<Instant>> // pid → open timestamps (1 s window)
+stats:        HashMap<u32, ProcStats>        // pid → cumulative stats
+windows:      HashMap<u32, VecDeque<Instant>> // pid → open timestamps (1 s window)
+file_counts:  HashMap<String, u64>            // path → total open count
+ext_counts:   HashMap<String, u64>            // extension → total open count
+rate_history: VecDeque<RateSample>            // per-second event counts (sparklines)
+tick_execs/opens/alerts: u64                 // accumulated since last tick
 ```
 
 `handle_event`:
 
-1. Records the event into `ProcStats` (totals per kind).
+1. Records the event into `ProcStats` (totals per kind, extension map).
 2. For `Open` events, pushes the timestamp onto the PID's sliding window and
    evicts entries older than `WINDOW_SECS` (1 s).
-3. **Alert trigger:** when the window length reaches exactly `threshold`, an
+3. Increments `file_counts` and `ext_counts` for file-extension tracking.
+4. **Alert trigger:** when the window length reaches exactly `threshold`, an
    `Alert` is emitted (once per crossing; further opens keep counting). A
    threshold of `0` disables alerting entirely.
 
+Every ~1 second, `poll()` flushes the tick counters into a `RateSample`
+appended to `rate_history` (capped at 120 seconds). This powers the TUI's
+sparkline rate charts.
+
 `stats_sorted` returns processes ranked by current `opens/s` for the TUI's
-"Top processes" panel. `uptime` and `total_lost` feed the status bar.
+"Top processes" panel. `top_files(n)` returns the N most-opened files with
+normalised Shannon entropy scores. `extension_counts` feeds the "File Types"
+panel. `uptime` and `total_lost` feed the status bar.
 
 ### 3.4 Output layer
 
@@ -161,7 +172,7 @@ The main thread routes these by mode:
 
 | Mode | Implementation |
 |---|---|
-| **TUI** | `tui.rs` — `ratatui` layout: events log (scrollable), top-processes table, alerts panel, status bar with uptime/lost/threshold |
+| **TUI** | `tui.rs` — cyberpunk-themed `ratatui` layout: event log (scrollable), sparkline rate charts, top-processes table with mini-bars, file-type frequency panel, top-files leaderboard with entropy, alerts panel, status bar |
 | **JSON** | `run_json` — one JSON object per line: events and alerts (see schema in `README.md`) |
 | **Plain** | `run_plain` — human-readable timestamped lines |
 | **Diagnose** | `run_diagnose` — verifies tracepoint IDs under `/sys/kernel/tracing/events`, loads + attaches, listens 5 s, prints counters |
@@ -169,6 +180,14 @@ The main thread routes these by mode:
 Mode selection: `--tui` forces the TUI; otherwise `--json` / `--plain` select
 their modes; with no flags and a TTY stdout, the TUI is the default (non-TTY
 stdout defaults to plain, keeping pipes clean).
+
+The TUI uses a 3-column layout:
+- **Left (40%)**: scrollable event log with colour-coded EXEC/OPEN/ALERT tags
+- **Middle (30%)**: top-processes table (top) + file-type frequency bars (bottom)
+- **Right (30%)**: top-files leaderboard with entropy scores (top) + alerts (bottom)
+
+Sparkline charts for exec/s, open/s, and alert/s are rendered above the body,
+using a 120-second rolling window of per-second rate samples.
 
 Signal handling (`install_signal_handler`) sets an atomic `QUIT` flag on
 `SIGINT`/`SIGTERM` so loops exit cleanly and buffers flush.
@@ -199,12 +218,14 @@ Design decisions:
 ## 5. Data flow summary
 
 ```
-kernel                  userspace reader            monitor core            output
-──────────              ─────────────────          ─────────────            ──────
-openat entry   ──► EVENTS map ──► perf buffer ──► Msg::Event ──► sliding window ──► TUI / JSON / plain
-                                  (per CPU)           │                │
-                                                      └─ Msg::Lost ────► lost counter ──► status bar
-                                                                        └─ Alert (on threshold) ──► alerts panel
+kernel                  userspace reader            monitor core                        output
+──────────              ─────────────────          ─────────────                        ──────
+openat entry   ──► EVENTS map ──► perf buffer ──► Msg::Event ──► sliding window     ──► TUI / JSON / plain
+                                  (per CPU)           │          ├─ file_counts     ──► top-files panel
+                                                      │          ├─ ext_counts      ──► file-types panel
+                                                      │          ├─ rate_history    ──► sparkline charts
+                                                      │          └─ Alert (on threshold) ──► alerts panel
+                                                      └─ Msg::Lost ──► lost counter ──► status bar
 ```
 
 ---
@@ -217,7 +238,7 @@ openat entry   ──► EVENTS map ──► perf buffer ──► Msg::Event �
 | Userspace decode | Pre-allocated `BytesMut` pools; zero per-event allocation in the hot loop |
 | Latency | Reader polls perf buffers continuously; events typically visible in <1 ms |
 | Idle CPU | Reader sleeps 1 ms when no buffers have data |
-| Memory | Sliding window evicts old entries every poll; maps bounded by live PIDs |
+| Memory | Sliding window evicts old entries every poll; maps bounded by live PIDs; rate_history capped at 120 samples |
 | Binary | Full LTO + `strip = "symbols"` + `panic = "abort"` release profile |
 
 ---
