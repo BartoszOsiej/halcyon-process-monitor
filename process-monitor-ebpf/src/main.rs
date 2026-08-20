@@ -19,7 +19,9 @@ pub const EVENT_EXECVE: u8 = 0;
 pub const EVENT_OPENAT: u8 = 1;
 pub const EVENT_FILENAME_LEN: usize = 64;
 pub const EVENT_COMM_LEN: usize = 16;
+pub const EVENT_ARGV_LEN: usize = 128;
 
+/// Event record shared between kernel and userspace (`#[repr(C)]`).
 #[repr(C)]
 pub struct ProcessEvent {
     pub event_type: u8,
@@ -27,6 +29,7 @@ pub struct ProcessEvent {
     pub uid: u32,
     pub comm: [u8; EVENT_COMM_LEN],
     pub filename: [u8; EVENT_FILENAME_LEN],
+    pub argv: [u8; EVENT_ARGV_LEN],
 }
 
 #[map]
@@ -52,6 +55,7 @@ fn emit_event(ctx: &TracePointContext, event_type: u8, filename_arg: u32) -> u32
         uid,
         comm: [0u8; EVENT_COMM_LEN],
         filename: [0u8; EVENT_FILENAME_LEN],
+        argv: [0u8; EVENT_ARGV_LEN],
     };
 
     if let Ok(comm) = bpf_get_current_comm() {
@@ -59,22 +63,49 @@ fn emit_event(ctx: &TracePointContext, event_type: u8, filename_arg: u32) -> u32
         event.comm[..n].copy_from_slice(&comm[..n]);
     }
 
-    // Tracepoint buffer layout (64-bit): struct trace_entry (8 bytes) followed
-    // by a long syscall id (8 bytes), then up to 6 syscall arguments. The
-    // filename is argument 0 for execve and argument 1 for openat.
     let ptr_size = core::mem::size_of::<*const c_char>();
     let filename_offset = 16 + filename_arg as usize * ptr_size;
 
-    // The filename is a userspace pointer: it must be read with the
-    // bpf_probe_read_user helper, never dereferenced directly, or the
-    // verifier will reject the program.
+    // Read the filename from the tracepoint args.
     if let Ok(filename) = unsafe { ctx.read_at::<*const c_char>(filename_offset) } {
         if !filename.is_null() {
             let dst = unsafe {
                 slice::from_raw_parts_mut(event.filename.as_mut_ptr(), EVENT_FILENAME_LEN)
             };
-            if let Ok(bytes) = unsafe { bpf_probe_read_user_str_bytes(filename.cast::<u8>(), dst) } {
+            if let Ok(bytes) = unsafe { bpf_probe_read_user_str_bytes(filename.cast::<u8>(), dst) }
+            {
                 event.filename[..bytes.len()].copy_from_slice(bytes);
+            }
+        }
+    }
+
+    // For execve: read argv[0] (full command path as typed by user).
+    // Tracepoint layout: arg0=filename, arg1=argv (userspace char** pointer).
+    if event_type == EVENT_EXECVE {
+        let argv_offset = 16 + 1 * ptr_size;
+        // Read the argv pointer value from the tracepoint context buffer.
+        if let Ok(argv_ptr) = unsafe { ctx.read_at::<*const *const c_char>(argv_offset) } {
+            if !argv_ptr.is_null() {
+                // Dereference argv to get argv[0] (a userspace pointer).
+                // Use bpf_probe_read_user since argv_ptr points to userspace memory.
+                let mut arg0: *const c_char = core::ptr::null();
+                let rc = unsafe {
+                    aya_ebpf::helpers::bpf_probe_read_user(
+                        (&mut arg0 as *mut *const c_char).cast::<()>(),
+                        ptr_size as u32,
+                        argv_ptr.cast::<()>(),
+                    )
+                };
+                if rc == 0 && !arg0.is_null() {
+                    let dst = unsafe {
+                        slice::from_raw_parts_mut(event.argv.as_mut_ptr(), EVENT_ARGV_LEN)
+                    };
+                    if let Ok(bytes) = unsafe {
+                        bpf_probe_read_user_str_bytes(arg0.cast::<u8>(), dst)
+                    } {
+                        event.argv[..bytes.len()].copy_from_slice(bytes);
+                    }
+                }
             }
         }
     }
