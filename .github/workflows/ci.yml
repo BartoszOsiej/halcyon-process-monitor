@@ -29,7 +29,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@nightly
         with:
           components: rust-src
-      - name: Install bpf-linker
-        run: cargo install bpf-linker
+      - name: Install bpf-linker (prebuilt)
+        run: |
+          curl -LsSf https://github.com/cargo-bins/cargo-binstall/releases/latest/download/cargo-binstall-x86_64-unknown-linux-gnu.tgz | tar xvzf - -C /usr/local/bin
+          cargo binstall -y bpf-linker
       - name: Build eBPF (bpfel-unknown-none)
         run: cargo build -Z build-std=core --target bpfel-unknown-none --release
