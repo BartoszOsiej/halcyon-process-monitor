@@ -1,5 +1,8 @@
 <img src="https://capsule-render.vercel.app/api?type=soft&color=0:0d1117,50:da3633,100:f0883e&height=140&section=header&text=Halcyon%20Process%20Monitor&fontSize=34&fontColor=fff&desc=eBPF%20ransomware%20behavior%20tracker%20%C2%B7%20kernel-level%20telemetry&descSize=15&descAlignY=72" width="100%" />
 
+
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/BartoszOsiej/halcyon-process-monitor/badge)](https://scorecard.dev/viewer/?uri=github.com/BartoszOsiej/halcyon-process-monitor)
+
 <div align="center">
 
 [![crates.io](https://img.shields.io/crates/v/process-monitor?style=for-the-badge&logo=rust&label=process-monitor)](https://crates.io/crates/process-monitor)
