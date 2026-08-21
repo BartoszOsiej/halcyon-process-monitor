@@ -5,6 +5,7 @@
 ![crates.io](https://img.shields.io/crates/v/process-monitor?style=flat-square&label=process-monitor&logo=rust)
 ![eBPF](https://img.shields.io/badge/eBPF-Linux%205.8+-FCD900?style=flat-square&logo=linux)
 ![Docker](https://img.shields.io/badge/Docker-GHCR-2496ED?style=flat-square&logo=docker)
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/BartoszOsiej/halcyon-process-monitor/badge)](https://securityscorecards.dev/viewer/?uri=github.com/BartoszOsiej/halcyon-process-monitor)
 
 **Real-time, eBPF-based process and file-operation telemetry for Linux.**
 
