@@ -227,6 +227,12 @@ sudo process-monitor --diagnose    # 5-second self-diagnostic
 
 ---
 
+## Why?
+
+Because ransomware detection should not require a $50K enterprise solution. Halcyon runs at the kernel level with eBPF, scores file-open rates in real-time, and alerts you in a live TUI -- all from a single static binary. Open source, auditable, and free.
+
+---
+
 ## License
 
 MIT
