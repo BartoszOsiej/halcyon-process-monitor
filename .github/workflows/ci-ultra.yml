@@ -11,13 +11,15 @@ concurrency:
 
 permissions:
   contents: read
+  security-events: write
+  id-token: write
 
 env:
   CARGO_TERM_COLOR: always
   RUSTFLAGS: "-D warnings"
 
 jobs:
-  # ── SYNTAX ──────────────────────────────────────────────────
+  # ── SYNTAX (najwyższy poziom) ───────────────────────────────
   fmt:
     name: fmt (${{ matrix.os }})
     strategy:
@@ -26,15 +28,13 @@ jobs:
         os: [ubuntu-24.04, ubuntu-24.04-arm]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
-        with:
-          persist-credentials: false
-      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c  # stable
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
         with:
           components: rustfmt
       - run: cargo fmt --all -- --check
 
-  # ── RUST ────────────────────────────────────────────────────
+  # ── RUST (najwyższy poziom: nightly + pedantic + nursery) ───
   clippy:
     name: clippy (${{ matrix.os }})
     strategy:
@@ -43,15 +43,13 @@ jobs:
         os: [ubuntu-24.04, ubuntu-24.04-arm]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
-        with:
-          persist-credentials: false
-      - uses: dtolnay/rust-toolchain@7c8d7d138f5c09cef361f8214cf96882cd029cdb  # nightly
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: dtolnay/rust-toolchain@7c8d7d138f5c09cef361f8214cf96882cd029cdb
         with:
           components: clippy
-      - run: cargo clippy --all-targets --all-features -- -D warnings
+      - run: cargo clippy --all-targets --all-features -- -D warnings -W clippy::all -W clippy::pedantic -W clippy::nursery -W clippy::style
 
-  # ── TESTY ───────────────────────────────────────────────────
+  # ── TESTY (osobno, na ARM i x86) ────────────────────────────
   test:
     name: test (${{ matrix.os }})
     strategy:
@@ -60,77 +58,42 @@ jobs:
         os: [ubuntu-24.04, ubuntu-24.04-arm]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
-        with:
-          persist-credentials: false
-      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c  # stable
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
       - run: cargo test --all-features --verbose
 
-  # ── eBPF build ──────────────────────────────────────────────
+  # ── eBPF build (bpfel target) ───────────────────────────────
   ebpf:
     name: ebpf-build
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: dtolnay/rust-toolchain@7c8d7d138f5c09cef361f8214cf96882cd029cdb
         with:
-          persist-credentials: false
-      - uses: dtolnay/rust-toolchain@7c8d7d138f5c09cef361f8214cf96882cd029cdb  # nightly
-        with:
-          components: rust-src
-      - name: Install bpf-linker (from source, matches nightly LLVM)
-        run: cargo install bpf-linker --git https://github.com/alessandrod/bpf-linker --force
-      - name: Fix libLLVM symlink (nightly linker scripts)
-        run: |
-          RUSTLIB_ROOT="$(rustc --print sysroot)"
-          RUSTLIB="${RUSTLIB_ROOT}/lib"
-          for f in "$RUSTLIB"/libLLVM-*-rust-*.so; do
-            [ -f "$f" ] || continue
-            SIZE="$(stat -c%s "$f" 2>/dev/null || echo 999999)"
-            if [ "$SIZE" -lt 1024 ] 2>/dev/null; then
-              REAL="$(grep -oP '(?<=INPUT\()[^)]+' "$f" 2>/dev/null || true)"
-              if [ -n "$REAL" ] && [ -f "$RUSTLIB/$REAL" ]; then
-                mv "$f" "${f}.script"
-                ln -s "$REAL" "$f"
-              fi
-            fi
-          done
-      - name: Build eBPF (bpfel-unknown-none)
-        run: |
-          RUSTLIB_ROOT="$(rustc --print sysroot)"
-          RUSTLIB="${RUSTLIB_ROOT}/lib"
-          for f in "$RUSTLIB"/libLLVM.so.*; do
-            [ -f "$f" ] || break
-            LD_LIBRARY_PATH="$(dirname "$f"):$LD_LIBRARY_PATH"
-            export LD_LIBRARY_PATH
-            break
-          done
-          cargo +nightly build --profile bpf --target bpfel-unknown-none -Z build-std=core --manifest-path process-monitor-ebpf/Cargo.toml
+          targets: bpfel-unknown-none
+          components: llvm-tools-preview, rust-src
+      - run: cargo install bpf-linker
+      - run: cargo build --target bpfel-unknown-none -p process-monitor-ebpf
 
-  # ── MIRI ────────────────────────────────────────────────────
+  # ── MIRI (UB w unsafe) ──────────────────────────────────────
   miri:
     name: miri
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
-        with:
-          persist-credentials: false
-      - uses: dtolnay/rust-toolchain@7c8d7d138f5c09cef361f8214cf96882cd029cdb  # nightly
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: dtolnay/rust-toolchain@7c8d7d138f5c09cef361f8214cf96882cd029cdb
         with:
           components: miri
       - run: cargo miri setup
       - run: cargo miri test
-        env:
-          MIRIFLAGS: "-Zmiri-ignore-leaks"
 
-  # ── SECURITY ────────────────────────────────────────────────
+  # ── SECURITY (najwyższy poziom) ─────────────────────────────
   audit:
     name: cargo-audit
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
-        with:
-          persist-credentials: false
-      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c  # stable
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
       - run: cargo install cargo-audit --locked
       - run: cargo audit --deny warnings
 
@@ -138,10 +101,8 @@ jobs:
     name: cargo-deny
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
-        with:
-          persist-credentials: false
-      - uses: EmbarkStudios/cargo-deny-action@b66acf5e9fe20f8aba065be86778a8a4c846f902  # v2
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25
         with:
           command: check all
 
@@ -149,60 +110,43 @@ jobs:
     name: typos
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
-        with:
-          persist-credentials: false
-      - uses: crate-ci/typos@12ffd4a04b4893ab75db66a59aaad2d996c3e982  # v1
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: crate-ci/typos@1a51d4b5a03bb97576af186c813af67e9137ba7c
 
   zizmor:
     name: zizmor (GH Actions security)
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
-        with:
-          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: astral-sh/ruff-action@4919ec5cf1f49eff0871dbcea0da843445b837e6
       - run: pip install zizmor && zizmor .
 
   actionlint:
     name: actionlint
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
-        with:
-          persist-credentials: false
-      - uses: raven-actions/actionlint@3d39aea434753780c3b3d4a1a31c854b4dbf49d7  # v2.2.0
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: raven-actions/actionlint@3d39aea434753780c3b3d4a1a31c854b4dbf49d7
 
   codeql:
     name: CodeQL
     runs-on: ubuntu-24.04
-    permissions:
-      contents: read
-      security-events: write
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
-        with:
-          persist-credentials: false
-      - uses: github/codeql-action/init@6d786de4d6f3531a740e445b53a42b622bbbace8  # v3
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: github/codeql-action/init@42947a340483f03ba47bb1a039b2c519aab3df85
         with:
           languages: rust
-      - uses: github/codeql-action/analyze@6d786de4d6f3531a740e445b53a42b622bbbace8  # v3
+      - uses: github/codeql-action/analyze@42947a340483f03ba47bb1a039b2c519aab3df85
 
   scorecard:
     name: OpenSSF Scorecard
     runs-on: ubuntu-24.04
-    permissions:
-      contents: read
-      security-events: write
-      id-token: write
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
-      - uses: ossf/scorecard-action@4eaacf0543bb3f2c246792bd56e8cdeffafb205a  # v2.4.3
+      - uses: ossf/scorecard-action@f49aabe0b5af0936a0987cfb85d86b75731b0186
         with:
           results_file: results.sarif
           results_format: sarif
-          publish_results: false
-      - uses: github/codeql-action/upload-sarif@6d786de4d6f3531a740e445b53a42b622bbbace8  # v3
-        with:
-          sarif_file: results.sarif
+          publish_results: true
