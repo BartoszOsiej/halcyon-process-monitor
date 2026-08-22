@@ -8,9 +8,7 @@ use ratatui::{
     layout::{Constraint, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{
-        Block, Borders, Cell, Clear, Paragraph, Row, Sparkline, Table,
-    },
+    widgets::{Block, Borders, Cell, Clear, Paragraph, Row, Sparkline, Table},
     Frame,
 };
 
@@ -295,13 +293,41 @@ impl App {
             }
 
             // Direct panel focus with number keys
-            KeyCode::Char('1') => { self.focused = 0; self.scroll = 0; false }
-            KeyCode::Char('2') => { self.focused = 1; self.scroll = 0; false }
-            KeyCode::Char('3') => { self.focused = 2; self.scroll = 0; false }
-            KeyCode::Char('4') => { self.focused = 3; self.scroll = 0; false }
-            KeyCode::Char('5') => { self.focused = 4; self.scroll = 0; false }
-            KeyCode::Char('6') => { self.focused = 5; self.scroll = 0; false }
-            KeyCode::Char('7') => { self.focused = 6; self.scroll = 0; false }
+            KeyCode::Char('1') => {
+                self.focused = 0;
+                self.scroll = 0;
+                false
+            }
+            KeyCode::Char('2') => {
+                self.focused = 1;
+                self.scroll = 0;
+                false
+            }
+            KeyCode::Char('3') => {
+                self.focused = 2;
+                self.scroll = 0;
+                false
+            }
+            KeyCode::Char('4') => {
+                self.focused = 3;
+                self.scroll = 0;
+                false
+            }
+            KeyCode::Char('5') => {
+                self.focused = 4;
+                self.scroll = 0;
+                false
+            }
+            KeyCode::Char('6') => {
+                self.focused = 5;
+                self.scroll = 0;
+                false
+            }
+            KeyCode::Char('7') => {
+                self.focused = 6;
+                self.scroll = 0;
+                false
+            }
 
             // Search
             KeyCode::Char('/') => {
@@ -370,10 +396,17 @@ impl App {
                         match ev.kind {
                             Kind::Exec => {
                                 ev.comm.to_lowercase().contains(&q)
-                                    || ev.argv.as_deref().map(|a| a.to_lowercase().contains(&q)).unwrap_or(false)
+                                    || ev
+                                        .argv
+                                        .as_deref()
+                                        .map(|a| a.to_lowercase().contains(&q))
+                                        .unwrap_or(false)
                             }
                             Kind::Open => {
-                                ev.file.as_deref().map(|f| f.to_lowercase().contains(&q)).unwrap_or(false)
+                                ev.file
+                                    .as_deref()
+                                    .map(|f| f.to_lowercase().contains(&q))
+                                    .unwrap_or(false)
                                     || ev.comm.to_lowercase().contains(&q)
                             }
                             _ => ev.comm.to_lowercase().contains(&q),
@@ -386,7 +419,11 @@ impl App {
 
                     let (style, tag, body) = match ev.kind {
                         Kind::Exec => {
-                            let argv_info = ev.argv.as_ref().map(|a| format!(" {a}")).unwrap_or_default();
+                            let argv_info = ev
+                                .argv
+                                .as_ref()
+                                .map(|a| format!(" {a}"))
+                                .unwrap_or_default();
                             (
                                 Style::new().fg(NEON_GREEN).add_modifier(Modifier::BOLD),
                                 String::from("EXEC"),
@@ -419,7 +456,11 @@ impl App {
                         Kind::Connect | Kind::Accept | Kind::SendTo | Kind::RecvFrom => {
                             let kind_str = format!("{:?}", ev.kind);
                             let addr = ev.file.as_deref().unwrap_or("?");
-                            let bytes_str = ev.bytes.as_ref().map(|b| format!(" ({b} bytes)")).unwrap_or_default();
+                            let bytes_str = ev
+                                .bytes
+                                .as_ref()
+                                .map(|b| format!(" ({b} bytes)"))
+                                .unwrap_or_default();
                             self.push_network(NetworkEntry {
                                 ts: ev.ts.clone(),
                                 pid: ev.pid,
@@ -448,9 +489,7 @@ impl App {
                         bucket.alert_count += 1;
                     }
                     let line = LogLine {
-                        style: Style::new()
-                            .fg(NEON_RED)
-                            .add_modifier(Modifier::BOLD),
+                        style: Style::new().fg(NEON_RED).add_modifier(Modifier::BOLD),
                         text: format!(
                             "{} ⚠ ALERT [{}] {} — {} opens/s",
                             alert.ts, alert.pid, alert.comm, alert.opens
@@ -553,15 +592,16 @@ fn draw(frame: &mut Frame, app: &App, monitor: &Monitor) {
     let area = frame.area();
 
     // Main layout: header (2) | tab bar (1) | sparklines (2) | body | status (1) | footer (1)
-    let [header_area, tab_area, spark_area, body_area, status_area, footer_area] = Layout::vertical([
-        Constraint::Length(2),
-        Constraint::Length(1),
-        Constraint::Length(2),
-        Constraint::Min(0),
-        Constraint::Length(1),
-        Constraint::Length(1),
-    ])
-    .areas(area);
+    let [header_area, tab_area, spark_area, body_area, status_area, footer_area] =
+        Layout::vertical([
+            Constraint::Length(2),
+            Constraint::Length(1),
+            Constraint::Length(2),
+            Constraint::Min(0),
+            Constraint::Length(1),
+            Constraint::Length(1),
+        ])
+        .areas(area);
 
     draw_header(frame, app, monitor, header_area);
     draw_tab_bar(frame, app, tab_area);
@@ -589,9 +629,7 @@ fn draw_header(frame: &mut Frame, app: &App, monitor: &Monitor, area: Rect) {
     let logo_lines = vec![
         Line::from(vec![Span::styled(
             "  ⚡ HALCYON eBPF MONITOR",
-            Style::new()
-                .fg(CYAN)
-                .add_modifier(Modifier::BOLD),
+            Style::new().fg(CYAN).add_modifier(Modifier::BOLD),
         )]),
         Line::from(vec![Span::styled(
             "  kernel tracepoint · real-time · v0.4",
@@ -601,7 +639,11 @@ fn draw_header(frame: &mut Frame, app: &App, monitor: &Monitor, area: Rect) {
     frame.render_widget(Paragraph::new(logo_lines), logo_area);
 
     let status_color = if app.paused { NEON_YELLOW } else { NEON_GREEN };
-    let status_text = if app.paused { "▐ PAUSED " } else { "▐ LIVE " };
+    let status_text = if app.paused {
+        "▐ PAUSED "
+    } else {
+        "▐ LIVE "
+    };
 
     let elapsed = monitor.uptime().as_secs();
     let (days, hours, mins, secs) = (
@@ -619,9 +661,7 @@ fn draw_header(frame: &mut Frame, app: &App, monitor: &Monitor, area: Rect) {
     let stats_line = Line::from(vec![
         Span::styled(
             status_text,
-            Style::new()
-                .fg(status_color)
-                .add_modifier(Modifier::BOLD),
+            Style::new().fg(status_color).add_modifier(Modifier::BOLD),
         ),
         Span::styled(
             format!(
@@ -755,8 +795,7 @@ fn draw_body(frame: &mut Frame, app: &App, monitor: &Monitor, area: Rect) {
     .areas(area);
 
     let [middle_top, middle_bottom] =
-        Layout::vertical([Constraint::Percentage(55), Constraint::Percentage(45)])
-            .areas(middle);
+        Layout::vertical([Constraint::Percentage(55), Constraint::Percentage(45)]).areas(middle);
 
     let [right_top, right_middle, right_bottom] = Layout::vertical([
         Constraint::Percentage(35),
@@ -832,7 +871,11 @@ fn draw_process_tree(frame: &mut Frame, app: &App, monitor: &Monitor, area: Rect
         .take(inner_height)
         .map(|(depth, node)| {
             let indent = "  ".repeat(*depth);
-            let prefix = if node.children.is_empty() { "└─ " } else { "├─ " };
+            let prefix = if node.children.is_empty() {
+                "└─ "
+            } else {
+                "├─ "
+            };
             let node_style = if node.alerts > 0 {
                 Style::new().fg(NEON_RED).add_modifier(Modifier::BOLD)
             } else if node.total_opens > 100 {
@@ -857,15 +900,9 @@ fn draw_process_tree(frame: &mut Frame, app: &App, monitor: &Monitor, area: Rect
                 String::new()
             };
             Line::from(vec![
-                Span::styled(
-                    format!("{indent}{prefix}"),
-                    Style::new().fg(PANEL_BORDER),
-                ),
+                Span::styled(format!("{indent}{prefix}"), Style::new().fg(PANEL_BORDER)),
                 Span::styled(&node.comm, node_style),
-                Span::styled(
-                    format!(" [{}]", node.pid),
-                    pid_style,
-                ),
+                Span::styled(format!(" [{}]", node.pid), pid_style),
                 Span::styled(opens_badge, Style::new().fg(DIM_BRIGHT)),
                 Span::styled(
                     alert_badge,
@@ -922,23 +959,14 @@ fn draw_network_panel(frame: &mut Frame, app: &App, area: Rect) {
                 .map(|b| format!(" [{b}]"))
                 .unwrap_or_default();
             Line::from(vec![
-                Span::styled(
-                    format!("{} ", entry.ts),
-                    Style::new().fg(DIM),
-                ),
+                Span::styled(format!("{} ", entry.ts), Style::new().fg(DIM)),
                 Span::styled(
                     format!("{kind_icon} {:>8}", entry.kind),
                     Style::new().fg(kind_color).add_modifier(Modifier::BOLD),
                 ),
-                Span::styled(
-                    format!(" [{}] ", entry.pid),
-                    Style::new().fg(DIM_BRIGHT),
-                ),
+                Span::styled(format!(" [{}] ", entry.pid), Style::new().fg(DIM_BRIGHT)),
                 Span::styled(&entry.comm, Style::new().fg(Color::White)),
-                Span::styled(
-                    format!(" -> {}", entry.addr),
-                    Style::new().fg(MAGENTA),
-                ),
+                Span::styled(format!(" -> {}", entry.addr), Style::new().fg(MAGENTA)),
                 Span::styled(bytes_info, Style::new().fg(DIM)),
             ])
         })
@@ -1000,10 +1028,7 @@ fn draw_extensions(frame: &mut Frame, monitor: &Monitor, area: Rect) {
                 ),
                 Span::styled(filled, Style::new().fg(ext_color)),
                 Span::styled(empty, Style::new().fg(DIM)),
-                Span::styled(
-                    format!(" {:>5}", count),
-                    Style::new().fg(count_color),
-                ),
+                Span::styled(format!(" {:>5}", count), Style::new().fg(count_color)),
             ])
         })
         .collect();
@@ -1065,14 +1090,11 @@ fn draw_top_files(frame: &mut Frame, monitor: &Monitor, area: Rect) {
             Row::new(vec![
                 Cell::from(format!("#{}", i + 1)).style(rank_style),
                 Cell::from(path_display).style(Style::new().fg(Color::White)),
-                Cell::from(format!(".{}", f.extension)).style(
-                    Style::new().fg(ext_color).add_modifier(Modifier::BOLD),
-                ),
+                Cell::from(format!(".{}", f.extension))
+                    .style(Style::new().fg(ext_color).add_modifier(Modifier::BOLD)),
                 Cell::from(f.count.to_string()).style(Style::new().fg(NEON_GREEN)),
                 Cell::from(bar).style(Style::new().fg(DIM_BRIGHT)),
-                Cell::from(format!("{:.2}", f.entropy)).style(
-                    Style::new().fg(entropy_color),
-                ),
+                Cell::from(format!("{:.2}", f.entropy)).style(Style::new().fg(entropy_color)),
             ])
         })
         .collect();
@@ -1087,23 +1109,17 @@ fn draw_top_files(frame: &mut Frame, monitor: &Monitor, area: Rect) {
     ];
 
     let header = Row::new(vec![" #", "FILE", "EXT", "OPS", "BAR", "ENTR"])
-        .style(
-            Style::new()
-                .fg(CYAN)
-                .add_modifier(Modifier::BOLD),
-        );
+        .style(Style::new().fg(CYAN).add_modifier(Modifier::BOLD));
 
-    let table = Table::new(rows, widths)
-        .header(header)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(Span::styled(
-                    format!(" TOP FILES ({}) ", top.len()),
-                    Style::new().fg(CYAN).add_modifier(Modifier::BOLD),
-                ))
-                .border_style(Style::new().fg(PANEL_BORDER)),
-        );
+    let table = Table::new(rows, widths).header(header).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .title(Span::styled(
+                format!(" TOP FILES ({}) ", top.len()),
+                Style::new().fg(CYAN).add_modifier(Modifier::BOLD),
+            ))
+            .border_style(Style::new().fg(PANEL_BORDER)),
+    );
 
     frame.render_widget(table, area);
 }
@@ -1134,14 +1150,16 @@ fn draw_alerts(frame: &mut Frame, app: &App, area: Rect) {
         lines
     };
 
-    let title_color = if alert_count > 0 { NEON_RED } else { NEON_GREEN };
+    let title_color = if alert_count > 0 {
+        NEON_RED
+    } else {
+        NEON_GREEN
+    };
     let block = Block::default()
         .borders(Borders::ALL)
         .title(Span::styled(
             format!(" ⚠ ALERTS ({}) ", alert_count),
-            Style::new()
-                .fg(title_color)
-                .add_modifier(Modifier::BOLD),
+            Style::new().fg(title_color).add_modifier(Modifier::BOLD),
         ))
         .border_style(Style::new().fg(if alert_count > 0 {
             NEON_RED
@@ -1176,15 +1194,9 @@ fn draw_status_bar(frame: &mut Frame, app: &App, _monitor: &Monitor, area: Rect)
             ),
             Style::new().fg(DIM_BRIGHT),
         ),
-        Span::styled(
-            search_status,
-            Style::new().fg(NEON_YELLOW),
-        ),
+        Span::styled(search_status, Style::new().fg(NEON_YELLOW)),
     ]);
-    frame.render_widget(
-        Paragraph::new(line).style(Style::new().bg(BG_DARK)),
-        area,
-    );
+    frame.render_widget(Paragraph::new(line).style(Style::new().bg(BG_DARK)), area);
 }
 
 // ── Footer ────────────────────────────────────────────────────────────────
@@ -1195,9 +1207,7 @@ fn draw_footer(frame: &mut Frame, _app: &App, area: Rect) {
         vec![
             Span::styled(
                 format!(" {label} "),
-                Style::new()
-                    .fg(NEON_YELLOW)
-                    .add_modifier(Modifier::BOLD),
+                Style::new().fg(NEON_YELLOW).add_modifier(Modifier::BOLD),
             ),
             Span::raw(desc.to_string()),
             Span::styled(" │ ".to_string(), Style::new().fg(DIM)),
@@ -1240,14 +1250,13 @@ fn draw_help_overlay(frame: &mut Frame, area: Rect) {
     let help_text = vec![
         Line::from(vec![Span::styled(
             " ⚡ HALCYON KEYBINDINGS ",
-            Style::new()
-                .fg(CYAN)
-                .add_modifier(Modifier::BOLD),
+            Style::new().fg(CYAN).add_modifier(Modifier::BOLD),
         )]),
         Line::raw(""),
-        Line::from(vec![
-            Span::styled("  NAVIGATION", Style::new().fg(NEON_YELLOW).add_modifier(Modifier::BOLD)),
-        ]),
+        Line::from(vec![Span::styled(
+            "  NAVIGATION",
+            Style::new().fg(NEON_YELLOW).add_modifier(Modifier::BOLD),
+        )]),
         Line::raw("    q / Esc      Quit (or clear scroll)"),
         Line::raw("    p            Pause / resume"),
         Line::raw("    c            Clear all panels"),
@@ -1257,30 +1266,34 @@ fn draw_help_overlay(frame: &mut Frame, area: Rect) {
         Line::raw("    g / Home     Jump to top"),
         Line::raw("    G / End      Jump to bottom"),
         Line::raw(""),
-        Line::from(vec![
-            Span::styled("  PANELS", Style::new().fg(NEON_YELLOW).add_modifier(Modifier::BOLD)),
-        ]),
+        Line::from(vec![Span::styled(
+            "  PANELS",
+            Style::new().fg(NEON_YELLOW).add_modifier(Modifier::BOLD),
+        )]),
         Line::raw("    Tab          Next panel"),
         Line::raw("    Shift+Tab    Previous panel"),
         Line::raw("    1-7          Jump to panel"),
         Line::raw("    Enter        Open process detail"),
         Line::raw(""),
-        Line::from(vec![
-            Span::styled("  SEARCH & FILTER", Style::new().fg(NEON_YELLOW).add_modifier(Modifier::BOLD)),
-        ]),
+        Line::from(vec![Span::styled(
+            "  SEARCH & FILTER",
+            Style::new().fg(NEON_YELLOW).add_modifier(Modifier::BOLD),
+        )]),
         Line::raw("    /            Start search"),
         Line::raw("    Esc          Cancel search"),
         Line::raw("    Enter        Apply filter"),
         Line::raw(""),
-        Line::from(vec![
-            Span::styled("  LAYOUT", Style::new().fg(NEON_YELLOW).add_modifier(Modifier::BOLD)),
-        ]),
+        Line::from(vec![Span::styled(
+            "  LAYOUT",
+            Style::new().fg(NEON_YELLOW).add_modifier(Modifier::BOLD),
+        )]),
         Line::raw("    [ / ]        Resize left panel"),
         Line::raw("    { / }        Resize middle panel"),
         Line::raw(""),
-        Line::from(vec![
-            Span::styled("  OTHER", Style::new().fg(NEON_YELLOW).add_modifier(Modifier::BOLD)),
-        ]),
+        Line::from(vec![Span::styled(
+            "  OTHER",
+            Style::new().fg(NEON_YELLOW).add_modifier(Modifier::BOLD),
+        )]),
         Line::raw("    ? / h        Show this help"),
         Line::raw("    Ctrl+C       Force quit"),
     ];
@@ -1289,9 +1302,7 @@ fn draw_help_overlay(frame: &mut Frame, area: Rect) {
         .borders(Borders::ALL)
         .title(Span::styled(
             " HELP — press any key to close ",
-            Style::new()
-                .fg(CYAN)
-                .add_modifier(Modifier::BOLD),
+            Style::new().fg(CYAN).add_modifier(Modifier::BOLD),
         ))
         .border_style(Style::new().fg(CYAN))
         .style(Style::new().bg(BG_PANEL));
@@ -1319,7 +1330,11 @@ fn draw_detail_overlay(frame: &mut Frame, _app: &App, monitor: &Monitor, area: R
         .take(inner_height)
         .map(|(depth, node)| {
             let indent = "  ".repeat(*depth);
-            let prefix = if node.children.is_empty() { "└─ " } else { "├─ " };
+            let prefix = if node.children.is_empty() {
+                "└─ "
+            } else {
+                "├─ "
+            };
             let style = if node.alerts > 0 {
                 Style::new().fg(NEON_RED).add_modifier(Modifier::BOLD)
             } else if node.total_opens > 0 {
@@ -1327,12 +1342,13 @@ fn draw_detail_overlay(frame: &mut Frame, _app: &App, monitor: &Monitor, area: R
             } else {
                 Style::new().fg(Color::White)
             };
-            Line::from(vec![
-                Span::styled(
-                    format!("{indent}{prefix}{} [{}] opens={} alerts={}", node.comm, node.pid, node.total_opens, node.alerts),
-                    style,
+            Line::from(vec![Span::styled(
+                format!(
+                    "{indent}{prefix}{} [{}] opens={} alerts={}",
+                    node.comm, node.pid, node.total_opens, node.alerts
                 ),
-            ])
+                style,
+            )])
         })
         .collect();
 
@@ -1340,9 +1356,7 @@ fn draw_detail_overlay(frame: &mut Frame, _app: &App, monitor: &Monitor, area: R
         .borders(Borders::ALL)
         .title(Span::styled(
             " PROCESS DETAIL — press d/Esc to close ",
-            Style::new()
-                .fg(CYAN)
-                .add_modifier(Modifier::BOLD),
+            Style::new().fg(CYAN).add_modifier(Modifier::BOLD),
         ))
         .border_style(Style::new().fg(CYAN))
         .style(Style::new().bg(BG_PANEL));
@@ -1409,7 +1423,8 @@ mod tests {
         let backend = ratatui::backend::TestBackend::new(160, 50);
         let mut terminal = ratatui::Terminal::new(backend).unwrap();
         terminal.draw(|f| draw(f, &app, &monitor)).unwrap();
-    }    #[test]
+    }
+    #[test]
     fn key_handling() {
         let mut app = App::new();
         app.on_key(KeyEvent::new(KeyCode::Char('p'), KeyModifiers::NONE));

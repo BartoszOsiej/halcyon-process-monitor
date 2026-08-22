@@ -1,6 +1,6 @@
+mod ffi;
 mod monitor;
 mod tui;
-mod ffi;
 #[cfg(feature = "web")]
 mod web;
 
@@ -92,7 +92,10 @@ fn main() -> Result<()> {
     let use_tui = args.tui || (!args.json && !args.plain && io::stdout().is_terminal());
 
     eprintln!("[halcyon] eBPF program: {}", bpf_path.display());
-    eprintln!("[halcyon] alert threshold: {} file opens/s", args.alert_threshold);
+    eprintln!(
+        "[halcyon] alert threshold: {} file opens/s",
+        args.alert_threshold
+    );
     if let Some(ref ext) = args.filter_ext {
         eprintln!("[halcyon] extension filter: .{ext}");
     }
@@ -240,8 +243,10 @@ fn run_diagnose(monitor: &mut Monitor) -> Result<()> {
         ("syscalls", "sys_enter_execve"),
         ("syscalls", "sys_enter_openat"),
     ] {
-        let id_path =
-            Path::new("/sys/kernel/tracing/events").join(cat).join(name).join("id");
+        let id_path = Path::new("/sys/kernel/tracing/events")
+            .join(cat)
+            .join(name)
+            .join("id");
         match std::fs::read_to_string(&id_path) {
             Ok(id) => println!("OK: tracepoint {cat}/{name} id={}", id.trim()),
             Err(e) => println!("FAIL: cannot read {}: {e}", id_path.display()),
@@ -274,7 +279,9 @@ fn run_diagnose(monitor: &mut Monitor) -> Result<()> {
             last_report = std::time::Instant::now();
             println!(
                 "  t-{:.0}s  exec={execs}  open={opens}  alerts={alerts}  lost={}",
-                deadline.saturating_duration_since(std::time::Instant::now()).as_secs_f32(),
+                deadline
+                    .saturating_duration_since(std::time::Instant::now())
+                    .as_secs_f32(),
                 monitor.total_lost
             );
         }
@@ -376,7 +383,7 @@ fn run_plain(monitor: &mut Monitor) -> Result<()> {
                             println!(
                                 "{} {} [{}] {} -> {}",
                                 ev.ts,
-                            "OPEN".blue().bold(),
+                                "OPEN".blue().bold(),
                                 ev.pid,
                                 ev.comm.dimmed(),
                                 file.dimmed()

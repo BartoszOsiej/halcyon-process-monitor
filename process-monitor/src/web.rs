@@ -26,6 +26,7 @@ struct AppState {
     metrics_exec: Counter,
     metrics_open: Counter,
     metrics_alerts: Counter,
+    #[allow(dead_code)]
     metrics_lost: Counter,
     metrics_ws: Counter,
 }
@@ -215,7 +216,9 @@ async fn get_files(State(state): State<AppState>) -> Json<ApiResponse<Vec<FileRa
     })
 }
 
-async fn get_extensions(State(state): State<AppState>) -> Json<ApiResponse<Vec<ExtensionResponse>>> {
+async fn get_extensions(
+    State(state): State<AppState>,
+) -> Json<ApiResponse<Vec<ExtensionResponse>>> {
     let mon = state.monitor.lock().await;
     let mut exts: Vec<ExtensionResponse> = mon
         .extension_counts()
@@ -258,17 +261,17 @@ async fn set_threshold(
 async fn metrics_handler(State(state): State<AppState>) -> impl IntoResponse {
     let registry = state.metrics.lock().await;
     let mut buffer = String::new();
-    encode(&mut buffer, &*registry).unwrap();
+    encode(&mut buffer, &registry).unwrap();
     (
-        [(axum::http::header::CONTENT_TYPE, "text/plain; version=0.0.4")],
+        [(
+            axum::http::header::CONTENT_TYPE,
+            "text/plain; version=0.0.4",
+        )],
         buffer,
     )
 }
 
-async fn ws_handler(
-    ws: WebSocketUpgrade,
-    State(state): State<AppState>,
-) -> impl IntoResponse {
+async fn ws_handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> impl IntoResponse {
     ws.on_upgrade(move |socket| handle_ws(socket, state))
 }
 
@@ -314,8 +317,12 @@ fn spawn_event_forwarder(state: AppState) {
                         Output::Event(ev) => {
                             state.metrics_events.inc();
                             match ev.kind {
-                                Kind::Exec => { state.metrics_exec.inc(); }
-                                Kind::Open => { state.metrics_open.inc(); }
+                                Kind::Exec => {
+                                    state.metrics_exec.inc();
+                                }
+                                Kind::Open => {
+                                    state.metrics_open.inc();
+                                }
                                 _ => {}
                             }
                             let _ = state.tx.send(WsEvent::Event {
@@ -439,9 +446,7 @@ pub async fn start_web_server(
         .route("/api/v1/threshold", post(set_threshold))
         .route("/metrics", get(metrics_handler))
         .with_state(state)
-        .layer(
-            tower_http::cors::CorsLayer::permissive(),
-        );
+        .layer(tower_http::cors::CorsLayer::permissive());
 
     eprintln!("[halcyon] web server listening on http://{addr}");
     eprintln!("[halcyon] dashboard: http://{addr}/");

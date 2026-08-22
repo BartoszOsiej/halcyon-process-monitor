@@ -22,12 +22,12 @@ pub struct HalcyonMonitor {
 
 #[repr(C)]
 pub struct HalcyonEvent {
-    pub kind: c_int,          // 0 = EXEC, 1 = OPEN
+    pub kind: c_int, // 0 = EXEC, 1 = OPEN
     pub pid: u32,
     pub uid: u32,
     pub comm: *mut c_char,
-    pub file: *mut c_char,    // NULL for EXEC events
-    pub argv: *mut c_char,    // NULL for OPEN events
+    pub file: *mut c_char, // NULL for EXEC events
+    pub argv: *mut c_char, // NULL for OPEN events
     pub timestamp: *mut c_char,
 }
 
@@ -161,7 +161,9 @@ pub unsafe extern "C" fn halcyon_monitor_create(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn halcyon_monitor_destroy(monitor: *mut HalcyonMonitor) {
     if !monitor.is_null() {
-        unsafe { drop(Box::from_raw(monitor)); }
+        unsafe {
+            drop(Box::from_raw(monitor));
+        }
     }
 }
 
@@ -231,7 +233,9 @@ pub unsafe extern "C" fn halcyon_monitor_poll(
         }
     }
 
-    unsafe { *count = n as u32; }
+    unsafe {
+        *count = n as u32;
+    }
     HALCYON_OK
 }
 
@@ -327,7 +331,9 @@ pub unsafe extern "C" fn halcyon_monitor_processes(
         out.window_opens = s.window_opens;
     }
 
-    unsafe { *count = n as u32; }
+    unsafe {
+        *count = n as u32;
+    }
     HALCYON_OK
 }
 
@@ -364,7 +370,9 @@ pub unsafe extern "C" fn halcyon_monitor_top_files(
         out.entropy = f.entropy;
     }
 
-    unsafe { *count = len as u32; }
+    unsafe {
+        *count = len as u32;
+    }
     HALCYON_OK
 }
 
@@ -375,7 +383,9 @@ pub unsafe extern "C" fn halcyon_monitor_top_files(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn halcyon_free_string(s: *mut c_char) {
     if !s.is_null() {
-        unsafe { drop(CString::from_raw(s)); }
+        unsafe {
+            drop(CString::from_raw(s));
+        }
     }
 }
 
@@ -391,19 +401,29 @@ pub unsafe extern "C" fn halcyon_free_events(events: *mut HalcyonEvent, count: u
     for i in 0..count as usize {
         let event = unsafe { &*events.add(i) };
         if !event.comm.is_null() {
-            unsafe { halcyon_free_string(event.comm); }
+            unsafe {
+                halcyon_free_string(event.comm);
+            }
         }
         if !event.file.is_null() {
-            unsafe { halcyon_free_string(event.file); }
+            unsafe {
+                halcyon_free_string(event.file);
+            }
         }
         if !event.argv.is_null() {
-            unsafe { halcyon_free_string(event.argv); }
+            unsafe {
+                halcyon_free_string(event.argv);
+            }
         }
         if !event.timestamp.is_null() {
-            unsafe { halcyon_free_string(event.timestamp); }
+            unsafe {
+                halcyon_free_string(event.timestamp);
+            }
         }
     }
-    unsafe { drop(Vec::from_raw_parts(events, count as usize, count as usize)); }
+    unsafe {
+        drop(Vec::from_raw_parts(events, count as usize, count as usize));
+    }
 }
 
 /// Frees an array of process stats.
@@ -418,10 +438,14 @@ pub unsafe extern "C" fn halcyon_free_processes(stats: *mut HalcyonProcessStats,
     for i in 0..count as usize {
         let s = unsafe { &*stats.add(i) };
         if !s.comm.is_null() {
-            unsafe { halcyon_free_string(s.comm); }
+            unsafe {
+                halcyon_free_string(s.comm);
+            }
         }
     }
-    unsafe { drop(Vec::from_raw_parts(stats, count as usize, count as usize)); }
+    unsafe {
+        drop(Vec::from_raw_parts(stats, count as usize, count as usize));
+    }
 }
 
 /// Frees an array of file ranks.
@@ -436,11 +460,17 @@ pub unsafe extern "C" fn halcyon_free_files(files: *mut HalcyonFileRank, count: 
     for i in 0..count as usize {
         let f = unsafe { &*files.add(i) };
         if !f.path.is_null() {
-            unsafe { halcyon_free_string(f.path); }
+            unsafe {
+                halcyon_free_string(f.path);
+            }
         }
         if !f.extension.is_null() {
-            unsafe { halcyon_free_string(f.extension); }
+            unsafe {
+                halcyon_free_string(f.extension);
+            }
         }
     }
-    unsafe { drop(Vec::from_raw_parts(files, count as usize, count as usize)); }
+    unsafe {
+        drop(Vec::from_raw_parts(files, count as usize, count as usize));
+    }
 }

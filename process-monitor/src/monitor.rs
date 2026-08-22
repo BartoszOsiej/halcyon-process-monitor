@@ -173,9 +173,7 @@ pub struct Monitor {
 impl Monitor {
     pub fn start(bpf_path: &Path, threshold: u64) -> Result<Self> {
         if unsafe { libc::geteuid() } != 0 {
-            bail!(
-                "must be run as root: loading eBPF programs requires CAP_BPF / CAP_SYS_ADMIN"
-            );
+            bail!("must be run as root: loading eBPF programs requires CAP_BPF / CAP_SYS_ADMIN");
         }
 
         eprintln!("[halcyon] loading eBPF object: {}", bpf_path.display());
@@ -427,14 +425,19 @@ impl Monitor {
             ProcessNode {
                 pid,
                 ppid: s.map(|s| s.ppid).unwrap_or(0),
-                comm: s.map(|s| s.comm.clone()).unwrap_or_else(|| "<unknown>".into()),
+                comm: s
+                    .map(|s| s.comm.clone())
+                    .unwrap_or_else(|| "<unknown>".into()),
                 alerts: s.map(|s| s.alerts).unwrap_or(0),
                 total_opens: s.map(|s| s.total_opens).unwrap_or(0),
                 children,
             }
         }
 
-        roots.into_iter().map(|pid| build(pid, &self.stats, &children_map)).collect()
+        roots
+            .into_iter()
+            .map(|pid| build(pid, &self.stats, &children_map))
+            .collect()
     }
 
     /// Flatten a process tree into a Vec of (depth, node) for display.
@@ -528,8 +531,7 @@ fn spawn_reader(
                             if events.read > 0 {
                                 idle = false;
                             }
-                            if events.lost > 0 && tx.send(Msg::Lost(events.lost as u64)).is_err()
-                            {
+                            if events.lost > 0 && tx.send(Msg::Lost(events.lost as u64)).is_err() {
                                 return;
                             }
                             for raw in out.iter().take(events.read) {
@@ -553,7 +555,8 @@ fn spawn_reader(
             }
         })
         .context("failed to spawn reader thread")
-}    fn to_recorded(raw: &ProcessEvent) -> RecordedEvent {
+}
+fn to_recorded(raw: &ProcessEvent) -> RecordedEvent {
     let ts = Local::now().format("%H:%M:%S%.3f").to_string();
     let argv = raw.argv_str();
     let argv_opt = if argv.is_empty() { None } else { Some(argv) };
@@ -624,7 +627,11 @@ fn spawn_reader(
                 file: if addr.is_empty() { None } else { Some(addr) },
                 extension: None,
                 argv: None,
-                bytes: if bytes_str.is_empty() { None } else { Some(bytes_str) },
+                bytes: if bytes_str.is_empty() {
+                    None
+                } else {
+                    Some(bytes_str)
+                },
             }
         }
         EVENT_RECVFROM => {
@@ -639,7 +646,11 @@ fn spawn_reader(
                 file: if addr.is_empty() { None } else { Some(addr) },
                 extension: None,
                 argv: None,
-                bytes: if bytes_str.is_empty() { None } else { Some(bytes_str) },
+                bytes: if bytes_str.is_empty() {
+                    None
+                } else {
+                    Some(bytes_str)
+                },
             }
         }
         _ => RecordedEvent {
@@ -657,11 +668,7 @@ fn spawn_reader(
 }
 
 fn cstr_to_string(arr: &[u8]) -> String {
-    let bytes: Vec<u8> = arr
-        .iter()
-        .take_while(|&&c| c != 0)
-        .copied()
-        .collect();
+    let bytes: Vec<u8> = arr.iter().take_while(|&&c| c != 0).copied().collect();
     String::from_utf8_lossy(&bytes).into_owned()
 }
 
@@ -772,7 +779,10 @@ mod tests {
         for _ in 0..3 {
             monitor.handle_event(&open(42, 1000, "/tmp/x"), &mut outputs);
         }
-        let alerts: Vec<_> = outputs.iter().filter(|o| matches!(o, Output::Alert(_))).collect();
+        let alerts: Vec<_> = outputs
+            .iter()
+            .filter(|o| matches!(o, Output::Alert(_)))
+            .collect();
         assert_eq!(alerts.len(), 1, "exactly one alert at the threshold");
         if let Output::Alert(a) = &outputs[2] {
             assert_eq!(a.pid, 42);
@@ -792,7 +802,10 @@ mod tests {
         for _ in 0..5 {
             monitor.handle_event(&open(42, 1000, "/tmp/x"), &mut outputs);
         }
-        let alerts = outputs.iter().filter(|o| matches!(o, Output::Alert(_))).count();
+        let alerts = outputs
+            .iter()
+            .filter(|o| matches!(o, Output::Alert(_)))
+            .count();
         assert_eq!(alerts, 1, "alert fires once, not repeatedly");
         assert_eq!(monitor.stats.get(&42).unwrap().alerts, 1);
     }
@@ -865,9 +878,9 @@ mod tests {
         let mut monitor = Monitor::dummy();
         let mut outputs = Vec::new();
         // Manually inject PPID mappings (bypass /proc since test PIDs don't exist).
-        monitor.pid_to_ppid.insert(1, 0);   // systemd → root
-        monitor.pid_to_ppid.insert(100, 1);  // sshd → systemd
-        monitor.pid_to_ppid.insert(200, 1);  // bash → systemd
+        monitor.pid_to_ppid.insert(1, 0); // systemd → root
+        monitor.pid_to_ppid.insert(100, 1); // sshd → systemd
+        monitor.pid_to_ppid.insert(200, 1); // bash → systemd
         monitor.pid_to_ppid.insert(300, 200); // vim → bash
 
         for pid in &[1, 100, 200, 300] {

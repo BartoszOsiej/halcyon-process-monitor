@@ -102,9 +102,9 @@ fn emit_event(ctx: &TracePointContext, event_type: u8, filename_arg: u32) -> u32
                     let dst = unsafe {
                         slice::from_raw_parts_mut(event.argv.as_mut_ptr(), EVENT_ARGV_LEN)
                     };
-                    if let Ok(bytes) = unsafe {
-                        bpf_probe_read_user_str_bytes(arg0.cast::<u8>(), dst)
-                    } {
+                    if let Ok(bytes) =
+                        unsafe { bpf_probe_read_user_str_bytes(arg0.cast::<u8>(), dst) }
+                    {
                         event.argv[..bytes.len()].copy_from_slice(bytes);
                     }
                 }
