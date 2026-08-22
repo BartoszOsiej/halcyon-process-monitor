@@ -21,7 +21,6 @@ use crate::monitor::{Kind, Monitor, Output};
 const LOG_CAP: usize = 5000;
 const ALERT_CAP: usize = 200;
 const NETWORK_CAP: usize = 500;
-const HEATMAP_BUCKETS: usize = 10;
 const MAX_FILES: usize = 12;
 const TICK_MS: u64 = 50; // 20 FPS
 
@@ -85,16 +84,15 @@ impl Panel {
 struct LogLine {
     style: Style,
     text: String,
-    kind: LogKind,
 }
 
 #[derive(Clone, Copy, PartialEq)]
+#[allow(dead_code)]
 enum LogKind {
     Exec,
     Open,
     Network,
     Alert,
-    Info,
 }
 
 #[derive(Clone)]
@@ -386,14 +384,13 @@ impl App {
                         continue;
                     }
 
-                    let (style, tag, body, kind) = match ev.kind {
+                    let (style, tag, body) = match ev.kind {
                         Kind::Exec => {
                             let argv_info = ev.argv.as_ref().map(|a| format!(" {a}")).unwrap_or_default();
                             (
                                 Style::new().fg(NEON_GREEN).add_modifier(Modifier::BOLD),
                                 String::from("EXEC"),
                                 format!("[{}] {} (uid {}){}", ev.pid, ev.comm, ev.uid, argv_info),
-                                LogKind::Exec,
                             )
                         }
                         Kind::Open => {
@@ -417,14 +414,12 @@ impl App {
                                         format!("[{ext_badge}]")
                                     }
                                 ),
-                                LogKind::Open,
                             )
                         }
                         Kind::Connect | Kind::Accept | Kind::SendTo | Kind::RecvFrom => {
                             let kind_str = format!("{:?}", ev.kind);
                             let addr = ev.file.as_deref().unwrap_or("?");
                             let bytes_str = ev.bytes.as_ref().map(|b| format!(" ({b} bytes)")).unwrap_or_default();
-                            // Add to network panel
                             self.push_network(NetworkEntry {
                                 ts: ev.ts.clone(),
                                 pid: ev.pid,
@@ -440,14 +435,12 @@ impl App {
                                 Style::new().fg(MAGENTA),
                                 kind_str,
                                 format!("[{}] {} -> {}{}", ev.pid, ev.comm, addr, bytes_str),
-                                LogKind::Network,
                             )
                         }
                     };
                     self.push_log(LogLine {
                         style,
                         text: format!("{} {:>8} {}", ev.ts, tag, body),
-                        kind,
                     });
                 }
                 Output::Alert(alert) => {
@@ -462,7 +455,6 @@ impl App {
                             "{} ⚠ ALERT [{}] {} — {} opens/s",
                             alert.ts, alert.pid, alert.comm, alert.opens
                         ),
-                        kind: LogKind::Alert,
                     };
                     self.push_log(line.clone());
                     if self.alerts.len() >= ALERT_CAP {

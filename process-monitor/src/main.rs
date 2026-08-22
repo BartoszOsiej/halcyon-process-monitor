@@ -5,10 +5,8 @@ mod ffi;
 mod web;
 
 use std::io::{self, IsTerminal, Write};
-use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
@@ -104,6 +102,7 @@ fn main() -> Result<()> {
     } else if let Some(addr_str) = &args.web {
         #[cfg(feature = "web")]
         {
+            use std::net::SocketAddr;
             let addr: SocketAddr = addr_str.parse().context("invalid web server address")?;
             let rt = tokio::runtime::Runtime::new().context("failed to create tokio runtime")?;
             rt.block_on(web::start_web_server(monitor, addr, args.alert_threshold))?;

@@ -93,6 +93,7 @@ pub struct Alert {
 #[derive(Debug, Clone, Default)]
 pub struct ProcStats {
     pub pid: u32,
+    #[allow(dead_code)]
     pub ppid: u32,
     pub comm: String,
     pub window_opens: u64,
@@ -124,6 +125,7 @@ pub struct RateSample {
 #[derive(Debug, Clone)]
 pub struct ProcessNode {
     pub pid: u32,
+    #[allow(dead_code)]
     pub ppid: u32,
     pub comm: String,
     pub alerts: u64,
