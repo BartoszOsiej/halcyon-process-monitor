@@ -99,9 +99,7 @@ fn emit_event(ctx: &TracePointContext, event_type: u8, filename_arg: u32) -> u32
             if !argv_ptr.is_null() {
                 // Dereference argv to get argv[0] (a userspace pointer).
                 // Use bpf_probe_read_user since argv_ptr points to userspace memory.
-                if let Ok(arg0) = unsafe {
-                    bpf_probe_read_user::<*const c_char>(argv_ptr)
-                } {
+                if let Ok(arg0) = unsafe { bpf_probe_read_user::<*const c_char>(argv_ptr) } {
                     if !arg0.is_null() {
                         let dst = unsafe {
                             slice::from_raw_parts_mut(event.argv.as_mut_ptr(), EVENT_ARGV_LEN)

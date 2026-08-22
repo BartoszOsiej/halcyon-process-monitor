@@ -83,22 +83,18 @@ pub fn sys_enter_connect(ctx: TracePointContext) -> u32 {
             if let Ok(sa_family) = unsafe { bpf_probe_read_user::<u16>(sockaddr_ptr.cast()) } {
                 // AF_INET (2): read sin_port (2 bytes at offset 2) + sin_addr (4 bytes at offset 4)
                 if sa_family == 2 {
-                    if let Ok(port) = unsafe {
-                        bpf_probe_read_user::<u16>(sockaddr_ptr.add(2).cast())
-                    } {
-                        if let Ok(addr) = unsafe {
-                            bpf_probe_read_user::<[u8; 4]>(sockaddr_ptr.add(4).cast())
-                        } {
+                    if let Ok(port) =
+                        unsafe { bpf_probe_read_user::<u16>(sockaddr_ptr.add(2).cast()) }
+                    {
+                        if let Ok(addr) =
+                            unsafe { bpf_probe_read_user::<[u8; 4]>(sockaddr_ptr.add(4).cast()) }
+                        {
                             // Format: "IP:PORT" (e.g., "192.168.1.1:443")
                             let ip_fmt = format_ipv4_port(addr, port);
                             let len = ip_fmt.iter().position(|&b| b == 0).unwrap_or(21);
                             let copy_len = len.min(63);
                             unsafe {
-                                raw_copy(
-                                    event.filename.as_mut_ptr(),
-                                    ip_fmt.as_ptr(),
-                                    copy_len,
-                                )
+                                raw_copy(event.filename.as_mut_ptr(), ip_fmt.as_ptr(), copy_len)
                             };
                         }
                     }
@@ -153,21 +149,17 @@ pub fn sys_enter_accept(ctx: TracePointContext) -> u32 {
         if !sockaddr_ptr.is_null() {
             if let Ok(sa_family) = unsafe { bpf_probe_read_user::<u16>(sockaddr_ptr.cast()) } {
                 if sa_family == 2 {
-                    if let Ok(port) = unsafe {
-                        bpf_probe_read_user::<u16>(sockaddr_ptr.add(2).cast())
-                    } {
-                        if let Ok(addr) = unsafe {
-                            bpf_probe_read_user::<[u8; 4]>(sockaddr_ptr.add(4).cast())
-                        } {
+                    if let Ok(port) =
+                        unsafe { bpf_probe_read_user::<u16>(sockaddr_ptr.add(2).cast()) }
+                    {
+                        if let Ok(addr) =
+                            unsafe { bpf_probe_read_user::<[u8; 4]>(sockaddr_ptr.add(4).cast()) }
+                        {
                             let ip_fmt = format_ipv4_port(addr, port);
                             let len = ip_fmt.iter().position(|&b| b == 0).unwrap_or(21);
                             let copy_len = len.min(63);
                             unsafe {
-                                raw_copy(
-                                    event.filename.as_mut_ptr(),
-                                    ip_fmt.as_ptr(),
-                                    copy_len,
-                                )
+                                raw_copy(event.filename.as_mut_ptr(), ip_fmt.as_ptr(), copy_len)
                             };
                         }
                     }
@@ -218,21 +210,16 @@ pub fn sys_enter_sendto(ctx: TracePointContext) -> u32 {
         if !addr_ptr.is_null() {
             if let Ok(sa_family) = unsafe { bpf_probe_read_user::<u16>(addr_ptr.cast()) } {
                 if sa_family == 2 {
-                    if let Ok(port) = unsafe {
-                        bpf_probe_read_user::<u16>(addr_ptr.add(2).cast())
-                    } {
-                        if let Ok(addr) = unsafe {
-                            bpf_probe_read_user::<[u8; 4]>(addr_ptr.add(4).cast())
-                        } {
+                    if let Ok(port) = unsafe { bpf_probe_read_user::<u16>(addr_ptr.add(2).cast()) }
+                    {
+                        if let Ok(addr) =
+                            unsafe { bpf_probe_read_user::<[u8; 4]>(addr_ptr.add(4).cast()) }
+                        {
                             let ip_fmt = format_ipv4_port(addr, port);
                             let len = ip_fmt.iter().position(|&b| b == 0).unwrap_or(21);
                             let copy_len = len.min(63);
                             unsafe {
-                                raw_copy(
-                                    event.filename.as_mut_ptr(),
-                                    ip_fmt.as_ptr(),
-                                    copy_len,
-                                )
+                                raw_copy(event.filename.as_mut_ptr(), ip_fmt.as_ptr(), copy_len)
                             };
                         }
                     }
@@ -281,21 +268,16 @@ pub fn sys_enter_recvfrom(ctx: TracePointContext) -> u32 {
         if !addr_ptr.is_null() {
             if let Ok(sa_family) = unsafe { bpf_probe_read_user::<u16>(addr_ptr.cast()) } {
                 if sa_family == 2 {
-                    if let Ok(port) = unsafe {
-                        bpf_probe_read_user::<u16>(addr_ptr.add(2).cast())
-                    } {
-                        if let Ok(addr) = unsafe {
-                            bpf_probe_read_user::<[u8; 4]>(addr_ptr.add(4).cast())
-                        } {
+                    if let Ok(port) = unsafe { bpf_probe_read_user::<u16>(addr_ptr.add(2).cast()) }
+                    {
+                        if let Ok(addr) =
+                            unsafe { bpf_probe_read_user::<[u8; 4]>(addr_ptr.add(4).cast()) }
+                        {
                             let ip_fmt = format_ipv4_port(addr, port);
                             let len = ip_fmt.iter().position(|&b| b == 0).unwrap_or(21);
                             let copy_len = len.min(63);
                             unsafe {
-                                raw_copy(
-                                    event.filename.as_mut_ptr(),
-                                    ip_fmt.as_ptr(),
-                                    copy_len,
-                                )
+                                raw_copy(event.filename.as_mut_ptr(), ip_fmt.as_ptr(), copy_len)
                             };
                         }
                     }
