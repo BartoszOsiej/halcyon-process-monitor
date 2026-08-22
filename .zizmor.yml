@@ -2,6 +2,6 @@
 # https://docs.zizmor.sh/configuration/
 rules:
   superfluous-actions:
-    action: skip
+    disable: true
   dependabot-cooldown:
-    action: skip
+    disable: true
