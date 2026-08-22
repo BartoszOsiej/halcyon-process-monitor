@@ -9,17 +9,18 @@ permissions:
   contents: write
   id-token: write
   attestations: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
       - run: rustup toolchain install stable
       - run: cargo build --release
 
       - name: Generate build provenance (SLSA v1 attestation)
         id: attest
-        uses: actions/attest-build-provenance@v1
+        uses: actions/attest-build-provenance@92c65d2898f1f53cfdc910b962cecff86e7f8fcc  # v1
         with:
           subject-path: |
             target/release/process-monitor
@@ -36,7 +37,7 @@ jobs:
           if [ -n "$BUNDLE" ] && [ -f "$BUNDLE" ]; then FILES="$FILES $BUNDLE"; fi
           gh release upload "${{ github.ref_name }}" $FILES --clobber
       - name: Attach artifacts
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65  # v2
         with:
           files: |
             target/release/process-monitor
