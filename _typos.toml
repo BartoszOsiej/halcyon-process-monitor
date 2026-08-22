@@ -1,0 +1,13 @@
+[default.extend-words]
+# ratatui is the correct name of the TUI library, not a typo for ratatouille
+ratatui = "ratatui"
+
+[default.extend-identifiers]
+
+[files]
+extend-exclude = [
+    "*.svg",
+    "social-preview.svg",
+    "README.pl.md",
+    "ARCHITECTURE.md",
+]
