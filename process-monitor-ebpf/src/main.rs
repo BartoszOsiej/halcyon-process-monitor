@@ -10,7 +10,7 @@ use aya_ebpf::{
     cty::c_char,
     helpers::{
         bpf_get_current_comm, bpf_get_current_pid_tgid, bpf_get_current_uid_gid,
-        bpf_probe_read_user_str_bytes,
+        bpf_probe_read_user, bpf_probe_read_user_str_bytes,
     },
     macros::{map, tracepoint},
     maps::PerfEventArray,
@@ -47,22 +47,30 @@ pub fn sys_enter_openat(ctx: TracePointContext) -> u32 {
     emit_event(&ctx, EVENT_OPENAT, 1)
 }
 
+/// eBPF-safe byte copy — avoids LLVM memcpy builtin.
+#[inline(always)]
+unsafe fn raw_copy(dst: *mut u8, src: *const u8, len: usize) {
+    let mut i = 0;
+    while i < len {
+        *dst.add(i) = *src.add(i);
+        i += 1;
+    }
+}
+
 fn emit_event(ctx: &TracePointContext, event_type: u8, filename_arg: u32) -> u32 {
     let pid = (bpf_get_current_pid_tgid() >> 32) as u32;
     let uid = bpf_get_current_uid_gid() as u32;
 
-    let mut event = ProcessEvent {
-        event_type,
-        pid,
-        uid,
-        comm: [0u8; EVENT_COMM_LEN],
-        filename: [0u8; EVENT_FILENAME_LEN],
-        argv: [0u8; EVENT_ARGV_LEN],
-    };
+    // Use MaybeUninit to avoid LLVM memset builtin on struct init.
+    // BPF stack is zeroed by the kernel, so this is safe in practice.
+    let mut event: ProcessEvent = unsafe { core::mem::MaybeUninit::uninit().assume_init() };
+    event.event_type = event_type;
+    event.pid = pid;
+    event.uid = uid;
 
     if let Ok(comm) = bpf_get_current_comm() {
         let n = comm.len().min(EVENT_COMM_LEN - 1);
-        event.comm[..n].copy_from_slice(&comm[..n]);
+        unsafe { raw_copy(event.comm.as_mut_ptr(), comm.as_ptr(), n) };
     }
 
     let ptr_size = core::mem::size_of::<*const c_char>();
@@ -76,7 +84,8 @@ fn emit_event(ctx: &TracePointContext, event_type: u8, filename_arg: u32) -> u32
             };
             if let Ok(bytes) = unsafe { bpf_probe_read_user_str_bytes(filename.cast::<u8>(), dst) }
             {
-                event.filename[..bytes.len()].copy_from_slice(bytes);
+                let n = bytes.len().min(EVENT_FILENAME_LEN);
+                unsafe { raw_copy(event.filename.as_mut_ptr(), bytes.as_ptr(), n) };
             }
         }
     }
@@ -90,22 +99,19 @@ fn emit_event(ctx: &TracePointContext, event_type: u8, filename_arg: u32) -> u32
             if !argv_ptr.is_null() {
                 // Dereference argv to get argv[0] (a userspace pointer).
                 // Use bpf_probe_read_user since argv_ptr points to userspace memory.
-                let mut arg0: *const c_char = core::ptr::null();
-                let rc = unsafe {
-                    aya_ebpf::helpers::bpf_probe_read_user(
-                        (&mut arg0 as *mut *const c_char).cast::<()>(),
-                        ptr_size as u32,
-                        argv_ptr.cast::<()>(),
-                    )
-                };
-                if rc == 0 && !arg0.is_null() {
-                    let dst = unsafe {
-                        slice::from_raw_parts_mut(event.argv.as_mut_ptr(), EVENT_ARGV_LEN)
-                    };
-                    if let Ok(bytes) =
-                        unsafe { bpf_probe_read_user_str_bytes(arg0.cast::<u8>(), dst) }
-                    {
-                        event.argv[..bytes.len()].copy_from_slice(bytes);
+                if let Ok(arg0) = unsafe {
+                    bpf_probe_read_user::<*const c_char>(argv_ptr)
+                } {
+                    if !arg0.is_null() {
+                        let dst = unsafe {
+                            slice::from_raw_parts_mut(event.argv.as_mut_ptr(), EVENT_ARGV_LEN)
+                        };
+                        if let Ok(bytes) =
+                            unsafe { bpf_probe_read_user_str_bytes(arg0.cast::<u8>(), dst) }
+                        {
+                            let n = bytes.len().min(EVENT_ARGV_LEN);
+                            unsafe { raw_copy(event.argv.as_mut_ptr(), bytes.as_ptr(), n) };
+                        }
                     }
                 }
             }
