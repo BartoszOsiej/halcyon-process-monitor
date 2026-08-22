@@ -29,9 +29,28 @@ jobs:
       - uses: dtolnay/rust-toolchain@nightly
         with:
           components: rust-src
-      - name: Install bpf-linker (prebuilt)
+      - name: Install bpf-linker (from source, matches nightly LLVM)
+        run: cargo install bpf-linker --git https://github.com/alessandrod/bpf-linker --force
+      - name: Fix libLLVM symlink (nightly linker scripts)
         run: |
-          curl -LsSf https://github.com/cargo-bins/cargo-binstall/releases/latest/download/cargo-binstall-x86_64-unknown-linux-gnu.tgz | tar xvzf - -C /usr/local/bin
-          cargo binstall -y bpf-linker
+          RUSTLIB=$(rustc --print sysroot)/lib
+          for f in $RUSTLIB/libLLVM-*-rust-*.so; do
+            [ -f "$f" ] || continue
+            SIZE=$(stat -c%s "$f" 2>/dev/null || echo 999999)
+            if [ "$SIZE" -lt 1024 ] 2>/dev/null; then
+              REAL=$(grep -oP '(?<=INPUT\()[^)]+' "$f" 2>/dev/null || true)
+              if [ -n "$REAL" ] && [ -f "$RUSTLIB/$REAL" ]; then
+                mv "$f" "${f}.script"
+                ln -s "$REAL" "$f"
+              fi
+            fi
+          done
       - name: Build eBPF (bpfel-unknown-none)
-        run: cargo build -p process-monitor-ebpf -Z build-std=core,alloc --target bpfel-unknown-none --release
+        run: |
+          RUSTLIB=$(rustc --print sysroot)/lib
+          for f in $RUSTLIB/libLLVM.so.*; do
+            [ -f "$f" ] || break
+            export LD_LIBRARY_PATH="$(dirname "$f"):$LD_LIBRARY_PATH"
+            break
+          done
+          cargo +nightly build --profile bpf --target bpfel-unknown-none -Z build-std=core --manifest-path process-monitor-ebpf/Cargo.toml

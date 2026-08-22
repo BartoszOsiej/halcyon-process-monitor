@@ -20,3 +20,14 @@ opt-level = 3
 codegen-units = 1
 strip = "symbols"
 panic = "abort"
+
+# BPF profile: avoids memset/memcpy intrinsics that the BPF LLVM backend
+# cannot lower. No LTO + reduced opt-level prevents LLVM from converting
+# byte-by-byte loops into unsupported builtins.
+[profile.bpf]
+inherits = "release"
+lto = false
+opt-level = 2
+codegen-units = 4
+strip = "symbols"
+panic = "abort"

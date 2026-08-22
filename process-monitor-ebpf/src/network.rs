@@ -16,8 +16,6 @@ use aya_ebpf::{
     programs::TracePointContext,
 };
 
-use crate::ProcessEvent;
-
 pub const EVENT_CONNECT: u8 = 2;
 pub const EVENT_ACCEPT: u8 = 3;
 pub const EVENT_SENDTO: u8 = 4;
@@ -37,6 +35,26 @@ pub struct NetworkEvent {
 #[map]
 pub static NETWORK_EVENTS: PerfEventArray<NetworkEvent> = PerfEventArray::new(0);
 
+// ── eBPF-safe byte helpers (avoids LLVM memset/memcpy builtins) ──────────
+
+/// Zero-initialize a NetworkEvent on the stack without triggering memset.
+/// SAFETY: BPF stack memory is zeroed by the kernel before the program runs,
+/// so this is equivalent to `core::mem::zeroed()` but avoids the LLVM builtin.
+#[inline(always)]
+unsafe fn zero_event() -> NetworkEvent {
+    core::mem::MaybeUninit::uninit().assume_init()
+}
+
+/// Copy `len` bytes from `src` to `dst` without triggering memcpy.
+#[inline(always)]
+unsafe fn raw_copy(dst: *mut u8, src: *const u8, len: usize) {
+    let mut i = 0;
+    while i < len {
+        *dst.add(i) = *src.add(i);
+        i += 1;
+    }
+}
+
 /// Trace `connect` syscall — captures remote socket address.
 ///
 /// Tracepoint args: fd (int), uservaddr (struct sockaddr *), addrlen (int)
@@ -45,18 +63,14 @@ pub fn sys_enter_connect(ctx: TracePointContext) -> u32 {
     let pid = (bpf_get_current_pid_tgid() >> 32) as u32;
     let uid = bpf_get_current_uid_gid() as u32;
 
-    let mut event = NetworkEvent {
-        event_type: EVENT_CONNECT,
-        pid,
-        uid,
-        comm: [0u8; 16],
-        filename: [0u8; 64],
-        argv: [0u8; 128],
-    };
+    let mut event = unsafe { zero_event() };
+    event.event_type = EVENT_CONNECT;
+    event.pid = pid;
+    event.uid = uid;
 
     if let Ok(comm) = bpf_get_current_comm() {
         let n = comm.len().min(15);
-        event.comm[..n].copy_from_slice(&comm[..n]);
+        unsafe { raw_copy(event.comm.as_mut_ptr(), comm.as_ptr(), n) };
     }
 
     // Read sockaddr pointer from tracepoint args (arg1 = uservaddr)
@@ -66,36 +80,28 @@ pub fn sys_enter_connect(ctx: TracePointContext) -> u32 {
     if let Ok(sockaddr_ptr) = unsafe { ctx.read_at::<*const u8>(sockaddr_offset) } {
         if !sockaddr_ptr.is_null() {
             // Read sa_family (first 2 bytes of sockaddr)
-            let mut sa_family: u16 = 0;
-            let rc = unsafe {
-                bpf_probe_read_user(
-                    (&mut sa_family as *mut u16).cast::<()>(),
-                    2,
-                    sockaddr_ptr.cast::<()>(),
-                )
-            };
-            if rc == 0 {
-                // AF_INET (2): read sin_addr (4 bytes at offset 4) + sin_port (2 bytes at offset 2)
+            if let Ok(sa_family) = unsafe { bpf_probe_read_user::<u16>(sockaddr_ptr.cast()) } {
+                // AF_INET (2): read sin_port (2 bytes at offset 2) + sin_addr (4 bytes at offset 4)
                 if sa_family == 2 {
-                    let mut port: u16 = 0;
-                    let mut addr: [u8; 4] = [0; 4];
-                    unsafe {
-                        bpf_probe_read_user(
-                            (&mut port as *mut u16).cast::<()>(),
-                            2,
-                            sockaddr_ptr.add(2).cast::<()>(),
-                        );
-                        bpf_probe_read_user(
-                            addr.as_mut_ptr().cast::<()>(),
-                            4,
-                            sockaddr_ptr.add(4).cast::<()>(),
-                        );
+                    if let Ok(port) = unsafe {
+                        bpf_probe_read_user::<u16>(sockaddr_ptr.add(2).cast())
+                    } {
+                        if let Ok(addr) = unsafe {
+                            bpf_probe_read_user::<[u8; 4]>(sockaddr_ptr.add(4).cast())
+                        } {
+                            // Format: "IP:PORT" (e.g., "192.168.1.1:443")
+                            let ip_fmt = format_ipv4_port(addr, port);
+                            let len = ip_fmt.iter().position(|&b| b == 0).unwrap_or(21);
+                            let copy_len = len.min(63);
+                            unsafe {
+                                raw_copy(
+                                    event.filename.as_mut_ptr(),
+                                    ip_fmt.as_ptr(),
+                                    copy_len,
+                                )
+                            };
+                        }
                     }
-                    // Format: "IP:PORT" (e.g., "192.168.1.1:443")
-                    let ip_fmt = format_ipv4_port(addr, port);
-                    let bytes = ip_fmt.as_bytes();
-                    let len = bytes.len().min(63);
-                    event.filename[..len].copy_from_slice(&bytes[..len]);
                 }
                 // AF_INET6 (10): simplified — just note it's IPv6
                 else if sa_family == 10 {
@@ -109,14 +115,15 @@ pub fn sys_enter_connect(ctx: TracePointContext) -> u32 {
                     if let Ok(bytes) =
                         unsafe { bpf_probe_read_user_str_bytes(sun_path_ptr.cast::<u8>(), dst) }
                     {
-                        event.filename[..bytes.len()].copy_from_slice(bytes);
+                        let n = bytes.len().min(63);
+                        unsafe { raw_copy(event.filename.as_mut_ptr(), bytes.as_ptr(), n) };
                     }
                 }
             }
         }
     }
 
-    NETWORK_EVENTS.output(ctx, &event, 0);
+    NETWORK_EVENTS.output(&ctx, &event, 0);
     0
 }
 
@@ -128,18 +135,14 @@ pub fn sys_enter_accept(ctx: TracePointContext) -> u32 {
     let pid = (bpf_get_current_pid_tgid() >> 32) as u32;
     let uid = bpf_get_current_uid_gid() as u32;
 
-    let mut event = NetworkEvent {
-        event_type: EVENT_ACCEPT,
-        pid,
-        uid,
-        comm: [0u8; 16],
-        filename: [0u8; 64],
-        argv: [0u8; 128],
-    };
+    let mut event = unsafe { zero_event() };
+    event.event_type = EVENT_ACCEPT;
+    event.pid = pid;
+    event.uid = uid;
 
     if let Ok(comm) = bpf_get_current_comm() {
         let n = comm.len().min(15);
-        event.comm[..n].copy_from_slice(&comm[..n]);
+        unsafe { raw_copy(event.comm.as_mut_ptr(), comm.as_ptr(), n) };
     }
 
     // Similar to connect — read remote address
@@ -148,40 +151,34 @@ pub fn sys_enter_accept(ctx: TracePointContext) -> u32 {
 
     if let Ok(sockaddr_ptr) = unsafe { ctx.read_at::<*const u8>(sockaddr_offset) } {
         if !sockaddr_ptr.is_null() {
-            let mut sa_family: u16 = 0;
-            let rc = unsafe {
-                bpf_probe_read_user(
-                    (&mut sa_family as *mut u16).cast::<()>(),
-                    2,
-                    sockaddr_ptr.cast::<()>(),
-                )
-            };
-            if rc == 0 && sa_family == 2 {
-                let mut port: u16 = 0;
-                let mut addr: [u8; 4] = [0; 4];
-                unsafe {
-                    bpf_probe_read_user(
-                        (&mut port as *mut u16).cast::<()>(),
-                        2,
-                        sockaddr_ptr.add(2).cast::<()>(),
-                    );
-                    bpf_probe_read_user(
-                        addr.as_mut_ptr().cast::<()>(),
-                        4,
-                        sockaddr_ptr.add(4).cast::<()>(),
-                    );
+            if let Ok(sa_family) = unsafe { bpf_probe_read_user::<u16>(sockaddr_ptr.cast()) } {
+                if sa_family == 2 {
+                    if let Ok(port) = unsafe {
+                        bpf_probe_read_user::<u16>(sockaddr_ptr.add(2).cast())
+                    } {
+                        if let Ok(addr) = unsafe {
+                            bpf_probe_read_user::<[u8; 4]>(sockaddr_ptr.add(4).cast())
+                        } {
+                            let ip_fmt = format_ipv4_port(addr, port);
+                            let len = ip_fmt.iter().position(|&b| b == 0).unwrap_or(21);
+                            let copy_len = len.min(63);
+                            unsafe {
+                                raw_copy(
+                                    event.filename.as_mut_ptr(),
+                                    ip_fmt.as_ptr(),
+                                    copy_len,
+                                )
+                            };
+                        }
+                    }
+                } else if sa_family == 10 {
+                    event.filename[..6].copy_from_slice(b"[IPv6]");
                 }
-                let ip_fmt = format_ipv4_port(addr, port);
-                let bytes = ip_fmt.as_bytes();
-                let len = bytes.len().min(63);
-                event.filename[..len].copy_from_slice(&bytes[..len]);
-            } else if sa_family == 10 {
-                event.filename[..6].copy_from_slice(b"[IPv6]");
             }
         }
     }
 
-    NETWORK_EVENTS.output(ctx, &event, 0);
+    NETWORK_EVENTS.output(&ctx, &event, 0);
     0
 }
 
@@ -194,18 +191,14 @@ pub fn sys_enter_sendto(ctx: TracePointContext) -> u32 {
     let pid = (bpf_get_current_pid_tgid() >> 32) as u32;
     let uid = bpf_get_current_uid_gid() as u32;
 
-    let mut event = NetworkEvent {
-        event_type: EVENT_SENDTO,
-        pid,
-        uid,
-        comm: [0u8; 16],
-        filename: [0u8; 64],
-        argv: [0u8; 128],
-    };
+    let mut event = unsafe { zero_event() };
+    event.event_type = EVENT_SENDTO;
+    event.pid = pid;
+    event.uid = uid;
 
     if let Ok(comm) = bpf_get_current_comm() {
         let n = comm.len().min(15);
-        event.comm[..n].copy_from_slice(&comm[..n]);
+        unsafe { raw_copy(event.comm.as_mut_ptr(), comm.as_ptr(), n) };
     }
 
     let ptr_size = core::mem::size_of::<*const c_char>();
@@ -214,47 +207,41 @@ pub fn sys_enter_sendto(ctx: TracePointContext) -> u32 {
     let size_offset = 16 + 2 * ptr_size;
     if let Ok(size) = unsafe { ctx.read_at::<usize>(size_offset) } {
         let size_str = format_usize(size);
-        let bytes = size_str.as_bytes();
-        let len = bytes.len().min(127);
-        event.argv[..len].copy_from_slice(&bytes[..len]);
+        let len = size_str.iter().position(|&b| b == 0).unwrap_or(20);
+        let copy_len = len.min(127);
+        unsafe { raw_copy(event.argv.as_mut_ptr(), size_str.as_ptr(), copy_len) };
     }
 
     // Read destination address if present (arg4 = struct sockaddr *)
     let addr_offset = 16 + 4 * ptr_size;
     if let Ok(addr_ptr) = unsafe { ctx.read_at::<*const u8>(addr_offset) } {
         if !addr_ptr.is_null() {
-            let mut sa_family: u16 = 0;
-            let rc = unsafe {
-                bpf_probe_read_user(
-                    (&mut sa_family as *mut u16).cast::<()>(),
-                    2,
-                    addr_ptr.cast::<()>(),
-                )
-            };
-            if rc == 0 && sa_family == 2 {
-                let mut port: u16 = 0;
-                let mut addr: [u8; 4] = [0; 4];
-                unsafe {
-                    bpf_probe_read_user(
-                        (&mut port as *mut u16).cast::<()>(),
-                        2,
-                        addr_ptr.add(2).cast::<()>(),
-                    );
-                    bpf_probe_read_user(
-                        addr.as_mut_ptr().cast::<()>(),
-                        4,
-                        addr_ptr.add(4).cast::<()>(),
-                    );
+            if let Ok(sa_family) = unsafe { bpf_probe_read_user::<u16>(addr_ptr.cast()) } {
+                if sa_family == 2 {
+                    if let Ok(port) = unsafe {
+                        bpf_probe_read_user::<u16>(addr_ptr.add(2).cast())
+                    } {
+                        if let Ok(addr) = unsafe {
+                            bpf_probe_read_user::<[u8; 4]>(addr_ptr.add(4).cast())
+                        } {
+                            let ip_fmt = format_ipv4_port(addr, port);
+                            let len = ip_fmt.iter().position(|&b| b == 0).unwrap_or(21);
+                            let copy_len = len.min(63);
+                            unsafe {
+                                raw_copy(
+                                    event.filename.as_mut_ptr(),
+                                    ip_fmt.as_ptr(),
+                                    copy_len,
+                                )
+                            };
+                        }
+                    }
                 }
-                let ip_fmt = format_ipv4_port(addr, port);
-                let bytes = ip_fmt.as_bytes();
-                let len = bytes.len().min(63);
-                event.filename[..len].copy_from_slice(&bytes[..len]);
             }
         }
     }
 
-    NETWORK_EVENTS.output(ctx, &event, 0);
+    NETWORK_EVENTS.output(&ctx, &event, 0);
     0
 }
 
@@ -267,18 +254,14 @@ pub fn sys_enter_recvfrom(ctx: TracePointContext) -> u32 {
     let pid = (bpf_get_current_pid_tgid() >> 32) as u32;
     let uid = bpf_get_current_uid_gid() as u32;
 
-    let mut event = NetworkEvent {
-        event_type: EVENT_RECVFROM,
-        pid,
-        uid,
-        comm: [0u8; 16],
-        filename: [0u8; 64],
-        argv: [0u8; 128],
-    };
+    let mut event = unsafe { zero_event() };
+    event.event_type = EVENT_RECVFROM;
+    event.pid = pid;
+    event.uid = uid;
 
     if let Ok(comm) = bpf_get_current_comm() {
         let n = comm.len().min(15);
-        event.comm[..n].copy_from_slice(&comm[..n]);
+        unsafe { raw_copy(event.comm.as_mut_ptr(), comm.as_ptr(), n) };
     }
 
     let ptr_size = core::mem::size_of::<*const c_char>();
@@ -287,47 +270,41 @@ pub fn sys_enter_recvfrom(ctx: TracePointContext) -> u32 {
     let size_offset = 16 + 2 * ptr_size;
     if let Ok(size) = unsafe { ctx.read_at::<usize>(size_offset) } {
         let size_str = format_usize(size);
-        let bytes = size_str.as_bytes();
-        let len = bytes.len().min(127);
-        event.argv[..len].copy_from_slice(&bytes[..len]);
+        let len = size_str.iter().position(|&b| b == 0).unwrap_or(20);
+        let copy_len = len.min(127);
+        unsafe { raw_copy(event.argv.as_mut_ptr(), size_str.as_ptr(), copy_len) };
     }
 
     // Read source address if present (arg4 = struct sockaddr *)
     let addr_offset = 16 + 4 * ptr_size;
     if let Ok(addr_ptr) = unsafe { ctx.read_at::<*const u8>(addr_offset) } {
         if !addr_ptr.is_null() {
-            let mut sa_family: u16 = 0;
-            let rc = unsafe {
-                bpf_probe_read_user(
-                    (&mut sa_family as *mut u16).cast::<()>(),
-                    2,
-                    addr_ptr.cast::<()>(),
-                )
-            };
-            if rc == 0 && sa_family == 2 {
-                let mut port: u16 = 0;
-                let mut addr: [u8; 4] = [0; 4];
-                unsafe {
-                    bpf_probe_read_user(
-                        (&mut port as *mut u16).cast::<()>(),
-                        2,
-                        addr_ptr.add(2).cast::<()>(),
-                    );
-                    bpf_probe_read_user(
-                        addr.as_mut_ptr().cast::<()>(),
-                        4,
-                        addr_ptr.add(4).cast::<()>(),
-                    );
+            if let Ok(sa_family) = unsafe { bpf_probe_read_user::<u16>(addr_ptr.cast()) } {
+                if sa_family == 2 {
+                    if let Ok(port) = unsafe {
+                        bpf_probe_read_user::<u16>(addr_ptr.add(2).cast())
+                    } {
+                        if let Ok(addr) = unsafe {
+                            bpf_probe_read_user::<[u8; 4]>(addr_ptr.add(4).cast())
+                        } {
+                            let ip_fmt = format_ipv4_port(addr, port);
+                            let len = ip_fmt.iter().position(|&b| b == 0).unwrap_or(21);
+                            let copy_len = len.min(63);
+                            unsafe {
+                                raw_copy(
+                                    event.filename.as_mut_ptr(),
+                                    ip_fmt.as_ptr(),
+                                    copy_len,
+                                )
+                            };
+                        }
+                    }
                 }
-                let ip_fmt = format_ipv4_port(addr, port);
-                let bytes = ip_fmt.as_bytes();
-                let len = bytes.len().min(63);
-                event.filename[..len].copy_from_slice(&bytes[..len]);
             }
         }
     }
 
-    NETWORK_EVENTS.output(ctx, &event, 0);
+    NETWORK_EVENTS.output(&ctx, &event, 0);
     0
 }
 
@@ -336,11 +313,12 @@ pub fn sys_enter_recvfrom(ctx: TracePointContext) -> u32 {
 /// Format IPv4 address and port as "A.B.C.D:PORT".
 fn format_ipv4_port(addr: [u8; 4], port: u16) -> [u8; 21] {
     // Max length: "255.255.255.255:65535" = 21 bytes
-    let mut buf = [0u8; 21];
+    let mut buf = unsafe { core::mem::MaybeUninit::<[u8; 21]>::uninit().assume_init() };
     let mut pos = 0;
 
     // Write IP
-    for i in 0..4 {
+    let mut i = 0;
+    while i < 4 {
         let octet = addr[i];
         if i > 0 {
             buf[pos] = b'.';
@@ -362,6 +340,7 @@ fn format_ipv4_port(addr: [u8; 4], port: u16) -> [u8; 21] {
             buf[pos] = b'0' + octet;
             pos += 1;
         }
+        i += 1;
     }
 
     // Write ":PORT"
@@ -378,7 +357,6 @@ fn format_ipv4_port(addr: [u8; 4], port: u16) -> [u8; 21] {
         buf[pos] = b'0' + ((port / 10) % 10) as u8;
         pos += 1;
         buf[pos] = b'0' + (port % 10) as u8;
-        pos += 1;
     } else if port >= 1000 {
         buf[pos] = b'0' + (port / 1000) as u8;
         pos += 1;
@@ -387,22 +365,18 @@ fn format_ipv4_port(addr: [u8; 4], port: u16) -> [u8; 21] {
         buf[pos] = b'0' + ((port / 10) % 10) as u8;
         pos += 1;
         buf[pos] = b'0' + (port % 10) as u8;
-        pos += 1;
     } else if port >= 100 {
         buf[pos] = b'0' + (port / 100) as u8;
         pos += 1;
         buf[pos] = b'0' + ((port / 10) % 10) as u8;
         pos += 1;
         buf[pos] = b'0' + (port % 10) as u8;
-        pos += 1;
     } else if port >= 10 {
         buf[pos] = b'0' + (port / 10) as u8;
         pos += 1;
         buf[pos] = b'0' + (port % 10) as u8;
-        pos += 1;
     } else {
         buf[pos] = b'0' + port as u8;
-        pos += 1;
     }
 
     buf
@@ -410,7 +384,7 @@ fn format_ipv4_port(addr: [u8; 4], port: u16) -> [u8; 21] {
 
 /// Format usize as decimal string (no alloc, eBPF safe).
 fn format_usize(val: usize) -> [u8; 20] {
-    let mut buf = [0u8; 20];
+    let mut buf = unsafe { core::mem::MaybeUninit::<[u8; 20]>::uninit().assume_init() };
     let mut pos = 19;
     let mut v = val;
 
@@ -428,7 +402,7 @@ fn format_usize(val: usize) -> [u8; 20] {
     // Shift to start
     let start = pos + 1;
     let len = 20 - start;
-    let mut result = [0u8; 20];
-    result[..len].copy_from_slice(&buf[start..]);
+    let mut result = unsafe { core::mem::MaybeUninit::<[u8; 20]>::uninit().assume_init() };
+    unsafe { raw_copy(result.as_mut_ptr(), buf[start..].as_ptr(), len) };
     result
 }
