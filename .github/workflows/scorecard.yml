@@ -15,6 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       security-events: write
+      id-token: write
 
     steps:
       - name: "Checkout code"
@@ -27,7 +28,7 @@ jobs:
         with:
           results_file: results.sarif
           results_format: sarif
-          publish_results: true
+          publish_results: false
 
       - name: "Upload to SARIF"
         uses: github/codeql-action/upload-sarif@6d786de4d6f3531a740e445b53a42b622bbbace8  # v3
