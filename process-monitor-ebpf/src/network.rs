@@ -30,8 +30,8 @@ pub struct NetworkEvent {
     pub pid: u32,
     pub uid: u32,
     pub comm: [u8; 16],
-    pub filename: [u8; 64],   // Remote address (IP:port or path)
-    pub argv: [u8; 128],      // Extra context (e.g., bytes count)
+    pub filename: [u8; 64], // Remote address (IP:port or path)
+    pub argv: [u8; 128],    // Extra context (e.g., bytes count)
 }
 
 #[map]
@@ -105,9 +105,7 @@ pub fn sys_enter_connect(ctx: TracePointContext) -> u32 {
                 else if sa_family == 1 {
                     // sun_path starts at offset 2 in sockaddr_un
                     let sun_path_ptr = unsafe { sockaddr_ptr.add(2) };
-                    let dst = unsafe {
-                        slice::from_raw_parts_mut(event.filename.as_mut_ptr(), 64)
-                    };
+                    let dst = unsafe { slice::from_raw_parts_mut(event.filename.as_mut_ptr(), 64) };
                     if let Ok(bytes) =
                         unsafe { bpf_probe_read_user_str_bytes(sun_path_ptr.cast::<u8>(), dst) }
                     {
