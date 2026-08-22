@@ -75,7 +75,8 @@ jobs:
         run: cargo install bpf-linker --git https://github.com/alessandrod/bpf-linker --force
       - name: Fix libLLVM symlink (nightly linker scripts)
         run: |
-          RUSTLIB="$(rustc --print sysroot)/lib"
+          RUSTLIB_ROOT="$(rustc --print sysroot)"
+          RUSTLIB="${RUSTLIB_ROOT}/lib"
           for f in "$RUSTLIB"/libLLVM-*-rust-*.so; do
             [ -f "$f" ] || continue
             SIZE="$(stat -c%s "$f" 2>/dev/null || echo 999999)"
@@ -89,7 +90,8 @@ jobs:
           done
       - name: Build eBPF (bpfel-unknown-none)
         run: |
-          RUSTLIB="$(rustc --print sysroot)/lib"
+          RUSTLIB_ROOT="$(rustc --print sysroot)"
+          RUSTLIB="${RUSTLIB_ROOT}/lib"
           for f in "$RUSTLIB"/libLLVM.so.*; do
             [ -f "$f" ] || break
             export LD_LIBRARY_PATH="$(dirname "$f"):$LD_LIBRARY_PATH"

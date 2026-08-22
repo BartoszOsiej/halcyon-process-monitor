@@ -3,9 +3,9 @@
 
 [advisories]
 vulnerability = "deny"
-unmaintained = "warn"
+unmaintained = "none"
 yanked = "warn"
-notice = "warn"
+notice = "none"
 
 [licenses]
 unlicensed = "deny"
