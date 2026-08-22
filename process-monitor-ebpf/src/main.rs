@@ -1,6 +1,7 @@
 #![no_std]
 #![no_main]
 #![allow(linker_messages)]
+#![allow(invalid_value)]  // MaybeUninit UB warnings — safe in eBPF (stack zeroed by kernel)
 
 mod network;
 
