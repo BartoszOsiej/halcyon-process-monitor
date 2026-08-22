@@ -1,9 +1,14 @@
 mod monitor;
 mod tui;
+mod ffi;
+#[cfg(feature = "web")]
+mod web;
 
 use std::io::{self, IsTerminal, Write};
+use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
@@ -60,6 +65,10 @@ struct Args {
     /// Show top-N files in TUI (default: 8)
     #[arg(long, default_value_t = 8, value_name = "N")]
     top_files: usize,
+
+    /// Start web server with REST API, WebSocket, and dashboard (requires feature "web")
+    #[arg(long, value_name = "ADDR", default_value = None)]
+    web: Option<String>,
 }
 
 fn main() -> Result<()> {
@@ -92,6 +101,18 @@ fn main() -> Result<()> {
 
     if args.diagnose {
         run_diagnose(&mut monitor)?;
+    } else if let Some(addr_str) = &args.web {
+        #[cfg(feature = "web")]
+        {
+            let addr: SocketAddr = addr_str.parse().context("invalid web server address")?;
+            let rt = tokio::runtime::Runtime::new().context("failed to create tokio runtime")?;
+            rt.block_on(web::start_web_server(monitor, addr, args.alert_threshold))?;
+        }
+        #[cfg(not(feature = "web"))]
+        {
+            let _ = addr_str;
+            bail!("--web requires the 'web' feature. Rebuild with: cargo build --features web");
+        }
     } else if use_tui {
         eprintln!("[halcyon] TUI mode (q quit, p pause, c clear, arrows scroll, Tab switch panel)");
         tui::run(&mut monitor)?;
@@ -245,6 +266,7 @@ fn run_diagnose(monitor: &mut Monitor) -> Result<()> {
                 Output::Event(ev) => match ev.kind {
                     Kind::Exec => execs += 1,
                     Kind::Open => opens += 1,
+                    Kind::Connect | Kind::Accept | Kind::SendTo | Kind::RecvFrom => {}
                 },
                 Output::Alert(_) => alerts += 1,
             }
@@ -297,6 +319,10 @@ fn run_json(monitor: &mut Monitor) -> Result<()> {
                     let kind = match ev.kind {
                         Kind::Exec => "exec",
                         Kind::Open => "open",
+                        Kind::Connect => "connect",
+                        Kind::Accept => "accept",
+                        Kind::SendTo => "sendto",
+                        Kind::RecvFrom => "recvfrom",
                     };
                     let value = json!({
                         "ts": ev.ts,
@@ -351,12 +377,24 @@ fn run_plain(monitor: &mut Monitor) -> Result<()> {
                             println!(
                                 "{} {} [{}] {} -> {}",
                                 ev.ts,
-                                "OPEN".blue().bold(),
+                            "OPEN".blue().bold(),
                                 ev.pid,
                                 ev.comm.dimmed(),
                                 file.dimmed()
                             );
                         }
+                    }
+                    Kind::Connect | Kind::Accept | Kind::SendTo | Kind::RecvFrom => {
+                        let kind_str = format!("{:?}", ev.kind).to_uppercase();
+                        let addr = ev.file.as_deref().unwrap_or("?");
+                        println!(
+                            "{} {} [{}] {} -> {}",
+                            ev.ts,
+                            kind_str.magenta().bold(),
+                            ev.pid,
+                            ev.comm.dimmed(),
+                            addr.dimmed()
+                        );
                     }
                 },
                 Output::Alert(al) => {

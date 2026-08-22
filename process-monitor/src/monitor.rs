@@ -15,6 +15,10 @@ use chrono::Local;
 
 pub const EVENT_EXECVE: u8 = 0;
 pub const EVENT_OPENAT: u8 = 1;
+pub const EVENT_CONNECT: u8 = 2;
+pub const EVENT_ACCEPT: u8 = 3;
+pub const EVENT_SENDTO: u8 = 4;
+pub const EVENT_RECVFROM: u8 = 5;
 
 const EVENT_COMM_LEN: usize = 16;
 const EVENT_FILENAME_LEN: usize = 64;
@@ -56,6 +60,10 @@ impl ProcessEvent {
 pub enum Kind {
     Exec,
     Open,
+    Connect,
+    Accept,
+    SendTo,
+    RecvFrom,
 }
 
 #[derive(Debug, Clone)]
@@ -69,6 +77,8 @@ pub struct RecordedEvent {
     pub extension: Option<String>,
     /// Full command path from argv[0] (execve events only).
     pub argv: Option<String>,
+    /// Bytes count (for network send/recv events).
+    pub bytes: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -271,6 +281,11 @@ impl Monitor {
 
         match ev.kind {
             Kind::Exec => {
+                stats.total_execs += 1;
+                self.tick_execs += 1;
+            }
+            Kind::Connect | Kind::Accept | Kind::SendTo | Kind::RecvFrom => {
+                // Network events — count as exec for stats purposes
                 stats.total_execs += 1;
                 self.tick_execs += 1;
             }
@@ -536,9 +551,7 @@ fn spawn_reader(
             }
         })
         .context("failed to spawn reader thread")
-}
-
-fn to_recorded(raw: &ProcessEvent) -> RecordedEvent {
+}    fn to_recorded(raw: &ProcessEvent) -> RecordedEvent {
     let ts = Local::now().format("%H:%M:%S%.3f").to_string();
     let argv = raw.argv_str();
     let argv_opt = if argv.is_empty() { None } else { Some(argv) };
@@ -552,6 +565,7 @@ fn to_recorded(raw: &ProcessEvent) -> RecordedEvent {
             file: None,
             extension: None,
             argv: argv_opt,
+            bytes: None,
         },
         EVENT_OPENAT => {
             let filename = raw.filename_str();
@@ -565,6 +579,65 @@ fn to_recorded(raw: &ProcessEvent) -> RecordedEvent {
                 file: Some(filename),
                 extension: Some(ext),
                 argv: None,
+                bytes: None,
+            }
+        }
+        EVENT_CONNECT => {
+            let addr = raw.filename_str();
+            RecordedEvent {
+                ts,
+                kind: Kind::Connect,
+                pid: raw.pid,
+                uid: raw.uid,
+                comm: raw.comm_str(),
+                file: if addr.is_empty() { None } else { Some(addr) },
+                extension: None,
+                argv: None,
+                bytes: None,
+            }
+        }
+        EVENT_ACCEPT => {
+            let addr = raw.filename_str();
+            RecordedEvent {
+                ts,
+                kind: Kind::Accept,
+                pid: raw.pid,
+                uid: raw.uid,
+                comm: raw.comm_str(),
+                file: if addr.is_empty() { None } else { Some(addr) },
+                extension: None,
+                argv: None,
+                bytes: None,
+            }
+        }
+        EVENT_SENDTO => {
+            let addr = raw.filename_str();
+            let bytes_str = raw.argv_str();
+            RecordedEvent {
+                ts,
+                kind: Kind::SendTo,
+                pid: raw.pid,
+                uid: raw.uid,
+                comm: raw.comm_str(),
+                file: if addr.is_empty() { None } else { Some(addr) },
+                extension: None,
+                argv: None,
+                bytes: if bytes_str.is_empty() { None } else { Some(bytes_str) },
+            }
+        }
+        EVENT_RECVFROM => {
+            let addr = raw.filename_str();
+            let bytes_str = raw.argv_str();
+            RecordedEvent {
+                ts,
+                kind: Kind::RecvFrom,
+                pid: raw.pid,
+                uid: raw.uid,
+                comm: raw.comm_str(),
+                file: if addr.is_empty() { None } else { Some(addr) },
+                extension: None,
+                argv: None,
+                bytes: if bytes_str.is_empty() { None } else { Some(bytes_str) },
             }
         }
         _ => RecordedEvent {
@@ -576,6 +649,7 @@ fn to_recorded(raw: &ProcessEvent) -> RecordedEvent {
             file: None,
             extension: None,
             argv: None,
+            bytes: None,
         },
     }
 }
@@ -635,6 +709,7 @@ mod tests {
             file: Some(file.into()),
             extension: Some(extract_extension(file)),
             argv: None,
+            bytes: None,
         }
     }
 
@@ -672,14 +747,16 @@ mod tests {
                 ts: "00:00:00.000".into(),
                 kind: Kind::Exec,
                 pid: 9,
-                uid: 0,                    comm: "init".into(),
-                    file: None,
-                    extension: None,
-                    argv: None,
-                },
-                &mut outputs,
-            );
-            let stats = monitor.stats.get(&9).expect("stats recorded");
+                uid: 0,
+                comm: "init".into(),
+                file: None,
+                extension: None,
+                argv: None,
+                bytes: None,
+            },
+            &mut outputs,
+        );
+        let stats = monitor.stats.get(&9).expect("stats recorded");
         assert_eq!(stats.total_execs, 1);
         assert_eq!(stats.total_opens, 0);
         assert_eq!(stats.alerts, 0);
@@ -808,6 +885,7 @@ mod tests {
                     file: None,
                     extension: None,
                     argv: None,
+                    bytes: None,
                 },
                 &mut outputs,
             );
@@ -845,6 +923,7 @@ mod tests {
                     file: None,
                     extension: None,
                     argv: None,
+                    bytes: None,
                 },
                 &mut outputs,
             );
@@ -877,6 +956,7 @@ mod tests {
                     file: None,
                     extension: None,
                     argv: None,
+                    bytes: None,
                 },
                 &mut outputs,
             );

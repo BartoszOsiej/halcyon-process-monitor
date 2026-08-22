@@ -1,0 +1,96 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: halcyon-ebpf-monitor
+  namespace: observability
+  labels:
+    app.kubernetes.io/name: halcyon-ebpf-monitor
+    app.kubernetes.io/version: "0.3.0"
+    app.kubernetes.io/component: eBPF-monitor
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: halcyon-ebpf-monitor
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: halcyon-ebpf-monitor
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      hostPID: true
+      hostNetwork: true
+      tolerations:
+        - operator: Exists
+          effect: NoSchedule
+        - operator: Exists
+          effect: NoExecute
+      containers:
+        - name: halcyon
+          image: ghcr.io/bartoszosiej/halcyon-process-monitor:latest
+          imagePullPolicy: Always
+          command:
+            - process-monitor
+          args:
+            - --web
+            - "0.0.0.0:8080"
+            - --alert-threshold
+            - "100"
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+            - name: metrics
+              containerPort: 8080
+              protocol: TCP
+          securityContext:
+            privileged: true
+            capabilities:
+              add:
+                - CAP_BPF
+                - CAP_SYS_ADMIN
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+          volumeMounts:
+            - name: btf
+              mountPath: /sys/kernel/btf/vmlinux
+              readOnly: true
+            - name: debug
+              mountPath: /sys/kernel/debug
+              readOnly: true
+            - name: proc
+              mountPath: /proc
+              readOnly: true
+          livenessProbe:
+            httpGet:
+              path: /api/v1/stats
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /api/v1/stats
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+      volumes:
+        - name: btf
+          hostPath:
+            path: /sys/kernel/btf/vmlinux
+            type: File
+        - name: debug
+          hostPath:
+            path: /sys/kernel/debug
+            type: Directory
+        - name: proc
+          hostPath:
+            path: /proc
+            type: Directory
+      priorityClassName: system-cluster-critical

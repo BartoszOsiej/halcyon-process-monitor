@@ -1,0 +1,20 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: halcyon-ebpf-monitor
+  namespace: observability
+  labels:
+    app.kubernetes.io/name: halcyon-ebpf-monitor
+    release: prometheus  # Match your Prometheus operator's label selector
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: halcyon-ebpf-monitor
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 15s
+      scrapeTimeout: 10s
+  namespaceSelector:
+    matchNames:
+      - observability
