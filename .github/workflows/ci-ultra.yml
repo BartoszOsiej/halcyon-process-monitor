@@ -119,7 +119,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - uses: astral-sh/ruff-action@4919ec5cf1f49eff0871dbcea0da843445b837e6
-      - run: pip install zizmor && zizmor .
+      - run: pip install zizmor && zizmor .github/workflows/ci-ultra.yml
 
   actionlint:
     name: actionlint
