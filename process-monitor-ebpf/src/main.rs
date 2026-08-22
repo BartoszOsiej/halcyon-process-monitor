@@ -2,6 +2,8 @@
 #![no_main]
 #![allow(linker_messages)]
 
+mod network;
+
 use core::slice;
 
 use aya_ebpf::{

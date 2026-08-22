@@ -1,226 +1,340 @@
 # Halcyon Process Monitor
 
-> **Telemetria procesów i operacji plikowych w czasie rzeczywistym dla Linuksa, oparta na eBPF.**
+> **Telemetria procesów, operacji plikowych i sieci w czasie rzeczywistym dla Linuksa, oparta na eBPF.**
 
-Halcyon Process Monitor śledzi syscalle `execve` i `openat` na poziomie jądra
-przez tracepointy eBPF, strumieniuje zdarzenia do przestrzeni użytkownika przez
-bufor per-CPU perf, i prezentuje je w terminalowym TUI na żywo — jednocześnie
-oceniając tempo otwierania plików przez każdy proces w ruchomym oknie, aby
-wykrywać masowy dostęp do plików w stylu ransomware.
+Halcyon Process Monitor śledzi syscalle `execve`, `openat`, `connect`, `accept`, `sendto` i `recvfrom` na poziomie jądra przez tracepointy eBPF, strumieniuje zdarzenia do przestrzeni użytkownika przez bufor per-CPU perf, i prezentuje je w zaawansowanym terminalowym TUI na żywo — jednocześnie oceniając tempo otwierania plików przez każdy proces w ruchomym oknie, aby wykrywać masowy dostęp do plików w stylu ransomware.
 
 ```
-                 ┌──────────────────────────────────────────────┐
-                 │            Przestrzeń jądra (eBPF)           │
-   execve  ──► sys_enter_execve ─┐                               │
-   openat  ──► sys_enter_openat ─┼──► ProcessEvent ──► EVENTS   │
-                                 │         (map)     (perf array)│
-                 └───────────────────────────┬──────────────────┘
-                                             │  bufory per-CPU perf
-                 ┌───────────────────────────▼──────────────────┐
-                 │          Przestrzeń użytkownika (Rust)       │
-                 │  wątek czytający ──► kanał ──► Monitor       │
-                 │        │                        │            │
-                 │        │                  ruchome okno       │
-                 │        │                  + alerty           │
-                 │        └──► TUI / JSON / plain / diagnose    │
-                 └──────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                        PRZESTRZEŃ JĄDRA (eBPF)                 │
+│                                                                 │
+│  sys_enter_execve ──┐                                           │
+│  sys_enter_openat  ──┤                                           │
+│  sys_enter_connect ──┤   ProcessEvent    PerfEventArray         │
+│  sys_enter_accept  ──┼──► (map)    ────► (bufory per-CPU)      │
+│  sys_enter_sendto  ──┤                                           │
+│  sys_enter_recvfrom ─┘                                           │
+└──────────────────────────────────┬──────────────────────────────┘
+                                   │
+┌──────────────────────────────────▼──────────────────────────────┐
+│                  PRZESTRZEŃ UŻYTKOWNIKA (Rust)                  │
+│                                                                 │
+│  wątek czytający ──► kanał ──► Monitor ──► TUI / JSON / Web    │
+│       │                  │         │                            │
+│       │                  │    ruchome okno                      │
+│       │                  │    + alerty                          │
+│       │                  │    + drzewo procesów                 │
+│       │                  │    + ranking plików                  │
+│       │                  │    + śledzenie sieci                 │
+│       │                  │    + heatmapa                        │
+│       └──► perf buffer   └──► szukanie/filtrowanie             │
+└─────────────────────────────────────────────────────────────────┘
 ```
+
+## Wersja angielska
+
+**[English README](README.md)** · [Nowe funkcje v0.4](NEW_FEATURES.md) · [Architektura](ARCHITECTURE.md)
 
 ## Funkcje
 
 | Możliwość | Opis |
 |---|---|
-| **Śledzenie na poziomie jądra** | Tracepointy `execve` i `openat` podpięte na każdym aktywnym CPU |
-| **Kod jądra bezpieczny dla verifiera** | Wskaźniki przestrzeni użytkownika czytane wyłącznie przez `bpf_probe_read_user` — nigdy przez dereferencję |
-| **Potok zdarzeń zero-copy** | Rekordy `ProcessEvent` o stałym rozmiarze strumieniowane przez bufory per-CPU `PerfEventArray` |
-| **TUI na żywo** | Dashboard w stylu cyberpunk z dziennikiem zdarzeń, tabelą procesów, rankingiem plików, sparkline'ami i alertami |
-| **Sparkline'y tempa zdarzeń** | Wizualizacje exec/s, open/s i alert/s (okno 120-sekundowe) |
-| **Śledzenie typów plików** | Częstotliwość otwarć per rozszerzenie z kolorowymi kategoriami (dokumenty, archiwa, markery ransomware) |
-| **Ranking najczęściej otwieranych plików** | Pliki posortowane wg liczby otwarć, z wynikami znormalizowanej entropii Shannona |
-| **Entropia Shannona** | Znormalizowana (0–1) entropia nazw plików do wykrywania zaszyfrowanych lub podejrzanych ścieżek |
-| **Heurystyka ruchomego okna** | 1-sekundowe okno per PID; alert, gdy proces przekroczy skonfigurowane tempo otwierania |
-| **Wiele trybów wyjścia** | TUI dla człowieka, JSON z podziałem na linie, zwykły dziennik tekstowy i wbudowana autodiagnostyka |
-| **Liczenie utraconych zdarzeń** | Przepełnienia bufora perf są liczone i raportowane, nigdy cicho pomijane |
-| **Pojedynczy statyczny binarny plik** | Pełne LTO, `panic = "abort"`, profil release z usuniętymi symbolami |
+| **Śledzenie na poziomie jądra** | Tracepointy `execve`, `openat`, `connect`, `accept`, `sendto`, `recvfrom` |
+| **Kod jądra bezpieczny dla verifiera** | Wskaźniki przestrzeni użytkownika czytane wyłącznie przez `bpf_probe_read_user` |
+| **Potok zdarzeń zero-copy** | Rekordy `ProcessEvent` o stałym rozmiarze przez bufory per-CPU `PerfEventArray` |
+| **Ultra-zaawansowane TUI** | 7 paneli: Zdarzenia, Procesy, Sieć, Pliki, Rozszerzenia, Alerty, Heatmapa |
+| **Szukanie i filtrowanie** | Wyszukiwanie tekstu w zdarzeniach (`/` aby aktywować) |
+| **Widok szczegółów procesu** | Pełna hierarchia drzewa procesów ze statystykami (`Enter`) |
+| **Nakładka pomocy** | Kompletna lista skrótów klawiszowych (`?` aby pokazać) |
+| **Zmiana rozmiaru paneli** | Przesuwanie granic kolumn `[`/`]` i `{`/`}` |
+| **Panel sieci** | Podgląd connect/accept/sendto/recvfrom z IP:port |
+| **Sparkline'y tempa** | Wizualizacje exec/s, open/s, net/s, alert/s (120s) |
+| **Heatmapa** | Wizualizacja częstotliwości syscalli |
+| **Śledzenie typów plików** | Częstotliwość otwarć per rozszerzenie z kolorowymi kategoriami |
+| **Ranking plików** | Pliki posortowane wg liczby otwarć, z entropią Shannona |
+| **Heurystyka ruchomego okna** | 1-sekundowe okno per PID; alert przy przekroczeniu progu |
+| **Wiele trybów wyjścia** | TUI, JSON, plain text, autodiagnostyka, dashboard webowy |
+| **Dashboard webowy** | REST API + WebSocket + metryki Prometheus (opcjonalny build) |
+| **Agent Go** | Lekki CLI łączący się z daemonem przez HTTP/WebSocket |
+| **Biblioteka C FFI** | `libhalcyon.so` z C bindings dla integracji międzyjęzykowej |
+| **Kubernetes** | Manifesty DaemonSet + Service + ConfigMap + ServiceMonitor |
+| **Schemat Protobuf** | Definicja usługi gRPC dla komunikacji między komponentami |
+| **Liczenie utraconych zdarzeń** | Przepełnienia bufora perf liczone i raportowane |
+| **Pojedynczy statyczny binarny** | Pełne LTO, `panic = "abort"`, usunięte symbole |
+
+## Budowanie
+
+```bash
+# TUI-only (domyślne, 1.7MB) — zalecane
+./build.sh
+# lub
+cargo build --release
+
+# Z serwerem webowym (2.5MB) — z REST API, WebSocket, Prometheus
+./build.sh --web
+# lub
+cargo build --release --features web
+
+# Oba warianty
+./build.sh --all
+```
+
+### Rozmiary binarek (release)
+
+| Wariant | Rozmiar | Zależności |
+|---|---|---|
+| `process-monitor-tui` | 1.7MB | aya, ratatui, chrono, crossterm |
+| `process-monitor-web` | 2.5MB | +axum, tokio, tower-http, prometheus-client |
 
 ## Wymagania
 
 | Wymaganie | Uwagi |
 |---|---|
 | Jądro Linux **5.8+** | wsparcie eBPF + tracepointów |
-| **root** (`CAP_BPF` / `CAP_SYS_ADMIN`) | wymagane do załadowania i podpięcia programów eBPF |
+| **root** (`CAP_BPF` / `CAP_SYS_ADMIN`) | wymagane do załadowania programów eBPF |
 | Rust **nightly** + `rust-src` | buduje program eBPF z `-Z build-std` |
-| `bpf-linker`, `clang`, kompilator C | toolchain linkowania eBPF |
+| `bpf-linker`, `clang` | toolchain linkowania eBPF |
 | BTF (`/sys/kernel/btf/vmlinux`) | zalecane dla zgodności CO-RE |
-
-Binarka przestrzeni użytkownika buduje się na stabilnym Rust; tylko crate eBPF
-wymaga nightly.
 
 ## Szybki start
 
-Najszybsza ścieżka to instalator rozpoznający dystrybucję — wykrywa menedżer
-pakietów (apt, dnf, pacman, zypper, apk, xbps), instaluje zależności buildowe
-z oficjalnych repozytoriów dystrybucji, provisionuje toolchain Rusta, buduje
-i instaluje:
-
 ```bash
-# Instalacja systemowa do /usr/local (pyta przed każdą zmianą):
+# Instalacja systemowa do /usr/local
 ./install.sh --system
 
-# Instalacja lokalna do ~/.local (bez sudo):
+# Instalacja lokalna do ~/.local
 ./install.sh
-```
 
-Albo buduj ręcznie:
-
-```bash
+# Budowanie ręczne
 ./build.sh
-sudo target/release/process-monitor
+sudo target/release/process-monitor-tui
 ```
 
 ## Użycie
 
 ```bash
-# TUI (domyślnie, gdy stdout to terminal)
+# TUI (domyślnie)
 sudo process-monitor
 
-# Podnieś próg alertu (otwarcia plików na sekundę przed alertem)
+# Podnieś próg alertu
 sudo process-monitor --alert-threshold 100
 
-# Filtruj wg rozszerzenia (pokaż tylko zdarzenia .pdf i .enc w TUI)
+# Filtruj wg rozszerzenia
 sudo process-monitor --filter-ext pdf
 
-# Wyjście maszynowe do potoków / agregacji logów
+# Wyjście JSON
 sudo process-monitor --json | jq .
 
-# Zwykły dziennik tekstowy (bez TUI, bez JSON)
-sudo process-monitor --plain
-
-# Jawna ścieżka do skompilowanego obiektu eBPF (inaczej auto-wykrywanie)
-sudo process-monitor --bpf /path/to/process-monitor-ebpf
-
-# 5-sekundowa autodiagnostyka end-to-end, potem wyjście
-sudo process-monitor --diagnose
+# Dashboard webowy (wymaga --features web)
+sudo process-monitor --web 0.0.0.0:8080
 ```
 
-### Referencja opcji CLI
+## Klawisze TUI
 
-| Flaga | Domyślnie | Opis |
-|---|---|---|
-| `-b, --bpf <PATH>` | auto-wykrywanie | Ścieżka do skompilowanego obiektu eBPF |
-| `--alert-threshold <N>` | `50` | Alert, gdy proces otworzy N+ plików w 1 s (`0` wyłącza alerty) |
-| `--filter-ext <EXT>` | wszystkie | Pokaż tylko zdarzenia pasujące do rozszerzenia (np. `pdf`, `enc`) |
-| `--top-files <N>` | `8` | Liczba górnych plików do wyświetlenia w TUI |
-| `--json` | wył. | Wyjście JSON z podziałem na linie (bez TUI) |
-| `--plain` | wył. | Zwykły dziennik tekstowy (bez TUI); koliduje z `--json` |
-| `--tui` | wył. | Wymuś TUI, nawet gdy stdout nie jest terminalem |
-| `--diagnose` | wył. | Uruchom 5-sekundową autodiagnostykę end-to-end i wyjdź |
-
-### Klawisze TUI
+### Nawigacja
 
 | Klawisz | Akcja |
 |---|---|
-| `q`, `Esc`, `Ctrl+C` | Wyjście |
-| `p` | Pauza / wznowienie strumienia zdarzeń |
-| `c` | Wyczyść dziennik zdarzeń |
-| `↑` / `↓`, `j` / `k` | Przewijanie dziennika zdarzeń |
-| `PgUp` / `PgDn` | Szybsze przewijanie |
-| `Home` / `End` | Skok na górę / dół |
-| `Tab` | Przełącz fokus między panelami (Zdarzenia → Procesy → Pliki) |
+| `q` / `Esc` | Wyjście (lub wyczyść scroll) |
+| `p` | Pauza / wznowienie |
+| `c` | Wyczyść wszystkie panele |
+| `↑`/`↓` / `k`/`j` | Przewijanie |
+| `PgUp`/`PgDn` | Szybsze przewijanie |
+| `g` / `Home` | Skok na górę |
+| `G` / `End` | Skok na dół |
 
-## Schemat wyjścia JSON
+### Panele
 
-Każde zdarzenie to jeden obiekt JSON na linię (JSON z podziałem na linie):
+| Klawisz | Akcja |
+|---|---|
+| `Tab` | Następny panel |
+| `Shift+Tab` | Poprzedni panel |
+| `1`-`7` | Skocz do panelu numerem |
+| `Enter` | Otwórz szczegóły procesu |
 
-```jsonc
-// Zdarzenie procesu
-{"ts": "14:09:16.531", "type": "open", "pid": 29645, "uid": 1000, "comm": "process-monitor", "file": "/dev/tty"}
-{"ts": "14:09:16.532", "type": "exec", "pid": 29645, "uid": 1000, "comm": "bash", "file": "/usr/bin/ls"}
+### Szukanie
 
-// Alert
-{"ts": "14:09:16.973", "type": "alert", "pid": 2126, "uid": 1000, "comm": "Cache2 I/O", "opens_in_1s": 50}
+| Klawisz | Akcja |
+|---|---|
+| `/` | Tryb szukania |
+| `Esc` | Anuluj szukanie |
+| `Enter` | Zastosuj filtr |
+
+### Układ
+
+| Klawisz | Akcja |
+|---|---|
+| `[` / `]` | Zmień rozmiar lewego panelu |
+| `{` / `}` | Zmień rozmiar środkowego panelu |
+
+### Inne
+
+| Klawisz | Akcja |
+|---|---|
+| `?` / `h` | Nakładka pomocy |
+| `Ctrl+C` | Wymuś wyjście |
+
+### Panele TUI (7)
+
+| # | Panel | Opis |
+|---|---|---|
+| 1 | **EVENTS** | Dziennik zdarzeń z szukaniem/filtrowaniem |
+| 2 | **PROCESSES** | Hierarchiczne drzewo procesów z mini-paskami |
+| 3 | **NETWORK** | Połączenia sieciowe na żywo (connect/accept/send/recv) |
+| 4 | **TOP FILES** | Najczęściej otwierane pliki z entropią Shannona |
+| 5 | **FILE TYPES** | Częstotliwość rozszerzeń z kolorowymi paskami |
+| 6 | **ALERTS** | Historia alertów z czasami |
+| 7 | **HEATMAP** | Wizualizacja częstotliwości syscalli |
+
+## Śledzenie sieci
+
+Nowe w v0.4 — śledzenie syscalli sieciowych:
+
+| Syscall | Typ zdarzenia | Przechwytuje |
+|---|---|---|
+| `connect` | `Connect` | Adres zdalny IPv4/IPv6/Unix |
+| `accept` | `Accept` | Adres zdalny |
+| `sendto` | `SendTo` | Cel + wysłane bajty |
+| `recvfrom` | `RecvFrom` | Źródło + odebrane bajty |
+
+## Dashboard webowy
+
+Opcjonalny build z `--features web`:
+
+```bash
+cargo build --release --features web
+sudo process-monitor --web 0.0.0.0:8080
 ```
 
-| Pole | Występuje w | Znaczenie |
+### Endpoints
+
+| Endpoint | Metoda | Opis |
 |---|---|---|
-| `ts` | wszystkie | Znacznik czasu lokalnego, `HH:MM:SS.mmm` |
-| `type` | wszystkie | `exec`, `open` lub `alert` |
-| `pid` | wszystkie | ID procesu, który wywołał syscall |
-| `uid` | wszystkie | ID użytkownika procesu |
-| `comm` | wszystkie | Nazwa procesu (16-bajtowe `comm`, obcięte) |
-| `file` | exec/open | Ścieżka docelowa (bufor 64-bajtowy, obcięty) |
-| `opens_in_1s` | alert | Otwarcia plików zliczone w bieżącym ruchomym oknie |
+| `/` | GET | Dashboard webowy cyberpunk |
+| `/ws` | WebSocket | Strumień zdarzeń na żywo |
+| `/api/v1/stats` | GET | Statystyki globalne |
+| `/api/v1/processes` | GET | Śledzone procesy |
+| `/api/v1/files` | GET | Najczęściej otwierane pliki |
+| `/api/v1/extensions` | GET | Częstotliwość rozszerzeń |
+| `/api/v1/threshold` | POST | Zmień próg w czasie rzeczywistym |
+| `/metrics` | GET | Metryki Prometheus |
 
-## Jak to działa
+## Agent Go
 
-1. Dwa tracepointy jądra (`sys_enter_execve`, `sys_enter_openat`) zapisują PID,
-   UID, `comm` i nazwę pliku docelowego do zwartego rekordu `ProcessEvent`
-   o stałym układzie i wrzucają go do `EVENTS` `PerfEventArray`.
-2. Dedykowany wątek czytający otwiera jeden bufor perf na każdy aktywny CPU
-   i przekazuje zdekodowane zdarzenia przez kanał MPSC do rdzenia monitora.
-3. Monitor utrzymuje 1-sekundowe ruchome okno otwarć plików per PID i podnosi
-   alert, gdy proces przekroczy skonfigurowany próg.
-4. Wyjście jest renderowane zgodnie z wybranym trybem: TUI, JSON, plain lub
-   raport diagnostyczny.
+Lekki CLI łączący się z daemonem:
 
-Pełny projekt: **[ARCHITECTURE.md](ARCHITECTURE.md)**.
+```bash
+cd go-agent && go build -o halcyon-agent .
+./halcyon-agent stats
+./halcyon-agent processes
+./halcyon-agent watch    # WebSocket na żywo
+```
+
+## Biblioteka C FFI
+
+C-compatible library do integracji z innymi językami:
+
+```c
+#include "halcyon.h"
+
+halcyon_monitor_t* monitor;
+halcyon_monitor_create("/path/to/bpf.o", 50, &monitor);
+
+halcyon_event_t events[100];
+uint32_t count;
+halcyon_monitor_poll(monitor, events, 100, &count);
+
+for (uint32_t i = 0; i < count; i++) {
+    printf("[%d] %s\n", events[i].pid, events[i].comm);
+    halcyon_free_string(events[i].comm);
+}
+halcyon_free_events(events, count);
+halcyon_monitor_destroy(monitor);
+```
+
+## Kubernetes
+
+Wdróż Halcyon jako DaemonSet na każdym węźle:
+
+```bash
+kubectl create namespace observability
+kubectl apply -f k8s/
+```
+
+### Komponenty
+
+| Zasób | Opis |
+|---|---|
+| `DaemonSet` | Uruchamia Halcyon na każdym węźle z dostępem do eBPF |
+| `Service` | Serwis ClusterIP dla dostępu do API |
+| `ConfigMap` | Konfiguracja (próg, poziom logowania, etc.) |
+| `ServiceMonitor` | Integracja z operatorem Prometheus |
+
+## Schemat JSON
+
+```jsonc
+{"ts": "14:09:16.531", "type": "open", "pid": 29645, "uid": 1000, "comm": "process-monitor", "file": "/dev/tty"}
+{"ts": "14:09:16.973", "type": "alert", "pid": 2126, "uid": 1000, "comm": "Cache2 I/O", "opens_in_1s": 50}
+{"ts": "14:09:17.100", "type": "connect", "pid": 1234, "uid": 1000, "comm": "curl", "file": "93.184.216.34:443"}
+```
 
 ## Struktura projektu
 
 ```
 halcyon-process-monitor/
-├── process-monitor/          # Przestrzeń użytkownika: rdzeń monitora + TUI + tryby wyjścia
+├── process-monitor/          # Przestrzeń użytkownika: rdzeń + TUI + web + FFI
 │   └── src/
 │       ├── main.rs           # CLI, wybór trybu, obsługa sygnałów
-│       ├── monitor.rs        # Ładowanie eBPF, czytnik perf, tracker ruchomego okna
-│       └── tui.rs            # Interfejs ratatui (zdarzenia / statystyki / alerty)
+│       ├── monitor.rs        # Ładowanie eBPF, czytnik perf, ruchome okno
+│       ├── tui.rs            # Ultra-zaawansowany interfejs ratatui
+│       ├── web.rs            # Serwer axum (opcjonalny, --features web)
+│       └── ffi.md            # C FFI bindings (libhalcyon)
 ├── process-monitor-ebpf/     # Strona jądra (#![no_std], aya-ebpf)
-│   └── src/main.rs           # Hooki tracepoint → PerfEventArray
-├── build.sh                  # Skrypt budowania (nightly dla eBPF, stable dla TUI)
-├── install.sh                # Instalator / dezinstalator rozpoznający dystrybucję
+│   └── src/
+│       ├── main.rs           # Tracepointy execve/openat → PerfEventArray
+│       └── network.rs        # Tracepointy connect/accept/sendto/recvfrom
+├── go-agent/                 # Agent Go (klient HTTP/WebSocket)
+├── c-api/                    # Nagłówek C dla libhalcyon
+├── k8s/                      # Manifesty Kubernetes
+├── proto/                    # Schemat Protobuf (definicja usługi gRPC)
+├── build.sh                  # Skrypt budowania (--web, --all)
+├── install.sh                # Instalator rozpoznający dystrybucję
+├── NEW_FEATURES.md           # Dokumentacja funkcji v0.4
 └── Cargo.toml                # Definicja workspace'a
 ```
 
-## Uwagi bezpieczeństwa
+## Bezpieczeństwo
 
-- Instalator nigdy nie czyta ani nie loguje tokenów, poświadczeń ani sekretów
-  środowiskowych i nie wykonuje **żadnych uwierzytelnionych żądań sieciowych**.
-- Zależności instalowane są tylko z oficjalnych repozytoriów dystrybucji;
-  jedyne pobrania to oficjalny instalator `rustup.rs` (z pytaniem) i crates
-  z crates.io.
-- Wszystkie komendy shell są cytowane i bezpieczne domyślnie; instalacje
-  lokalne nie wymagają `sudo`.
-- Kod jądra przestrzega ścisłych zasad bezpieczeństwa eBPF: cała pamięć
-  przestrzeni użytkownika czytana jest przez `bpf_probe_read_user`, nigdy
-  przez dereferencję.
-- Programy eBPF muszą działać jako root; uruchamiaj monitor przez `sudo`.
+- Instalator nie wykonuje **żadnych uwierzytelnionych żądań sieciowych**
+- Zależności z oficjalnych repozytoriów dystrybucji + `rustup.rs`
+- Kod jądra przestrzega ścisłych zasad eBPF: `bpf_probe_read_user` tylko
+- Programy eBPF wymagają root
+
+## Docker
+
+```bash
+docker build -t halcyon-process-monitor .
+docker run --privileged -v /sys/kernel/btf:/sys/kernel/btf \
+    halcyon-process-monitor process-monitor
+```
 
 ## Rozwiązywanie problemów
 
-Uruchom wbudowaną autodiagnostykę, aby zweryfikować toolchain, dostępność
-tracepointów, ładowanie eBPF i przepływ zdarzeń end-to-end:
-
 ```bash
-sudo process-monitor --diagnose
+sudo process-monitor --diagnose    # 5-sekundowa autodiagnostyka
 ```
 
-Typowe sprawdzenia:
-
-- **Brak zdarzeń w ogóle** → potwierdź, że tracepointy istnieją
-  (`/sys/kernel/tracing/events/syscalls/sys_enter_execve/id`) i że bufory
-  perf się otworzyły (`[halcyon] opening perf buffers on N CPUs`).
-- **`failed to load eBPF program`** → ścieżka do obiektu eBPF jest błędna;
-  podaj `--bpf` jawnie lub uruchom ponownie `./install.sh`.
-- **Brak uprawnień root** → `Monitor::start` kończy się jasnym komunikatem
-  `CAP_BPF / CAP_SYS_ADMIN`.
+- **Brak zdarzeń** → sprawdź tracepointy w `/sys/kernel/tracing/events/syscalls/`
+- **Błąd ładowania eBPF** → podaj `--bpf` jawnie lub uruchom `./install.sh` ponownie
+- **Brak root** → wymagane `CAP_BPF` lub `CAP_SYS_ADMIN`
 
 ## Dezinstalacja
 
 ```bash
-./install.sh --uninstall            # usuń instalację lokalną
-./install.sh --uninstall --system   # usuń instalację systemową
+./install.sh --uninstall            # lokalna
+./install.sh --uninstall --system   # systemowa
 ```
 
 ## Licencja
 
-MIT — crates deklarują `license = "MIT"` w manifestach `Cargo.toml`.
+MIT

@@ -17,7 +17,11 @@ extending or debugging the project.
 │  ┌───────────┐   ┌──────────────────────────────────┐   ┌──────────────┐    │
 │  │ execve    │──►│ process-monitor-ebpf             │──►│   EVENTS     │    │
 │  │ openat    │   │  #[tracepoint] sys_enter_execve  │   │ PerfEventArray│   │
-│  └───────────┘   │  #[tracepoint] sys_enter_openat  │   └──────┬───────┘    │
+│  │ connect   │   │  #[tracepoint] sys_enter_openat  │   └──────┬───────┘    │
+│  │ accept    │   │  #[tracepoint] sys_enter_connect │          │             │
+│  │ sendto    │   │  #[tracepoint] sys_enter_accept  │          │             │
+│  │ recvfrom  │   │  #[tracepoint] sys_enter_sendto  │          │             │
+│  └───────────┘   │  #[tracepoint] sys_enter_recvfrom│          │             │
 │                  └──────────────────────────────────┘          │             │
 └─────────────────────────────────────────────────────────────────┼───────────┘
                                                                   │ per-CPU
@@ -44,7 +48,8 @@ Two crates form the workspace:
 | Crate | Role | Toolchain |
 |---|---|---|
 | `process-monitor-ebpf` | Kernel-side tracepoint programs, `#![no_std]`, aya-ebpf | Rust **nightly** (`-Z build-std`) |
-| `process-monitor` | Userspace: loader, reader thread, monitor core, output modes | Rust **stable** |
+| `process-monitor` | Userspace: loader, reader thread, monitor core, TUI, web, FFI | Rust **stable** |
+| `go-agent` | Go CLI agent connecting via HTTP/WebSocket | Go 1.22 |
 
 ---
 
@@ -55,10 +60,17 @@ Two crates form the workspace:
 `src/main.rs` defines two tracepoint programs and one map:
 
 ```
-sys_enter_execve ──┐
-                   ├──► EVENTS: PerfEventArray<ProcessEvent>
-sys_enter_openat ──┘
+sys_enter_execve  ──┐
+sys_enter_openat  ──┤
+                    ├──► EVENTS: PerfEventArray<ProcessEvent>
+sys_enter_connect ──┤
+sys_enter_accept  ──┤
+sys_enter_sendto  ──┤
+sys_enter_recvfrom ─┘
 ```
+
+Network tracepoints are defined in `src/network.rs` and share the same
+`PerfEventArray` map.
 
 Both programs run in **tracepoint context** on syscall entry, before the
 kernel copies arguments, so all pointers to userspace memory are read with
@@ -72,11 +84,12 @@ be memcpy'd across the perf buffer without serialization:
 
 ```rust
 pub struct ProcessEvent {
-    pub event_type: u8,             // 0 = EXEC, 1 = OPEN
+    pub event_type: u8,             // 0=EXEC, 1=OPEN, 2=CONNECT, 3=ACCEPT, 4=SENDTO, 5=RECVFROM
     pub pid: u32,
     pub uid: u32,
     pub comm: [u8; 16],             // process comm (truncated)
-    pub filename: [u8; 64],         // target path (truncated)
+    pub filename: [u8; 64],         // target path or IP:port (truncated)
+    pub argv: [u8; 128],            // command line or bytes count
 }
 ```
 
@@ -172,22 +185,31 @@ The main thread routes these by mode:
 
 | Mode | Implementation |
 |---|---|
-| **TUI** | `tui.rs` — cyberpunk-themed `ratatui` layout: event log (scrollable), sparkline rate charts, top-processes table with mini-bars, file-type frequency panel, top-files leaderboard with entropy, alerts panel, status bar |
-| **JSON** | `run_json` — one JSON object per line: events and alerts (see schema in `README.md`) |
-| **Plain** | `run_plain` — human-readable timestamped lines |
-| **Diagnose** | `run_diagnose` — verifies tracepoint IDs under `/sys/kernel/tracing/events`, loads + attaches, listens 5 s, prints counters |
+| **TUI** | `tui.rs` — ultra-advanced 7-panel cyberpunk interface: events, process tree, network, top files, extensions, alerts, heatmap. Search/filter, pane resize, help overlay, process detail view |
+| **JSON** | `run_json` — one JSON object per line: events, alerts, network (see schema in `README.md`) |
+| **Plain** | `run_plain` — human-readable timestamped lines with color |
+| **Diagnose** | `run_diagnose` — verifies tracepoint IDs, loads + attaches, listens 5 s, prints counters |
+| **Web** | `web.rs` — axum server with REST API, WebSocket, dashboard HTML, Prometheus `/metrics` (optional, `--features web`) |
 
 Mode selection: `--tui` forces the TUI; otherwise `--json` / `--plain` select
 their modes; with no flags and a TTY stdout, the TUI is the default (non-TTY
 stdout defaults to plain, keeping pipes clean).
 
-The TUI uses a 3-column layout:
-- **Left (40%)**: scrollable event log with colour-coded EXEC/OPEN/ALERT tags
-- **Middle (30%)**: top-processes table (top) + file-type frequency bars (bottom)
-- **Right (30%)**: top-files leaderboard with entropy scores (top) + alerts (bottom)
+The TUI uses a resizable 3-column layout with 7 panels:
+- **Left**: scrollable event log with search/filter, colour-coded EXEC/OPEN/CONNECT/ALERT tags
+- **Middle**: hierarchical process tree (top) + file-type frequency bars (bottom)
+- **Right**: network connections (top) + top-files with entropy (middle) + alerts (bottom)
 
-Sparkline charts for exec/s, open/s, and alert/s are rendered above the body,
-using a 120-second rolling window of per-second rate samples.
+Above the body: sparkline charts for exec/s, open/s, net/s, alert/s.
+Below: status bar with live rates + keybinding footer.
+
+Keyboard features:
+- `/` search mode: filter events by text (PID, comm, file path)
+- `?` help overlay: complete keybinding reference
+- `Enter` on process tree: full hierarchy detail view
+- `[`/`]` and `{`/`}`: resize column borders
+- `1`-`7`: direct panel jump
+- `Tab`/`Shift+Tab`: cycle panels
 
 Signal handling (`install_signal_handler`) sets an atomic `QUIT` flag on
 `SIGINT`/`SIGTERM` so loops exit cleanly and buffers flush.
@@ -247,12 +269,12 @@ openat entry   ──► EVENTS map ──► perf buffer ──► Msg::Event �
 
 ### Add a syscall
 
-1. Add a `#[tracepoint]` program in `process-monitor-ebpf/src/main.rs`,
+1. Add a `#[tracepoint]` program in `process-monitor-ebpf/src/network.rs` (or `main.rs`),
    reading the new syscall's arguments with `bpf_probe_read_user` and pushing
    a `ProcessEvent` (reuse or extend `event_type`).
 2. Load + attach it in `Monitor::start`.
-3. Map the new `event_type` in `to_recorded` and, if needed, extend
-   `RecordedEvent` / JSON output.
+3. Map the new `event_type` in `to_recorded` and extend `Kind` enum.
+4. Add handling in `tui.rs` (panel), `main.rs` (JSON/plain), and `ffi.rs` (C API).
 
 ### Change the alert heuristic
 
@@ -264,3 +286,11 @@ openat entry   ──► EVENTS map ──► perf buffer ──► Msg::Event �
 
 Add a variant to `Output` handling in `main.rs`, mirror `run_json` /
 `run_plain`, and extend the mode-selection logic plus `Args` in the CLI.
+
+### Add a TUI panel
+
+1. Add a new `Panel` variant in `tui.rs`.
+2. Add data collection in `monitor.rs` (if needed).
+3. Implement the `draw_*` function in `tui.rs`.
+4. Add to `draw_body` layout.
+5. Update `Panel::all()` and `Panel::name()`.
