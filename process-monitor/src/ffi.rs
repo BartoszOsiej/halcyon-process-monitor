@@ -69,7 +69,7 @@ pub const HALCYON_ERR_IO: c_int = -4;
 pub const HALCYON_ERR_NOT_FOUND: c_int = -5;
 
 thread_local! {
-    static LAST_ERROR: std::cell::RefCell<Option<CString>> = std::cell::RefCell::new(None);
+    static LAST_ERROR: std::cell::RefCell<Option<CString>> = const { std::cell::RefCell::new(None) };
 }
 
 fn set_last_error(msg: &str) {
@@ -83,21 +83,20 @@ fn set_last_error(msg: &str) {
 /// Returns the library version string.
 #[unsafe(no_mangle)]
 pub extern "C" fn halcyon_version() -> *const c_char {
-    static VERSION: &[u8] = b"0.3.0\0";
-    VERSION.as_ptr() as *const c_char
+    c"0.3.0".as_ptr()
 }
 
 /// Returns a human-readable error message.
 #[unsafe(no_mangle)]
 pub extern "C" fn halcyon_strerror(err: c_int) -> *const c_char {
     match err {
-        HALCYON_OK => b"success\0".as_ptr() as *const c_char,
-        HALCYON_ERR_NOMEM => b"out of memory\0".as_ptr() as *const c_char,
-        HALCYON_ERR_INVAL => b"invalid argument\0".as_ptr() as *const c_char,
-        HALCYON_ERR_PERM => b"permission denied\0".as_ptr() as *const c_char,
-        HALCYON_ERR_IO => b"I/O error\0".as_ptr() as *const c_char,
-        HALCYON_ERR_NOT_FOUND => b"not found\0".as_ptr() as *const c_char,
-        _ => b"unknown error\0".as_ptr() as *const c_char,
+        HALCYON_OK => c"success".as_ptr(),
+        HALCYON_ERR_NOMEM => c"out of memory".as_ptr(),
+        HALCYON_ERR_INVAL => c"invalid argument".as_ptr(),
+        HALCYON_ERR_PERM => c"permission denied".as_ptr(),
+        HALCYON_ERR_IO => c"I/O error".as_ptr(),
+        HALCYON_ERR_NOT_FOUND => c"not found".as_ptr(),
+        _ => c"unknown error".as_ptr(),
     }
 }
 
