@@ -748,6 +748,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)] // miri has no /proc filesystem
     fn exec_events_update_stats_without_alerts() {
         let mut monitor = Monitor::dummy();
         let mut outputs = Vec::new();
@@ -773,6 +774,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)] // calls read_ppid_from_proc → /proc
     fn opens_trigger_alert_at_threshold() {
         let mut monitor = Monitor::dummy(); // threshold = 3
         let mut outputs = Vec::new();
@@ -796,6 +798,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)] // calls read_ppid_from_proc → /proc
     fn no_second_alert_above_threshold() {
         let mut monitor = Monitor::dummy(); // threshold = 3
         let mut outputs = Vec::new();
@@ -811,6 +814,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)] // calls read_ppid_from_proc → /proc
     fn stats_sorted_orders_by_window_opens_desc() {
         let mut monitor = Monitor::dummy();
         let mut outputs = Vec::new();
@@ -845,6 +849,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)] // calls read_ppid_from_proc → /proc
     fn top_files_sorted_by_count() {
         let mut monitor = Monitor::dummy();
         let mut outputs = Vec::new();
@@ -862,6 +867,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)] // calls read_ppid_from_proc → /proc
     fn extension_counts_aggregate() {
         let mut monitor = Monitor::dummy();
         let mut outputs = Vec::new();
@@ -874,6 +880,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)] // calls read_ppid_from_proc → /proc
     fn process_tree_builds_hierarchy() {
         let mut monitor = Monitor::dummy();
         let mut outputs = Vec::new();
@@ -920,6 +927,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)] // calls read_ppid_from_proc → /proc
     fn flatten_tree_depth_ordering() {
         let mut monitor = Monitor::dummy();
         let mut outputs = Vec::new();
@@ -953,6 +961,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)] // calls read_ppid_from_proc → /proc
     fn multiple_roots() {
         let mut monitor = Monitor::dummy();
         let mut outputs = Vec::new();
