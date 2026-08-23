@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Halcyon — eBPF Process Monitor</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --bg: #0a0a0f;
+            --surface: #12121a;
+            --border: #1e1e2e;
+            --text: #e0e0e8;
+            --muted: #6b7280;
+            --accent: #FCD900;
+            --accent2: #22d3ee;
+            --red: #ef4444;
+            --green: #22c55e;
+        }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+
+        /* Hero */
+        .hero {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 2rem;
+            position: relative;
+            overflow: hidden;
+        }
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle at 30% 50%, rgba(252, 217, 0, 0.03) 0%, transparent 50%),
+                        radial-gradient(circle at 70% 50%, rgba(34, 211, 238, 0.03) 0%, transparent 50%);
+            animation: drift 20s ease-in-out infinite;
+        }
+        @keyframes drift {
+            0%, 100% { transform: translate(0, 0); }
+            50% { transform: translate(-2%, 2%); }
+        }
+        .hero-content { position: relative; z-index: 1; max-width: 800px; }
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.4rem 1rem;
+            background: rgba(252, 217, 0, 0.1);
+            border: 1px solid rgba(252, 217, 0, 0.3);
+            border-radius: 100px;
+            font-size: 0.85rem;
+            color: var(--accent);
+            margin-bottom: 2rem;
+        }
+        .badge .dot {
+            width: 6px; height: 6px;
+            background: var(--accent);
+            border-radius: 50%;
+            animation: pulse 2s ease-in-out infinite;
+        }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+        h1 {
+            font-size: clamp(2.5rem, 6vw, 5rem);
+            font-weight: 800;
+            letter-spacing: -0.03em;
+            line-height: 1.1;
+            margin-bottom: 1.5rem;
+        }
+        h1 span { color: var(--accent); }
+        .subtitle {
+            font-size: 1.2rem;
+            color: var(--muted);
+            max-width: 600px;
+            margin: 0 auto 2.5rem;
+        }
+        .cta-group { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
+        .btn {
+            padding: 0.8rem 2rem;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.2s;
+            cursor: pointer;
+            border: none;
+        }
+        .btn-primary {
+            background: var(--accent);
+            color: #000;
+        }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(252, 217, 0, 0.3); }
+        .btn-secondary {
+            background: transparent;
+            color: var(--text);
+            border: 1px solid var(--border);
+        }
+        .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
+
+        /* Terminal Preview */
+        .terminal {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            margin: 4rem auto;
+            max-width: 900px;
+            overflow: hidden;
+        }
+        .terminal-header {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.8rem 1rem;
+            background: #0d0d14;
+            border-bottom: 1px solid var(--border);
+        }
+        .terminal-dot {
+            width: 12px; height: 12px;
+            border-radius: 50%;
+        }
+        .terminal-dot.r { background: #ef4444; }
+        .terminal-dot.y { background: #eab308; }
+        .terminal-dot.g { background: #22c55e; }
+        .terminal-title {
+            color: var(--muted);
+            font-size: 0.8rem;
+            margin-left: 0.5rem;
+        }
+        .terminal-body {
+            padding: 1.5rem;
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
+            font-size: 0.85rem;
+            line-height: 1.8;
+            overflow-x: auto;
+        }
+        .t-green { color: var(--green); }
+        .t-yellow { color: var(--accent); }
+        .t-cyan { color: var(--accent2); }
+        .t-red { color: var(--red); }
+        .t-muted { color: var(--muted); }
+
+        /* Features */
+        .features {
+            padding: 6rem 2rem;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .features h2 {
+            text-align: center;
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+        }
+        .features .sub {
+            text-align: center;
+            color: var(--muted);
+            margin-bottom: 4rem;
+            font-size: 1.1rem;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 1.5rem;
+        }
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 2rem;
+            transition: all 0.3s;
+        }
+        .card:hover {
+            border-color: var(--accent);
+            transform: translateY(-4px);
+            box-shadow: 0 12px 40px rgba(0,0,0,0.3);
+        }
+        .card-icon {
+            width: 48px; height: 48px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+        }
+        .card-icon.yellow { background: rgba(252, 217, 0, 0.1); }
+        .card-icon.cyan { background: rgba(34, 211, 238, 0.1); }
+        .card-icon.red { background: rgba(239, 68, 68, 0.1); }
+        .card-icon.green { background: rgba(34, 197, 94, 0.1); }
+        .card h3 { font-size: 1.2rem; margin-bottom: 0.5rem; }
+        .card p { color: var(--muted); font-size: 0.95rem; }
+
+        /* Architecture */
+        .arch {
+            padding: 6rem 2rem;
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        .arch h2 { text-align: center; font-size: 2.5rem; font-weight: 700; margin-bottom: 3rem; }
+        .arch-flow {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+            margin-bottom: 3rem;
+        }
+        .arch-box {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.2rem 1.5rem;
+            text-align: center;
+            min-width: 140px;
+        }
+        .arch-box.ebpf { border-color: var(--accent); }
+        .arch-box.userspace { border-color: var(--accent2); }
+        .arch-box.tui { border-color: var(--green); }
+        .arch-arrow { color: var(--muted); font-size: 1.5rem; }
+        .arch-box .label { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+        .arch-box .name { font-weight: 600; margin-top: 0.3rem; }
+
+        /* Stats */
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
+            padding: 4rem 2rem;
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        .stat {
+            text-align: center;
+            padding: 2rem;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+        }
+        .stat .number {
+            font-size: 2.5rem;
+            font-weight: 800;
+            color: var(--accent);
+        }
+        .stat .label {
+            color: var(--muted);
+            font-size: 0.9rem;
+            margin-top: 0.5rem;
+        }
+
+        /* Code */
+        .code-section {
+            padding: 6rem 2rem;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .code-section h2 { text-align: center; font-size: 2.5rem; font-weight: 700; margin-bottom: 1rem; }
+        .code-section .sub { text-align: center; color: var(--muted); margin-bottom: 3rem; }
+        .code-block {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9rem;
+            overflow-x: auto;
+        }
+        .code-block .comment { color: var(--muted); }
+        .code-block .cmd { color: var(--accent); }
+        .code-block .output { color: var(--accent2); }
+
+        /* Footer */
+        footer {
+            padding: 3rem 2rem;
+            text-align: center;
+            border-top: 1px solid var(--border);
+            color: var(--muted);
+        }
+        footer a { color: var(--accent); text-decoration: none; }
+        footer a:hover { text-decoration: underline; }
+
+        @media (max-width: 768px) {
+            .arch-flow { flex-direction: column; }
+            .arch-arrow { transform: rotate(90deg); }
+        }
+    </style>
+</head>
+<body>
+    <section class="hero">
+        <div class="hero-content">
+            <div class="badge"><span class="dot"></span> eBPF · Rust · Linux Kernel</div>
+            <h1>Halcyon<br><span>Process Monitor</span></h1>
+            <p class="subtitle">Real-time kernel-level process, file-operation, and network telemetry for Linux. Powered by eBPF.</p>
+            <div class="cta-group">
+                <a href="https://github.com/BartoszOsiej/halcyon-process-monitor" class="btn btn-primary">View on GitHub</a>
+                <a href="https://github.com/BartoszOsiej/halcyon-process-monitor#quick-start" class="btn btn-secondary">Quick Start →</a>
+            </div>
+        </div>
+    </section>
+
+    <div class="terminal">
+        <div class="terminal-header">
+            <div class="terminal-dot r"></div>
+            <div class="terminal-dot y"></div>
+            <div class="terminal-dot g"></div>
+            <span class="terminal-title">halcyon — live kernel tracing</span>
+        </div>
+        <div class="terminal-body">
+<span class="t-muted">[2026-08-23 14:32:01]</span> <span class="t-green">exec</span>   <span class="t-cyan">bash</span>            pid=<span class="t-yellow">12847</span>  uid=<span class="t-yellow">1000</span>  cmd="bash -c 'make -j8'"
+<span class="t-muted">[2026-08-23 14:32:01]</span> <span class="t-cyan">open</span>   <span class="t-green">/src/main.rs</span>    pid=<span class="t-yellow">12847</span>  flags=O_RDONLY
+<span class="t-muted">[2026-08-23 14:32:01]</span> <span class="t-cyan">open</span>   <span class="t-green">/build/output.o</span> pid=<span class="t-yellow">12852</span>  flags=O_WRONLY|O_CREAT
+<span class="t-muted">[2026-08-23 14:32:02]</span> <span class="t-red">conn</span>  <span class="t-cyan">10.0.0.5:443</span>    pid=<span class="t-yellow">12901</span>  proto=TCP  bytes=2847
+<span class="t-muted">[2026-08-23 14:32:02]</span> <span class="t-yellow">⚠ ALERT</span>  <span class="t-red">RANSOMWARE SCORE: 87/100</span>  process=<span class="t-cyan">unknown-worker</span>  files_opened=<span class="t-yellow">142</span> in 3s
+        </div>
+    </div>
+
+    <section class="features">
+        <h2>What it does</h2>
+        <p class="sub">Kernel-level observability without the overhead. No agents. No sidecars. Just eBPF.</p>
+        <div class="grid">
+            <div class="card">
+                <div class="card-icon yellow">🔬</div>
+                <h3>Kernel-Level Tracing</h3>
+                <p>Traces <code>execve</code>, <code>openat</code>, <code>connect</code>, <code>accept</code>, <code>sendto</code>, <code>recvfrom</code> syscalls at the kernel level using eBPF tracepoints.</p>
+            </div>
+            <div class="card">
+                <div class="card-icon cyan">📊</div>
+                <h3>7-Panel TUI</h3>
+                <p>Live terminal dashboard with Events, Processes, Network, TopFiles, Extensions, Alerts, and Ransomware Heatmap panels.</p>
+            </div>
+            <div class="card">
+                <div class="card-icon red">🛡️</div>
+                <h3>Ransomware Detection</h3>
+                <p>Continuously scores per-process file-open rates against a sliding window to flag ransomware-style mass file access in real-time.</p>
+            </div>
+            <div class="card">
+                <div class="card-icon green">⚡</div>
+                <h3>Zero-Copy Pipeline</h3>
+                <p>Fixed-size <code>ProcessEvent</code> structs through per-CPU <code>PerfEventArray</code>. No allocations. No locks. Kernel to userspace in nanoseconds.</p>
+            </div>
+            <div class="card">
+                <div class="card-icon cyan">🌐</div>
+                <h3>Network Tracing</h3>
+                <p>Captures TCP/UDP connections with destination IP, port, protocol, and byte count — all from the kernel.</p>
+            </div>
+            <div class="card">
+                <div class="card-icon yellow">🐳</div>
+                <h3>Docker & Kubernetes</h3>
+                <p>Runs in containers with <code>--privileged</code>. Includes K8s DaemonSet, ServiceMonitor, and Prometheus metrics.</p>
+            </div>
+        </div>
+    </section>
+
+    <section class="arch">
+        <h2>Architecture</h2>
+        <div class="arch-flow">
+            <div class="arch-box ebpf">
+                <div class="label">Kernel Space</div>
+                <div class="name">eBPF Programs</div>
+            </div>
+            <div class="arch-arrow">→</div>
+            <div class="arch-box ebpf">
+                <div class="label">Ring Buffer</div>
+                <div class="name">PerfEventArray</div>
+            </div>
+            <div class="arch-arrow">→</div>
+            <div class="arch-box userspace">
+                <div class="label">Userspace</div>
+                <div class="name">Rust aya</div>
+            </div>
+            <div class="arch-arrow">→</div>
+            <div class="arch-box tui">
+                <div class="label">Display</div>
+                <div class="name">Ratatui TUI</div>
+            </div>
+        </div>
+    </section>
+
+    <div class="stats">
+        <div class="stat">
+            <div class="number">~0</div>
+            <div class="label">CPU overhead (idle)</div>
+        </div>
+        <div class="stat">
+            <div class="number">&lt;1μs</div>
+            <div class="label">Event latency</div>
+        </div>
+        <div class="stat">
+            <div class="number">7</div>
+            <div class="label">TUI panels</div>
+        </div>
+        <div class="stat">
+            <div class="number">6</div>
+            <div class="label">Syscalls traced</div>
+        </div>
+    </div>
+
+    <section class="code-section">
+        <h2>Get started in 30 seconds</h2>
+        <p class="sub">One command. Full kernel observability.</p>
+        <div class="code-block">
+<span class="comment"># Clone and build</span>
+<span class="cmd">$</span> git clone https://github.com/BartoszOsiej/halcyon-process-monitor
+<span class="cmd">$</span> cd halcyon-process-monitor && cargo build --release
+
+<span class="comment"># Run (requires root for eBPF)</span>
+<span class="cmd">$</span> sudo ./target/release/process-monitor
+<span class="output">🔬 Halcyon Process Monitor v0.1.0</span>
+<span class="output">   eBPF programs loaded. Tracing syscalls...</span>
+<span class="output">   Press 'q' to quit, '?' for help</span>
+
+<span class="comment"># Or run in Docker</span>
+<span class="cmd">$</span> docker run --privileged -it ghcr.io/bartoszosiej/halcyon:latest
+        </div>
+    </section>
+
+    <footer>
+        <p>Built with 🦀 Rust + eBPF · <a href="https://github.com/BartoszOsiej/halcyon-process-monitor">GitHub</a> · MIT License</p>
+    </footer>
+</body>
+</html>
