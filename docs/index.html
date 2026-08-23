@@ -130,7 +130,7 @@ footer .heart{color:var(--red);animation:heartbeat 1.5s infinite}
   <p class="subtitle">Real-time kernel-level process, file-operation, and network telemetry for Linux. Zero overhead. Zero agents. Just eBPF.</p>
   <div class="cta-group">
     <a href="https://github.com/BartoszOsiej/halcyon-process-monitor" class="btn btn-primary">View on GitHub</a>
-    <a href="https://bartoszosiej.github.io/Docs/projects/halcyon-process-monitor/" class="btn btn-secondary">Documentation →</a>
+    <a href="https://crates.io/crates/process-monitor" class="btn btn-secondary">Install from crates.io →</a>
   </div>
 </div>
 </section>
@@ -218,9 +218,11 @@ footer .heart{color:var(--red);animation:heartbeat 1.5s infinite}
   <h2 class="reveal">Start in 30 seconds</h2>
   <p class="sub reveal">One command. Full kernel observability.</p>
   <div class="code-block reveal">
-<span class="comment"># Clone and build</span>
+<span class="comment"># Install from crates.io</span>
+<span class="cmd">$</span> cargo install process-monitor
+
+<span class="comment"># Or clone and build</span>
 <span class="cmd">$</span> git clone https://github.com/BartoszOsiej/halcyon-process-monitor
-<span class="cmd">$</span> cd halcyon-process-monitor && cargo build --release
 
 <span class="comment"># Run (requires root for eBPF)</span>
 <span class="cmd">$</span> sudo ./target/release/process-monitor
