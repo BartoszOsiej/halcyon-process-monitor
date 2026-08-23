@@ -115,6 +115,23 @@ footer .heart{color:var(--red);animation:heartbeat 1.5s infinite}
   .arch-arrow{transform:rotate(90deg)}
   .grid{grid-template-columns:1fr}
 }
+
+@media(max-width:768px){
+  .hero{min-height:92vh;padding:1.5rem .75rem}
+  h1{font-size:clamp(2.2rem,9vw,3.4rem)}
+  .subtitle{font-size:1rem;margin-bottom:2rem}
+  .section{padding:4rem 1rem}
+  .grid{grid-template-columns:1fr}
+  .terminal{margin:3rem auto;max-width:100%}
+  .terminal-body,.code-block{white-space:pre-wrap;word-break:break-word;font-size:.72rem;padding:1rem;overflow-x:hidden}
+  .code-section{padding:4rem 1rem}
+  .cta-group{flex-direction:column;align-items:center;gap:.75rem}
+  .cta-group .btn{width:100%;max-width:300px}
+  .arch-flow,.flow-step{flex-direction:column}
+  .arch-arrow{transform:rotate(90deg)}
+}
+@media (prefers-reduced-motion: reduce){.reveal{opacity:1!important;transform:none!important;transition:none}}
+
 </style>
 </head>
 <body>
@@ -246,6 +263,9 @@ for(let i=0;i<80;i++){const s=document.createElement('span');s.style.cssText=`le
 // Scroll reveal
 const observer=new IntersectionObserver((entries)=>{entries.forEach(e=>{if(e.isIntersecting){e.target.classList.add('visible');observer.unobserve(e.target)}})},{threshold:0.1});
 document.querySelectorAll('.reveal').forEach(el=>observer.observe(el));
+
+if(!('IntersectionObserver'in window)){document.querySelectorAll('.reveal').forEach(function(e){e.classList.add('visible')})}
+
 </script>
 </body>
 </html>
