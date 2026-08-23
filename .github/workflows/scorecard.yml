@@ -1,14 +1,12 @@
 name: OpenSSF Scorecard
 
 on:
-  branch_protection_rule:
-  schedule:
-    - cron: '25 7 * * 1'
   push:
     branches: [main, master]
+  schedule:
+    - cron: "0 6 * * 1"
 
-permissions:
-  contents: read
+permissions: read-all
 
 jobs:
   analysis:
@@ -18,15 +16,11 @@ jobs:
       contents: read
       security-events: write
       id-token: write
-
     steps:
-      - name: "Checkout code"
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
-
-      - name: "Run OpenSSF Scorecard"
-        uses: ossf/scorecard-action@ff5dd8929f96a8a4dc67d13f32b8c75057829621  # v2.4.3
+      - uses: ossf/scorecard-action@ff5dd8929f96a8a4dc67d13f32b8c75057829621 # v2.4.0
         with:
           results_file: results.sarif
           results_format: sarif
@@ -37,8 +31,3 @@ jobs:
           name: SARIF
           path: results.sarif
           retention-days: 5
-
-      - name: "Upload to SARIF"
-        uses: github/codeql-action/upload-sarif@{"message":"Not Found","documentation_url":"https://docs.github.com/rest/git/refs#get-a-reference","status":"404"}
-        with:
-          sarif_file: results.sarif
