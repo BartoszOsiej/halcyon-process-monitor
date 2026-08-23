@@ -478,4 +478,4 @@ MIT
 
 ## 📺 Demo
 
-![halcyon Demo](assets/halcyon-demo.svg)
+![halcyon Demo](assets/halcyon-demo.gif)
