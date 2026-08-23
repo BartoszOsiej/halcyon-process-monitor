@@ -1,4 +1,10 @@
-# 🔬 Halcyon Process Monitor
+<img src="https://capsule-render.vercel.app/api?type=waving&color=gradient&customColorList=6,11,20&height=130&section=header&text=halcyon-process-monitor&fontSize=32&animation=fadeIn" width="100%" />
+
+<div align="center">
+
+[![Typing SVG](https://readme-typing-svg.demolab.com/?font=JetBrains+Mono&weight=600&size=18&duration=3000&pause=1200&color=58A6FF&center=true&vCenter=true&width=600&height=45&lines=eBPF%20ransomware%20tracker%20%E2%80%94%20kernel%20execve%2Fopenat%20tracing%2C%20per-CPU%20perf%20buffers%2C%20ratatui%20TUI%2C%20sliding-window%20alerts)](https://github.com/BartoszOsiej/halcyon-process-monitor)
+
+</div># 🔬 Halcyon Process Monitor
 
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
 ![Rust](https://img.shields.io/badge/Rust-2021-DEA584?style=flat-square&logo=rust)
