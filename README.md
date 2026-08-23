@@ -474,3 +474,8 @@ Because ransomware detection should not require a $50K enterprise solution. Halc
 MIT
 
 ---
+---
+
+## 📺 Demo
+
+![halcyon Demo](assets/halcyon-demo.svg)
