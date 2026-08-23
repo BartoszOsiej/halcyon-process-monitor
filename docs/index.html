@@ -1,415 +1,223 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Halcyon — eBPF Process Monitor</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        :root {
-            --bg: #0a0a0f;
-            --surface: #12121a;
-            --border: #1e1e2e;
-            --text: #e0e0e8;
-            --muted: #6b7280;
-            --accent: #FCD900;
-            --accent2: #22d3ee;
-            --red: #ef4444;
-            --green: #22c55e;
-        }
-        body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            background: var(--bg);
-            color: var(--text);
-            line-height: 1.6;
-            overflow-x: hidden;
-        }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Halcyon — eBPF Process Monitor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#06060b;--surface:rgba(16,16,28,0.7);--surface2:rgba(20,20,35,0.5);
+  --border:rgba(255,255,255,0.06);--text:#f0f0f8;--muted:#5a5a7a;
+  --accent:#FCD900;--accent2:#22d3ee;--red:#ef4444;--green:#22c55e;
+  --glow:rgba(252,217,0,0.15);--glow2:rgba(34,211,238,0.1);
+}
+html{scroll-behavior:smooth}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);overflow-x:hidden}
 
-        /* Hero */
-        .hero {
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            text-align: center;
-            padding: 2rem;
-            position: relative;
-            overflow: hidden;
-        }
-        .hero::before {
-            content: '';
-            position: absolute;
-            top: -50%;
-            left: -50%;
-            width: 200%;
-            height: 200%;
-            background: radial-gradient(circle at 30% 50%, rgba(252, 217, 0, 0.03) 0%, transparent 50%),
-                        radial-gradient(circle at 70% 50%, rgba(34, 211, 238, 0.03) 0%, transparent 50%);
-            animation: drift 20s ease-in-out infinite;
-        }
-        @keyframes drift {
-            0%, 100% { transform: translate(0, 0); }
-            50% { transform: translate(-2%, 2%); }
-        }
-        .hero-content { position: relative; z-index: 1; max-width: 800px; }
-        .badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.5rem;
-            padding: 0.4rem 1rem;
-            background: rgba(252, 217, 0, 0.1);
-            border: 1px solid rgba(252, 217, 0, 0.3);
-            border-radius: 100px;
-            font-size: 0.85rem;
-            color: var(--accent);
-            margin-bottom: 2rem;
-        }
-        .badge .dot {
-            width: 6px; height: 6px;
-            background: var(--accent);
-            border-radius: 50%;
-            animation: pulse 2s ease-in-out infinite;
-        }
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
-        h1 {
-            font-size: clamp(2.5rem, 6vw, 5rem);
-            font-weight: 800;
-            letter-spacing: -0.03em;
-            line-height: 1.1;
-            margin-bottom: 1.5rem;
-        }
-        h1 span { color: var(--accent); }
-        .subtitle {
-            font-size: 1.2rem;
-            color: var(--muted);
-            max-width: 600px;
-            margin: 0 auto 2.5rem;
-        }
-        .cta-group { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
-        .btn {
-            padding: 0.8rem 2rem;
-            border-radius: 10px;
-            font-size: 1rem;
-            font-weight: 600;
-            text-decoration: none;
-            transition: all 0.2s;
-            cursor: pointer;
-            border: none;
-        }
-        .btn-primary {
-            background: var(--accent);
-            color: #000;
-        }
-        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(252, 217, 0, 0.3); }
-        .btn-secondary {
-            background: transparent;
-            color: var(--text);
-            border: 1px solid var(--border);
-        }
-        .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
+/* ─── Stars background ─── */
+.stars{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0}
+.stars span{position:absolute;width:2px;height:2px;background:#fff;border-radius:50%;animation:twinkle 3s infinite}
+@keyframes twinkle{0%,100%{opacity:.1}50%{opacity:.8}}
 
-        /* Terminal Preview */
-        .terminal {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            margin: 4rem auto;
-            max-width: 900px;
-            overflow: hidden;
-        }
-        .terminal-header {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            padding: 0.8rem 1rem;
-            background: #0d0d14;
-            border-bottom: 1px solid var(--border);
-        }
-        .terminal-dot {
-            width: 12px; height: 12px;
-            border-radius: 50%;
-        }
-        .terminal-dot.r { background: #ef4444; }
-        .terminal-dot.y { background: #eab308; }
-        .terminal-dot.g { background: #22c55e; }
-        .terminal-title {
-            color: var(--muted);
-            font-size: 0.8rem;
-            margin-left: 0.5rem;
-        }
-        .terminal-body {
-            padding: 1.5rem;
-            font-family: 'JetBrains Mono', 'Fira Code', monospace;
-            font-size: 0.85rem;
-            line-height: 1.8;
-            overflow-x: auto;
-        }
-        .t-green { color: var(--green); }
-        .t-yellow { color: var(--accent); }
-        .t-cyan { color: var(--accent2); }
-        .t-red { color: var(--red); }
-        .t-muted { color: var(--muted); }
+/* ─── Scroll reveal ─── */
+.reveal{opacity:0;transform:translateY(40px);transition:all 0.8s cubic-bezier(.16,1,.3,1)}
+.reveal.visible{opacity:1;transform:translateY(0)}
+.reveal-delay-1{transition-delay:.1s}
+.reveal-delay-2{transition-delay:.2s}
+.reveal-delay-3{transition-delay:.3s}
 
-        /* Features */
-        .features {
-            padding: 6rem 2rem;
-            max-width: 1200px;
-            margin: 0 auto;
-        }
-        .features h2 {
-            text-align: center;
-            font-size: 2.5rem;
-            font-weight: 700;
-            margin-bottom: 1rem;
-        }
-        .features .sub {
-            text-align: center;
-            color: var(--muted);
-            margin-bottom: 4rem;
-            font-size: 1.1rem;
-        }
-        .grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-            gap: 1.5rem;
-        }
-        .card {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 16px;
-            padding: 2rem;
-            transition: all 0.3s;
-        }
-        .card:hover {
-            border-color: var(--accent);
-            transform: translateY(-4px);
-            box-shadow: 0 12px 40px rgba(0,0,0,0.3);
-        }
-        .card-icon {
-            width: 48px; height: 48px;
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.5rem;
-            margin-bottom: 1rem;
-        }
-        .card-icon.yellow { background: rgba(252, 217, 0, 0.1); }
-        .card-icon.cyan { background: rgba(34, 211, 238, 0.1); }
-        .card-icon.red { background: rgba(239, 68, 68, 0.1); }
-        .card-icon.green { background: rgba(34, 197, 94, 0.1); }
-        .card h3 { font-size: 1.2rem; margin-bottom: 0.5rem; }
-        .card p { color: var(--muted); font-size: 0.95rem; }
+/* ─── Hero ─── */
+.hero{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:2rem;position:relative;overflow:hidden}
+.hero::before{content:'';position:absolute;top:-30%;left:50%;transform:translateX(-50%);width:800px;height:800px;background:radial-gradient(circle,var(--glow) 0%,transparent 70%);filter:blur(80px);animation:breathe 8s ease-in-out infinite}
+.hero::after{content:'';position:absolute;bottom:-20%;right:-10%;width:600px;height:600px;background:radial-gradient(circle,var(--glow2) 0%,transparent 70%);filter:blur(80px);animation:breathe 10s ease-in-out infinite 2s}
+@keyframes breathe{0%,100%{opacity:.4;transform:translateX(-50%) scale(1)}50%{opacity:.7;transform:translateX(-50%) scale(1.1)}}
+.hero-content{position:relative;z-index:2;max-width:800px}
 
-        /* Architecture */
-        .arch {
-            padding: 6rem 2rem;
-            max-width: 1000px;
-            margin: 0 auto;
-        }
-        .arch h2 { text-align: center; font-size: 2.5rem; font-weight: 700; margin-bottom: 3rem; }
-        .arch-flow {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 1rem;
-            flex-wrap: wrap;
-            margin-bottom: 3rem;
-        }
-        .arch-box {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 1.2rem 1.5rem;
-            text-align: center;
-            min-width: 140px;
-        }
-        .arch-box.ebpf { border-color: var(--accent); }
-        .arch-box.userspace { border-color: var(--accent2); }
-        .arch-box.tui { border-color: var(--green); }
-        .arch-arrow { color: var(--muted); font-size: 1.5rem; }
-        .arch-box .label { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
-        .arch-box .name { font-weight: 600; margin-top: 0.3rem; }
+.badge{display:inline-flex;align-items:center;gap:.5rem;padding:.45rem 1.2rem;background:rgba(252,217,0,0.08);border:1px solid rgba(252,217,0,0.2);border-radius:100px;font-size:.8rem;color:var(--accent);margin-bottom:2.5rem;backdrop-filter:blur(10px);letter-spacing:.02em}
+.badge .dot{width:6px;height:6px;background:var(--accent);border-radius:50%;animation:pulse 2s infinite;box-shadow:0 0 8px var(--accent)}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.3;transform:scale(.8)}}
 
-        /* Stats */
-        .stats {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1.5rem;
-            padding: 4rem 2rem;
-            max-width: 1000px;
-            margin: 0 auto;
-        }
-        .stat {
-            text-align: center;
-            padding: 2rem;
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 16px;
-        }
-        .stat .number {
-            font-size: 2.5rem;
-            font-weight: 800;
-            color: var(--accent);
-        }
-        .stat .label {
-            color: var(--muted);
-            font-size: 0.9rem;
-            margin-top: 0.5rem;
-        }
+h1{font-size:clamp(2.8rem,7vw,5.5rem);font-weight:900;letter-spacing:-.04em;line-height:1.05;margin-bottom:1.5rem}
+h1 span{background:linear-gradient(135deg,var(--accent) 0%,#ffed4a 50%,var(--accent2) 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{font-size:1.15rem;color:var(--muted);max-width:560px;margin:0 auto 3rem;line-height:1.7}
 
-        /* Code */
-        .code-section {
-            padding: 6rem 2rem;
-            max-width: 800px;
-            margin: 0 auto;
-        }
-        .code-section h2 { text-align: center; font-size: 2.5rem; font-weight: 700; margin-bottom: 1rem; }
-        .code-section .sub { text-align: center; color: var(--muted); margin-bottom: 3rem; }
-        .code-block {
-            background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 1.5rem;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.9rem;
-            overflow-x: auto;
-        }
-        .code-block .comment { color: var(--muted); }
-        .code-block .cmd { color: var(--accent); }
-        .code-block .output { color: var(--accent2); }
+.cta-group{display:flex;gap:1rem;justify-content:center;flex-wrap:wrap}
+.btn{padding:.85rem 2.2rem;border-radius:12px;font-size:.95rem;font-weight:600;text-decoration:none;transition:all .3s;cursor:pointer;border:none;position:relative;overflow:hidden}
+.btn-primary{background:var(--accent);color:#000;box-shadow:0 0 30px rgba(252,217,0,0.2)}
+.btn-primary:hover{transform:translateY(-3px);box-shadow:0 12px 40px rgba(252,217,0,0.4)}
+.btn-secondary{background:rgba(255,255,255,0.04);color:var(--text);border:1px solid var(--border);backdrop-filter:blur(10px)}
+.btn-secondary:hover{border-color:var(--accent);color:var(--accent);background:rgba(252,217,0,0.05)}
 
-        /* Footer */
-        footer {
-            padding: 3rem 2rem;
-            text-align: center;
-            border-top: 1px solid var(--border);
-            color: var(--muted);
-        }
-        footer a { color: var(--accent); text-decoration: none; }
-        footer a:hover { text-decoration: underline; }
+/* ─── Terminal ─── */
+.terminal{background:var(--surface);border:1px solid var(--border);border-radius:16px;margin:5rem auto;max-width:860px;overflow:hidden;backdrop-filter:blur(20px);box-shadow:0 24px 80px rgba(0,0,0,0.5),0 0 1px rgba(252,217,0,0.1)}
+.terminal-header{display:flex;align-items:center;gap:.5rem;padding:.75rem 1rem;background:rgba(10,10,18,0.8);border-bottom:1px solid var(--border)}
+.terminal-dot{width:12px;height:12px;border-radius:50%}
+.terminal-dot.r{background:#ff5f57}.terminal-dot.y{background:#febc2e}.terminal-dot.g{background:#28c840}
+.terminal-title{color:var(--muted);font-size:.75rem;margin-left:.5rem;font-family:'JetBrains Mono',monospace}
+.terminal-body{padding:1.5rem 2rem;font-family:'JetBrains Mono',monospace;font-size:.82rem;line-height:2;overflow-x:auto;min-height:240px}
+.t-green{color:var(--green)}.t-yellow{color:var(--accent)}.t-cyan{color:var(--accent2)}.t-red{color:var(--red)}.t-muted{color:var(--muted)}
 
-        @media (max-width: 768px) {
-            .arch-flow { flex-direction: column; }
-            .arch-arrow { transform: rotate(90deg); }
-        }
-    </style>
+/* ─── Section ─── */
+.section{padding:7rem 2rem;max-width:1200px;margin:0 auto}
+.section h2{font-size:clamp(2rem,4vw,3rem);font-weight:800;letter-spacing:-.03em;text-align:center;margin-bottom:1rem}
+.section .sub{text-align:center;color:var(--muted);margin-bottom:4rem;font-size:1.1rem;max-width:600px;margin-left:auto;margin-right:auto}
+
+/* ─── Grid ─── */
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:1.5rem}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:2rem;transition:all .4s cubic-bezier(.16,1,.3,1);position:relative;overflow:hidden;backdrop-filter:blur(10px)}
+.card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(252,217,0,0.3),transparent);opacity:0;transition:opacity .3s}
+.card:hover{border-color:rgba(252,217,0,0.3);transform:translateY(-6px);box-shadow:0 20px 60px rgba(0,0,0,0.3)}
+.card:hover::before{opacity:1}
+.card-icon{width:52px;height:52px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:1.5rem;margin-bottom:1.2rem}
+.card-icon.y{background:rgba(252,217,0,0.08)}.card-icon.c{background:rgba(34,211,238,0.08)}.card-icon.r{background:rgba(239,68,68,0.08)}.card-icon.g{background:rgba(34,197,94,0.08)}
+.card h3{font-size:1.15rem;font-weight:700;margin-bottom:.5rem}
+.card p{color:var(--muted);font-size:.92rem;line-height:1.7}
+.card code{background:rgba(252,217,0,0.08);color:var(--accent);padding:.15rem .4rem;border-radius:4px;font-size:.85rem}
+
+/* ─── Stats ─── */
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1.5rem;padding:4rem 2rem;max-width:1000px;margin:0 auto}
+.stat{text-align:center;padding:2rem 1rem;background:var(--surface);border:1px solid var(--border);border-radius:20px;backdrop-filter:blur(10px)}
+.stat .number{font-size:2.8rem;font-weight:900;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.stat .label{color:var(--muted);font-size:.85rem;margin-top:.4rem}
+
+/* ─── Architecture ─── */
+.arch-flow{display:flex;align-items:center;justify-content:center;gap:1rem;flex-wrap:wrap;margin:3rem 0}
+.arch-box{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.5rem 2rem;text-align:center;min-width:160px;backdrop-filter:blur(10px);transition:all .3s}
+.arch-box:hover{transform:scale(1.05)}
+.arch-box.ebpf{border-color:rgba(252,217,0,0.3);box-shadow:0 0 20px rgba(252,217,0,0.05)}
+.arch-box.us{border-color:rgba(34,211,238,0.3);box-shadow:0 0 20px rgba(34,211,238,0.05)}
+.arch-box.tui{border-color:rgba(34,197,94,0.3);box-shadow:0 0 20px rgba(34,197,94,0.05)}
+.arch-arrow{color:var(--muted);font-size:1.8rem;animation:arrowPulse 2s infinite}
+@keyframes arrowPulse{0%,100%{opacity:.3}50%{opacity:1}}
+.arch-box .label{font-size:.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-bottom:.3rem}
+.arch-box .name{font-weight:700;font-size:1rem}
+
+/* ─── Code ─── */
+.code-section{padding:7rem 2rem;max-width:800px;margin:0 auto}
+.code-section h2{text-align:center;font-size:2.5rem;font-weight:800;margin-bottom:1rem}
+.code-section .sub{text-align:center;color:var(--muted);margin-bottom:3rem}
+.code-block{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:2rem;font-family:'JetBrains Mono',monospace;font-size:.88rem;line-height:1.9;overflow-x:auto;backdrop-filter:blur(10px);box-shadow:0 16px 60px rgba(0,0,0,0.3)}
+.code-block .comment{color:var(--muted)}.code-block .cmd{color:var(--accent)}.code-block .output{color:var(--accent2)}
+
+/* ─── Footer ─── */
+footer{padding:4rem 2rem;text-align:center;border-top:1px solid var(--border);color:var(--muted);font-size:.9rem}
+footer a{color:var(--accent);text-decoration:none;transition:color .2s}
+footer a:hover{color:var(--accent2)}
+footer .heart{color:var(--red);animation:heartbeat 1.5s infinite}
+@keyframes heartbeat{0%,100%{transform:scale(1)}15%{transform:scale(1.15)}30%{transform:scale(1)}}
+
+@media(max-width:768px){
+  .stats{grid-template-columns:repeat(2,1fr)}
+  .arch-flow{flex-direction:column}
+  .arch-arrow{transform:rotate(90deg)}
+  .grid{grid-template-columns:1fr}
+}
+</style>
 </head>
 <body>
-    <section class="hero">
-        <div class="hero-content">
-            <div class="badge"><span class="dot"></span> eBPF · Rust · Linux Kernel</div>
-            <h1>Halcyon<br><span>Process Monitor</span></h1>
-            <p class="subtitle">Real-time kernel-level process, file-operation, and network telemetry for Linux. Powered by eBPF.</p>
-            <div class="cta-group">
-                <a href="https://github.com/BartoszOsiej/halcyon-process-monitor" class="btn btn-primary">View on GitHub</a>
-                <a href="https://github.com/BartoszOsiej/halcyon-process-monitor#quick-start" class="btn btn-secondary">Quick Start →</a>
-            </div>
-        </div>
-    </section>
 
-    <div class="terminal">
-        <div class="terminal-header">
-            <div class="terminal-dot r"></div>
-            <div class="terminal-dot y"></div>
-            <div class="terminal-dot g"></div>
-            <span class="terminal-title">halcyon — live kernel tracing</span>
-        </div>
-        <div class="terminal-body">
-<span class="t-muted">[2026-08-23 14:32:01]</span> <span class="t-green">exec</span>   <span class="t-cyan">bash</span>            pid=<span class="t-yellow">12847</span>  uid=<span class="t-yellow">1000</span>  cmd="bash -c 'make -j8'"
-<span class="t-muted">[2026-08-23 14:32:01]</span> <span class="t-cyan">open</span>   <span class="t-green">/src/main.rs</span>    pid=<span class="t-yellow">12847</span>  flags=O_RDONLY
-<span class="t-muted">[2026-08-23 14:32:01]</span> <span class="t-cyan">open</span>   <span class="t-green">/build/output.o</span> pid=<span class="t-yellow">12852</span>  flags=O_WRONLY|O_CREAT
-<span class="t-muted">[2026-08-23 14:32:02]</span> <span class="t-red">conn</span>  <span class="t-cyan">10.0.0.5:443</span>    pid=<span class="t-yellow">12901</span>  proto=TCP  bytes=2847
-<span class="t-muted">[2026-08-23 14:32:02]</span> <span class="t-yellow">⚠ ALERT</span>  <span class="t-red">RANSOMWARE SCORE: 87/100</span>  process=<span class="t-cyan">unknown-worker</span>  files_opened=<span class="t-yellow">142</span> in 3s
-        </div>
+<!-- Stars -->
+<div class="stars" id="stars"></div>
+
+<!-- Hero -->
+<section class="hero">
+<div class="hero-content reveal">
+  <div class="badge"><span class="dot"></span>eBPF · Rust · Linux Kernel 5.8+</div>
+  <h1>Halcyon<br><span>Process Monitor</span></h1>
+  <p class="subtitle">Real-time kernel-level process, file-operation, and network telemetry for Linux. Zero overhead. Zero agents. Just eBPF.</p>
+  <div class="cta-group">
+    <a href="https://github.com/BartoszOsiej/halcyon-process-monitor" class="btn btn-primary">View on GitHub</a>
+    <a href="https://bartoszosiej.github.io/Docs/projects/halcyon-process-monitor/" class="btn btn-secondary">Documentation →</a>
+  </div>
+</div>
+</section>
+
+<!-- Terminal -->
+<div class="terminal reveal">
+  <div class="terminal-header">
+    <div class="terminal-dot r"></div><div class="terminal-dot y"></div><div class="terminal-dot g"></div>
+    <span class="terminal-title">halcyon — live kernel tracing</span>
+  </div>
+  <div class="terminal-body" id="terminal">
+<span class="t-muted">[14:32:01.003]</span> <span class="t-green">exec</span>   <span class="t-cyan">bash</span>            pid=<span class="t-yellow">12847</span>  uid=<span class="t-yellow">1000</span>  cmd="make -j8"
+<span class="t-muted">[14:32:01.004]</span> <span class="t-cyan">open</span>   <span class="t-green">/src/main.rs</span>    pid=<span class="t-yellow">12847</span>  flags=O_RDONLY
+<span class="t-muted">[14:32:01.005]</span> <span class="t-cyan">open</span>   <span class="t-green">/build/output.o</span> pid=<span class="t-yellow">12852</span>  flags=O_WRONLY|O_CREAT
+<span class="t-muted">[14:32:01.008]</span> <span class="t-cyan">open</span>   <span class="t-green">/lib/libc.so</span>    pid=<span class="t-yellow">12847</span>  flags=O_RDONLY|O_CLOEXEC
+<span class="t-muted">[14:32:02.001]</span> <span class="t-red">conn</span>  <span class="t-cyan">10.0.0.5:443</span>    pid=<span class="t-yellow">12901</span>  proto=TCP  bytes=2847
+<span class="t-muted">[14:32:02.003]</span> <span class="t-red">send</span>  <span class="t-cyan">10.0.0.5:443</span>    pid=<span class="t-yellow">12901</span>  bytes=1024  seq=1
+<span class="t-muted">[14:32:03.100]</span> <span class="t-yellow">⚠ ALERT</span>  <span class="t-red">RANSOMWARE SCORE: 87/100</span>  proc=<span class="t-cyan">unknown-worker</span>  files=<span class="t-yellow">142</span> in 3s
+  </div>
+</div>
+
+<!-- Features -->
+<section class="section">
+  <h2 class="reveal">Built for the kernel</h2>
+  <p class="sub reveal">eBPF tracepoints. Per-CPU perf buffers. Ratatui TUI. Zero-copy from kernel to screen.</p>
+  <div class="grid">
+    <div class="card reveal reveal-delay-1">
+      <div class="card-icon y">🔬</div>
+      <h3>Kernel-Level Tracing</h3>
+      <p>Traces <code>execve</code>, <code>openat</code>, <code>connect</code>, <code>accept</code>, <code>sendto</code>, <code>recvfrom</code> at the kernel level using eBPF tracepoints. Verifier-safe with <code>bpf_probe_read_user</code>.</p>
     </div>
-
-    <section class="features">
-        <h2>What it does</h2>
-        <p class="sub">Kernel-level observability without the overhead. No agents. No sidecars. Just eBPF.</p>
-        <div class="grid">
-            <div class="card">
-                <div class="card-icon yellow">🔬</div>
-                <h3>Kernel-Level Tracing</h3>
-                <p>Traces <code>execve</code>, <code>openat</code>, <code>connect</code>, <code>accept</code>, <code>sendto</code>, <code>recvfrom</code> syscalls at the kernel level using eBPF tracepoints.</p>
-            </div>
-            <div class="card">
-                <div class="card-icon cyan">📊</div>
-                <h3>7-Panel TUI</h3>
-                <p>Live terminal dashboard with Events, Processes, Network, TopFiles, Extensions, Alerts, and Ransomware Heatmap panels.</p>
-            </div>
-            <div class="card">
-                <div class="card-icon red">🛡️</div>
-                <h3>Ransomware Detection</h3>
-                <p>Continuously scores per-process file-open rates against a sliding window to flag ransomware-style mass file access in real-time.</p>
-            </div>
-            <div class="card">
-                <div class="card-icon green">⚡</div>
-                <h3>Zero-Copy Pipeline</h3>
-                <p>Fixed-size <code>ProcessEvent</code> structs through per-CPU <code>PerfEventArray</code>. No allocations. No locks. Kernel to userspace in nanoseconds.</p>
-            </div>
-            <div class="card">
-                <div class="card-icon cyan">🌐</div>
-                <h3>Network Tracing</h3>
-                <p>Captures TCP/UDP connections with destination IP, port, protocol, and byte count — all from the kernel.</p>
-            </div>
-            <div class="card">
-                <div class="card-icon yellow">🐳</div>
-                <h3>Docker & Kubernetes</h3>
-                <p>Runs in containers with <code>--privileged</code>. Includes K8s DaemonSet, ServiceMonitor, and Prometheus metrics.</p>
-            </div>
-        </div>
-    </section>
-
-    <section class="arch">
-        <h2>Architecture</h2>
-        <div class="arch-flow">
-            <div class="arch-box ebpf">
-                <div class="label">Kernel Space</div>
-                <div class="name">eBPF Programs</div>
-            </div>
-            <div class="arch-arrow">→</div>
-            <div class="arch-box ebpf">
-                <div class="label">Ring Buffer</div>
-                <div class="name">PerfEventArray</div>
-            </div>
-            <div class="arch-arrow">→</div>
-            <div class="arch-box userspace">
-                <div class="label">Userspace</div>
-                <div class="name">Rust aya</div>
-            </div>
-            <div class="arch-arrow">→</div>
-            <div class="arch-box tui">
-                <div class="label">Display</div>
-                <div class="name">Ratatui TUI</div>
-            </div>
-        </div>
-    </section>
-
-    <div class="stats">
-        <div class="stat">
-            <div class="number">~0</div>
-            <div class="label">CPU overhead (idle)</div>
-        </div>
-        <div class="stat">
-            <div class="number">&lt;1μs</div>
-            <div class="label">Event latency</div>
-        </div>
-        <div class="stat">
-            <div class="number">7</div>
-            <div class="label">TUI panels</div>
-        </div>
-        <div class="stat">
-            <div class="number">6</div>
-            <div class="label">Syscalls traced</div>
-        </div>
+    <div class="card reveal reveal-delay-2">
+      <div class="card-icon c">📊</div>
+      <h3>7-Panel TUI Dashboard</h3>
+      <p>Live terminal interface with Events, Processes, Network, TopFiles, Extensions, Alerts, and Ransomware Heatmap. Built with Ratatui.</p>
     </div>
+    <div class="card reveal reveal-delay-3">
+      <div class="card-icon r">🛡️</div>
+      <h3>Ransomware Detection</h3>
+      <p>Continuously scores per-process file-open rates against a sliding window. Flags ransomware-style mass file access in real-time with configurable thresholds.</p>
+    </div>
+    <div class="card reveal reveal-delay-1">
+      <div class="card-icon g">⚡</div>
+      <h3>Zero-Copy Pipeline</h3>
+      <p>Fixed-size <code>ProcessEvent</code> structs through per-CPU <code>PerfEventArray</code>. No heap allocations in the hot path. Kernel to userspace in nanoseconds.</p>
+    </div>
+    <div class="card reveal reveal-delay-2">
+      <div class="card-icon c">🌐</div>
+      <h3>Network Tracing</h3>
+      <p>Captures TCP/UDP connections, byte counts, and remote endpoints — all from kernel-level tracepoints. No packet sniffing needed.</p>
+    </div>
+    <div class="card reveal reveal-delay-3">
+      <div class="card-icon y">🐳</div>
+      <h3>Docker & Kubernetes</h3>
+      <p>Runs in containers with <code>--privileged</code>. Includes K8s DaemonSet, ServiceMonitor for Prometheus, and GHCR images.</p>
+    </div>
+  </div>
+</section>
 
-    <section class="code-section">
-        <h2>Get started in 30 seconds</h2>
-        <p class="sub">One command. Full kernel observability.</p>
-        <div class="code-block">
+<!-- Stats -->
+<div class="stats reveal">
+  <div class="stat"><div class="number">~0%</div><div class="label">CPU overhead (idle)</div></div>
+  <div class="stat"><div class="number">&lt;1μs</div><div class="label">Event latency</div></div>
+  <div class="stat"><div class="number">7</div><div class="label">TUI panels</div></div>
+  <div class="stat"><div class="number">6</div><div class="label">Syscalls traced</div></div>
+</div>
+
+<!-- Architecture -->
+<section class="section">
+  <h2 class="reveal">Architecture</h2>
+  <p class="sub reveal">From kernel tracepoint to your terminal — zero copies, zero locks, zero overhead.</p>
+  <div class="arch-flow reveal">
+    <div class="arch-box ebpf"><div class="label">Kernel Space</div><div class="name">eBPF Programs</div></div>
+    <div class="arch-arrow">→</div>
+    <div class="arch-box ebpf"><div class="label">Ring Buffer</div><div class="name">PerfEventArray</div></div>
+    <div class="arch-arrow">→</div>
+    <div class="arch-box us"><div class="label">Userspace</div><div class="name">Rust + aya</div></div>
+    <div class="arch-arrow">→</div>
+    <div class="arch-box tui"><div class="label">Display</div><div class="name">Ratatui TUI</div></div>
+  </div>
+</section>
+
+<!-- Code -->
+<section class="code-section">
+  <h2 class="reveal">Start in 30 seconds</h2>
+  <p class="sub reveal">One command. Full kernel observability.</p>
+  <div class="code-block reveal">
 <span class="comment"># Clone and build</span>
 <span class="cmd">$</span> git clone https://github.com/BartoszOsiej/halcyon-process-monitor
 <span class="cmd">$</span> cd halcyon-process-monitor && cargo build --release
@@ -418,15 +226,24 @@
 <span class="cmd">$</span> sudo ./target/release/process-monitor
 <span class="output">🔬 Halcyon Process Monitor v0.1.0</span>
 <span class="output">   eBPF programs loaded. Tracing syscalls...</span>
-<span class="output">   Press 'q' to quit, '?' for help</span>
 
-<span class="comment"># Or run in Docker</span>
+<span class="comment"># Docker</span>
 <span class="cmd">$</span> docker run --privileged -it ghcr.io/bartoszosiej/halcyon:latest
-        </div>
-    </section>
+  </div>
+</section>
 
-    <footer>
-        <p>Built with 🦀 Rust + eBPF · <a href="https://github.com/BartoszOsiej/halcyon-process-monitor">GitHub</a> · MIT License</p>
-    </footer>
+<footer>
+  <p>Built with <span class="heart">♥</span> Rust + eBPF · <a href="https://github.com/BartoszOsiej/halcyon-process-monitor">GitHub</a> · MIT License</p>
+</footer>
+
+<script>
+// Stars
+const starsEl=document.getElementById('stars');
+for(let i=0;i<80;i++){const s=document.createElement('span');s.style.cssText=`left:${Math.random()*100}%;top:${Math.random()*100}%;animation-delay:${Math.random()*3}s;animation-duration:${2+Math.random()*3}s;width:${1+Math.random()*2}px;height:${1+Math.random()*2}px`;starsEl.appendChild(s)}
+
+// Scroll reveal
+const observer=new IntersectionObserver((entries)=>{entries.forEach(e=>{if(e.isIntersecting){e.target.classList.add('visible');observer.unobserve(e.target)}})},{threshold:0.1});
+document.querySelectorAll('.reveal').forEach(el=>observer.observe(el));
+</script>
 </body>
 </html>
