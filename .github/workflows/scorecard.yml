@@ -33,6 +33,6 @@ jobs:
           publish_results: true
 
       - name: "Upload to SARIF"
-        uses: github/codeql-action/upload-sarif@v3  # v3
+        uses: github/codeql-action/upload-sarif@{"message":"Not Found","documentation_url":"https://docs.github.com/rest/git/refs#get-a-reference","status":"404"}
         with:
           sarif_file: results.sarif

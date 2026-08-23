@@ -1,14 +1,12 @@
 # Security Policy
 
-## Zglaszanie podatnosci
+## Reporting a Vulnerability
 
-Nie publikuj podatnosci publicznie. Napisz prywatnie:
-https://github.com/dependabot (albo przez GitHub Security Advisories -> New draft advisory).
+If you discover a security vulnerability, please report it via [GitHub Security Advisories](https://github.com/BartoszOsiej/halcyon-process-monitor/security/advisories/new).
 
-Bezpieczniejsze niz issue: uzyj funkcji "Report a vulnerability" w sekcji Security repozytorium.
+**Do NOT** open a public issue for security vulnerabilities.
 
-## Szybkosc reakcji
+## Response Timeline
 
-Od sierpnia 2026: reakcja w ciagu 7 dni roboczych. Krytyczne podatnosci - 48h.
-
-Dziekuje za odpowiedzialne zgloszenie!
+- Acknowledgment: Within 48 hours
+- Assessment: Within 1 week
