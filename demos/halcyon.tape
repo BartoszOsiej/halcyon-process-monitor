@@ -4,7 +4,6 @@ Set FontSize 16
 Set Width 960
 Set Height 480
 Set Shell bash
-Set MarginColor "#0d1117"
 Set Theme {
   "name": "halcyon",
   "black": "#0d1117",
