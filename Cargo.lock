@@ -214,7 +214,7 @@ checksum = "d8dbaf5409a1a0982e5c9bdc0f499a55fe5ead39fe9c846012053faf0d404f73"
 dependencies = [
  "aya-ebpf-bindings",
  "aya-ebpf-cty",
- "aya-ebpf-macros",
+ "aya-ebpf-macros 0.1.2",
  "rustversion",
 ]
 
@@ -242,6 +242,18 @@ name = "aya-ebpf-macros"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "96fd02363736177e7e91d6c95d7effbca07be87502c7b5b32fc194aed8b177a0"
+dependencies = [
+ "proc-macro2",
+ "proc-macro2-diagnostics",
+ "quote",
+ "syn 2.0.117",
+]
+
+[[package]]
+name = "aya-ebpf-macros"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "23e3a7f86e914df106dd00f9d757bc93f7d5c93380c51eead23d8d2ccd15a87a"
 dependencies = [
  "proc-macro2",
  "proc-macro2-diagnostics",
@@ -1761,7 +1773,7 @@ name = "process-monitor-ebpf"
 version = "0.3.0"
 dependencies = [
  "aya-ebpf",
- "aya-ebpf-macros",
+ "aya-ebpf-macros 0.2.0",
 ]
 
 [[package]]
