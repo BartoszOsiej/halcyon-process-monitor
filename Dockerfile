@@ -1,5 +1,5 @@
 # ── Stage 1: Build ──
-FROM rust:1.88-bookworm AS builder
+FROM rust:nightly-bookworm AS builder
 WORKDIR /src
 COPY . .
 RUN cd process-monitor && cargo build --release
