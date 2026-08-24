@@ -12,7 +12,7 @@
 ![eBPF](https://img.shields.io/badge/eBPF-Linux%205.8+-FCD900?style=flat-square&logo=linux)
 ![Go](https://img.shields.io/badge/Go-1.22-00ADD8?style=flat-square&logo=go)
 ![Docker](https://img.shields.io/badge/Docker-GHCR-2496ED?style=flat-square&logo=docker)
-[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/BartoszOsiej/halcyon-process-monitor/badge)](https://securityscorecards.dev/viewer/?uri=github.com/BartoszOsiej/halcyon-process-monitor)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/BartoszOsiej/halcyon-process-monitor/badge)](https://scorecard.dev/viewer/?uri=github.com/BartoszOsiej/halcyon-process-monitor)
 
 **Real-time, eBPF-based process, file-operation, and network telemetry for Linux.**
 
