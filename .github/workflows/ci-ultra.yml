@@ -2,12 +2,8 @@ name: Ultra CI
 
 on:
   push:
-    permissions:
-      security-events: write
     branches: [master, main]
   pull_request:
-    permissions:
-      security-events: write
 
 concurrency:
   group: ultra-ci-${{ github.ref }}

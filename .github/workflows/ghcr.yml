@@ -2,9 +2,6 @@ name: Build & Push to GHCR
 
 on:
   push:
-    permissions:
-      packages: write
-    tags: ["v*"]
 
 permissions: read-all
 
