@@ -2,8 +2,12 @@ name: Ultra CI
 
 on:
   push:
+    permissions:
+      security-events: write
     branches: [master, main]
   pull_request:
+    permissions:
+      security-events: write
 
 concurrency:
   group: ultra-ci-${{ github.ref }}
@@ -19,6 +23,8 @@ env:
 jobs:
   # ── SYNTAX ──────────────────────────────────────────────────
   fmt:
+    permissions:
+      security-events: write
     name: fmt (${{ matrix.os }})
     strategy:
       fail-fast: false
@@ -36,6 +42,8 @@ jobs:
 
   # ── RUST ────────────────────────────────────────────────────
   clippy:
+    permissions:
+      security-events: write
     name: clippy (${{ matrix.os }})
     strategy:
       fail-fast: false
@@ -53,6 +61,8 @@ jobs:
 
   # ── TESTY ───────────────────────────────────────────────────
   test:
+    permissions:
+      security-events: write
     name: test (${{ matrix.os }})
     strategy:
       fail-fast: false
@@ -68,6 +78,8 @@ jobs:
 
   # ── eBPF build ──────────────────────────────────────────────
   ebpf:
+    permissions:
+      security-events: write
     name: ebpf-build
     runs-on: ubuntu-24.04
     steps:
@@ -108,6 +120,8 @@ jobs:
 
   # ── MIRI ────────────────────────────────────────────────────
   miri:
+    permissions:
+      security-events: write
     name: miri
     runs-on: ubuntu-24.04
     steps:
@@ -124,6 +138,8 @@ jobs:
 
   # ── SECURITY ────────────────────────────────────────────────
   audit:
+    permissions:
+      security-events: write
     name: cargo-audit
     runs-on: ubuntu-24.04
     steps:
@@ -135,6 +151,8 @@ jobs:
       - run: cargo audit --deny warnings
 
   deny:
+    permissions:
+      security-events: write
     name: cargo-deny
     runs-on: ubuntu-24.04
     steps:
@@ -146,6 +164,8 @@ jobs:
           command: check all
 
   typos:
+    permissions:
+      security-events: write
     name: typos
     runs-on: ubuntu-24.04
     steps:
@@ -155,6 +175,8 @@ jobs:
       - uses: crate-ci/typos@12ffd4a04b4893ab75db66a59aaad2d996c3e982  # v1
 
   zizmor:
+    permissions:
+      security-events: write
     name: zizmor (GH Actions security)
     runs-on: ubuntu-24.04
     steps:
@@ -164,6 +186,8 @@ jobs:
       - run: pip install zizmor && zizmor .
 
   actionlint:
+    permissions:
+      security-events: write
     name: actionlint
     runs-on: ubuntu-24.04
     steps:
@@ -173,6 +197,8 @@ jobs:
       - uses: raven-actions/actionlint@3d39aea434753780c3b3d4a1a31c854b4dbf49d7  # v2.2.0
 
   codeql:
+    permissions:
+      security-events: write
     name: CodeQL
     runs-on: ubuntu-24.04
     permissions:
@@ -188,6 +214,8 @@ jobs:
       - uses: github/codeql-action/analyze@6d786de4d6f3531a740e445b53a42b622bbbace8  # v3
 
   scorecard:
+    permissions:
+      security-events: write
     name: OpenSSF Scorecard
     runs-on: ubuntu-24.04
     permissions:
