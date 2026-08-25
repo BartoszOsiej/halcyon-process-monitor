@@ -1,0 +1,24 @@
+ 1: Tour │ 2: Dash │ 3: Shakes │ 4: Code │ 5: Widgets │ 6: Layout │ 7: Forms    
+╭──────────────────────────────────Dashboard───────────────────────────────────╮
+│FRANKENTUI DASHBOARD                                                          │
+│╭──────Plasma──────╮╭───────Charts · Pulse────────╮╭───Code · Rust (1/28)────╮│
+││⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿╭────────────── Command Palette ───────────────╮rs            ││
+││⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿│>Type to search...                            │ollections::Ha││
+││⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿│> [App] Quit  Exit the application            │              ││
+││⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿│  [Visuals] Data Viz  Dense charts and small-…│re::event::Eve││
+││⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿│  [Core] Advanced  Advanced widget patterns a…│e Explorer    ││
+││⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿│  [Text] Markdown  Markdown rendering with st…│──────────────╯│
+││⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿│  [Tour] Dashboard  Cinematic overview of key…│nfo───────────╮│
+││⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿│  [Text] Log Search  Search and filter logs w…│NAL FPS:0     ││
+││Click → Visual│  [Interaction] Layout Lab  Constraint lab + …│formance      ││
+│╰──────────────│  [Text] Shakespeare  Live search over Shakes…│──────────────╯│
+│╭Text FX · 2-Up│  [Systems] Performance  Render performance m…│treaming… 0%─╮ │
+││Sample 1 of 3 │  [Systems] Async Tasks  Async tasks and job …│             │ │
+││1 · None · S1 │  [Systems] VOI Overlay  Value-of-information…│             │ │
+││2 · FadeIn · S│  [Tour] Inline Mode  Inline mode story and s…│             │ │
+││              ╰──────────────────────────────────────────────╯             │ │
+││drag panes in das││Click → Action Timeline      ││Click → Markdown         │ │
+│╰─────────────────│╰─────────────────────────────│╰─────────────────────────╯ │
+│g:charts c:code e:fx m:md | drag bottom dividers: resize | 1-9:screens | t:the│
+╰──────────────────────────────────────────────────────────────────────────────╯
+ Dashboard [2/45] [h] [Cmd] [p] [d]    Tab/Shift+Tab: next/prev     80x24 00:00 

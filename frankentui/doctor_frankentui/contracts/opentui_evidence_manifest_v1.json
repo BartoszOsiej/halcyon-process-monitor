@@ -1,0 +1,179 @@
+{
+  "manifest_id": "opentui-migration-evidence-manifest",
+  "schema_version": "evidence-manifest-v1",
+  "manifest_version": "2026-02-25",
+  "run_id": "intake_20260225_120000",
+  "source_fingerprint": {
+    "repo_url": null,
+    "repo_commit": null,
+    "local_path": "/tmp/example_project",
+    "source_hash": "sha256:abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
+    "lockfiles": [
+      {
+        "path": "package-lock.json",
+        "sha256": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+        "size_bytes": 142857
+      }
+    ],
+    "parser_versions": {
+      "opentui_extractor": "0.1.0",
+      "typescript_parser": "5.7.0",
+      "jsx_mode": "react-jsx"
+    }
+  },
+  "stages": [
+    {
+      "stage_id": "intake",
+      "stage_index": 0,
+      "correlation_id": "run:intake_20260225_120000:stage:intake",
+      "claim_id": "ST-001",
+      "evidence_id": "evidence:intake_20260225_120000:intake",
+      "policy_id": "opentui-transform-policy-v1",
+      "trace_id": "trace:intake_20260225_120000",
+      "started_at": "2026-02-25T12:00:00Z",
+      "finished_at": "2026-02-25T12:00:05Z",
+      "status": "ok",
+      "input_hash": "sha256:abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
+      "output_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "artifact_paths": [
+        "snapshot/",
+        "intake_meta.json"
+      ],
+      "error": null
+    },
+    {
+      "stage_id": "extraction",
+      "stage_index": 1,
+      "correlation_id": "run:intake_20260225_120000:stage:extraction",
+      "claim_id": "ST-002",
+      "evidence_id": "evidence:intake_20260225_120000:extraction",
+      "policy_id": "opentui-transform-policy-v1",
+      "trace_id": "trace:intake_20260225_120000",
+      "started_at": "2026-02-25T12:00:05Z",
+      "finished_at": "2026-02-25T12:00:12Z",
+      "status": "ok",
+      "input_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "output_hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "artifact_paths": [
+        "extraction/facts.jsonl",
+        "extraction/component_graph.json"
+      ],
+      "error": null
+    },
+    {
+      "stage_id": "ir_normalization",
+      "stage_index": 2,
+      "correlation_id": "run:intake_20260225_120000:stage:ir_normalization",
+      "claim_id": "EO-001",
+      "evidence_id": "evidence:intake_20260225_120000:ir_normalization",
+      "policy_id": "opentui-transform-policy-v1",
+      "trace_id": "trace:intake_20260225_120000",
+      "started_at": "2026-02-25T12:00:12Z",
+      "finished_at": "2026-02-25T12:00:18Z",
+      "status": "ok",
+      "input_hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "output_hash": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+      "artifact_paths": [
+        "ir/canonical_ir.json"
+      ],
+      "error": null
+    },
+    {
+      "stage_id": "translation",
+      "stage_index": 3,
+      "correlation_id": "run:intake_20260225_120000:stage:translation",
+      "claim_id": "SE-001",
+      "evidence_id": "evidence:intake_20260225_120000:translation",
+      "policy_id": "opentui-transform-policy-v1",
+      "trace_id": "trace:intake_20260225_120000",
+      "started_at": "2026-02-25T12:00:18Z",
+      "finished_at": "2026-02-25T12:00:30Z",
+      "status": "ok",
+      "input_hash": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+      "output_hash": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+      "artifact_paths": [
+        "generated/src/",
+        "generated/Cargo.toml"
+      ],
+      "error": null
+    },
+    {
+      "stage_id": "formatting",
+      "stage_index": 4,
+      "correlation_id": "run:intake_20260225_120000:stage:formatting",
+      "claim_id": "VT-001",
+      "evidence_id": "evidence:intake_20260225_120000:formatting",
+      "policy_id": "opentui-transform-policy-v1",
+      "trace_id": "trace:intake_20260225_120000",
+      "started_at": "2026-02-25T12:00:30Z",
+      "finished_at": "2026-02-25T12:00:32Z",
+      "status": "ok",
+      "input_hash": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+      "output_hash": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+      "artifact_paths": [
+        "generated/src/"
+      ],
+      "error": null
+    },
+    {
+      "stage_id": "certification",
+      "stage_index": 5,
+      "correlation_id": "run:intake_20260225_120000:stage:certification",
+      "claim_id": "VT-002",
+      "evidence_id": "evidence:intake_20260225_120000:certification",
+      "policy_id": "opentui-transform-policy-v1",
+      "trace_id": "trace:intake_20260225_120000",
+      "started_at": "2026-02-25T12:00:32Z",
+      "finished_at": "2026-02-25T12:00:45Z",
+      "status": "ok",
+      "input_hash": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+      "output_hash": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+      "artifact_paths": [
+        "certification/report.json",
+        "certification/test_results.jsonl",
+        "certification/benchmark_results.jsonl"
+      ],
+      "error": null
+    }
+  ],
+  "generated_code_fingerprint": {
+    "code_hash": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+    "formatter_version": "rustfmt 1.8.0-nightly",
+    "linter_version": "clippy 0.1.87-nightly"
+  },
+  "certification_verdict": {
+    "verdict": "accept",
+    "confidence": 0.94,
+    "test_pass_count": 42,
+    "test_fail_count": 0,
+    "test_skip_count": 2,
+    "semantic_clause_coverage": {
+      "covered": [
+        "ST-001",
+        "ST-002",
+        "EO-001",
+        "SE-001",
+        "VT-001",
+        "VT-002"
+      ],
+      "uncovered": [
+        "EO-002",
+        "IE-001",
+        "IE-002",
+        "TB-001",
+        "TB-002"
+      ]
+    },
+    "benchmark_summary": {
+      "latency_p50_ms": 12.5,
+      "latency_p99_ms": 45.2,
+      "throughput_ops_per_sec": 1200.0
+    },
+    "risk_flags": []
+  },
+  "determinism_attestation": {
+    "identical_runs_count": 3,
+    "manifest_hash_stable": true,
+    "divergence_detected": false
+  }
+}

@@ -1,0 +1,10 @@
+╭────Virtualized List (10000 items)────╮
+│[    0]  INFO server::http       Event│
+│[    1] DEBUG db::pool           Event│
+│[    2]  WARN auth::jwt          Event│
+│[    3] ERROR cache::redis       Event│
+│[    4] TRACE queue::worker      Event│
+│[    5]  INFO api::handler       Event│
+│[    6] DEBUG core::runtime      Event│
+╰──────────────────────────────────────╯
+Item 1/10000 | j/k: scroll | Ctrl+D/U: p

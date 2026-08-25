@@ -1,0 +1,24 @@
+╭────Markdown Renderer────╮ ╭LLM Streaming Simulation ╮ ╭────Style Sampler─────╮
+│GitHub-Flavored Markdown │ │▌                        │ │Bold  Dim  Italic  Und│
+│(Rich Demo)              │ │                         │ │Strikethrough  Reverse│
+│                         │ │                         │ │Dbl-Underline  Curly-U│
+│LaTeX + Symbols          │ │                         │ │                      │
+│                         │ │                         │ │Error  Success  Warnin│
+│Inline math: E = mc², α  │ │                         │ │                      │
+│+ β = γ, Δ x ≈ 0.001.    │ │                         │ ╰──────────────────────╯
+│                         │ │                         │                         
+│Block math:              │ │                         │ ╭───Unicode Showcase───╮
+│                         │ │                         │ │Text        │Type    ││
+│  ∑ᵢ₌₁ⁿ xᵢ = n(n+1)/2    │ │                         │ │Hello       │ASCII   ││
+│                         │ │                         │ │????????    │CJK     ││
+│  ∫_{−∞}^{∞} e^{−x²} dx  │ │                         │ │??????????  │Hiragana││
+│= √{π}                   │ │                         │ │??????      │Emoji   ││
+│                         │ │                         │ │café        │Latin+ac││
+│Admonitions              │ │                         │ │α β γ δ     │Greek   ││
+│                         │ │                         │ │→ ← ↑ ↓     │Arrows  ││
+│ℹ  NOTE                  │ │                         │ ╰──────────────────────╯
+│┃ Information note with  │ │  [░░░░░░░░░░░░░░░░░░░░░]│                         
+│┃ rich emphasis.         │ │  Detection: 0 indicators│ ╭Wrap: Word | Align: Le╮
+│                         │ │  Confidence: 0% | Chars:│ │w: cycle wrap | a: cyc│
+│?? TIP                   │ │  Space: play/pause | r: │ │The quick brown fox   │
+╰─────────────────────────╯ ╰─────────────────────────╯ ╰──────────────────────╯

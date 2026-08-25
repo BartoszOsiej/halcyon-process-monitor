@@ -1,0 +1,10 @@
+Tasks: 3 total | Queued: 3 | Running: 0 
+╭──────Task Queue──────╮╭─Task Details─╮
+│> Queued   [M]        ││ID: 1         │
+│  Queued   [L]        ││Name: Initial │
+│  Queued   [H]        ││State: Queued │
+│                      │╰──────────────╯
+│                      │╭───Activity───╮
+│                      ││Spawned: Data │
+│                      ││Spawned: Cache│
+╰──────────────────────╯╰──────────────╯

@@ -1,0 +1,40 @@
+╭Search (/ to focus, Esc to clear)─────────────────────────────────────────────────────────────────────────────────────╮
+│Type to search...                                                                                                     │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭───────────────────────────────Items (10000 total)────────────────────────────────╮╭──────────────Stats───────────────╮
+│[09980] FileSystem :: WorkerPool completed — payload_980                          ││Total:    10000 items             │
+│[09981] Logging :: WorkerPool completed — payload_981                             ││Matches:  10000                   │
+│[09982] Security :: WorkerPool completed — payload_982                            ││Selected: 10000                   │
+│[09983] Performance :: WorkerPool completed — payload_983                         ││Query:    ""                      │
+│[09984] Configuration :: CacheManager initialized — payload_984                   ││Top score: 0                      │
+│[09985] Authentication :: CacheManager initialized — payload_985                  ││                                  │
+│[09986] Database :: CacheManager initialized — payload_986                        ││Keybindings:                      │
+│[09987] Network :: CacheManager initialized — payload_987                         ││  /      Focus search             │
+│[09988] FileSystem :: CacheManager initialized — payload_988                      ││  Esc    Clear search             │
+│[09989] Logging :: CacheManager initialized — payload_989                         ││  j/k    Navigate                 │
+│[09990] Security :: CacheManager initialized — payload_990                        ││  g/G    Top/Bottom               │
+│[09991] Performance :: CacheManager initialized — payload_991                     ││  PgUp/Dn  Page scroll            │
+│[09992] Configuration :: CacheManager updated — payload_992                       ││                                  │
+│[09993] Authentication :: CacheManager updated — payload_993                      ││                                  │
+│[09994] Database :: CacheManager updated — payload_994                            ││                                  │
+│[09995] Network :: CacheManager updated — payload_995                             ││                                  │
+│[09996] FileSystem :: CacheManager updated — payload_996                          ││                                  │
+│[09997] Logging :: CacheManager updated — payload_997                             ││                                  │
+│[09998] Security :: CacheManager updated — payload_998                            ││                                  │
+│[09999] Performance :: CacheManager updated — payload_999                         ││                                  │
+│                                                                                  ││                                  │
+│                                                                                  ││                                  │
+│                                                                                  ││                                  │
+│                                                                                  ││                                  │
+│                                                                                  ││                                  │
+│                                                                                  ││                                  │
+│                                                                                  ││                                  │
+│                                                                                  ││                                  │
+│                                                                                  ││                                  │
+│                                                                                  ││                                  │
+│                                                                                  ││                                  │
+│                                                                                  ││                                  │
+│                                                                                  ││                                  │
+│                                                                                  ││                                  │
+│                                                                                  ││                                  │
+╰──────────────────────────────────────────────────────────────────────────────────╯╰──────────────────────────────────╯

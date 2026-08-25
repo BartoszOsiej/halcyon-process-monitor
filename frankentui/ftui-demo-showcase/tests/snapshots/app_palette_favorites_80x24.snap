@@ -1,0 +1,24 @@
+ 1: Tour │ 2: Dash │ 3: Shakes │ 4: Code │ 5: Widgets │ 6: Layout │ 7: Forms    
+╭──────────────────────────────────Dashboard───────────────────────────────────╮
+│FRANKENTUI DASHBOARD                                                          │
+│╭──────Plasma──────╮╭───────Charts · Pulse────────╮╭───Code · Rust (1/28)────╮│
+││⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿╭────────────── Command Palette ───────────────╮rs            ││
+││⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿│>Type to search...                            │ollections::Ha││
+││⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿│> [App] Quit  Exit the application            │              ││
+││⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿│  [View] Toggle Help  Show or hide the keyboa…│re::event::Eve││
+││⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿│  [View] Cycle Theme  Switch to the next colo…│e Explorer    ││
+││⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿│  [View] Toggle Debug Overlay  Show or hide t…│──────────────╯│
+││⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿│  [Input] Toggle Mouse Capture  Enable or dis…│nfo───────────╮│
+││⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿│  [View] Toggle Performance HUD  Show or hide…│NAL FPS:0     ││
+││Click → Visual│  [View] Toggle Explainability Cockpit  Show …│formance      ││
+│╰──────────────╰──────────────────────────────────────────────╯──────────────╯│
+│╭Text FX · 2-Up (1│╭──────────Activity───────────│╭Markdown · Streaming… 0%─╮ │
+││Sample 1 of 3 · 2││SEV TIME  COMP  MESSAGE      ││▌                        │ │
+││1 · None · S1    ││ INFO  00:02   CPU spike dete││                         │ │
+││2 · FadeIn · S2  ⋮│                             ⋮│                         │ │
+││                 ││                             ││                         │ │
+││drag panes in das││Click → Action Timeline      ││Click → Markdown         │ │
+│╰─────────────────│╰─────────────────────────────│╰─────────────────────────╯ │
+│g:charts c:code e:fx m:md | drag bottom dividers: resize | 1-9:screens | t:the│
+╰──────────────────────────────────────────────────────────────────────────────╯
+ Dashboard [2/45] [h] [Cmd] [p] [d]    Tab/Shift+Tab: next/prev     80x24 00:00 

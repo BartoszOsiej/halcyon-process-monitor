@@ -1,0 +1,40 @@
+╭ Log Viewer ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│[     0]  INFO server::http       Request processed successfully                                                      │
+│[     1]  INFO db::pool           Connection pool health check passed                                                 │
+│[     2]  INFO auth::jwt          Token refresh completed for session                                                 │
+│[     3]  INFO cache::redis       Cache hit ratio: 0.94                                                               │
+│[     4]  INFO queue::worker      Worker picked up job from queue                                                     │
+│[     5]  INFO api::handler       Rate limit threshold approaching                                                    │
+│[     6] DEBUG core::runtime      Garbage collection cycle completed                                                  │
+│[     7] DEBUG metrics::push      Metric batch flushed to backend                                                     │
+│[     8] DEBUG config::reload     Configuration hot-reload triggered                                                  │
+│[     9]  WARN server::http       Retry attempt 2/3 for downstream call                                               │
+│[    10]  WARN db::pool           Scheduled maintenance window check                                                  │
+│[    11] ERROR auth::jwt          Request processed successfully                                                      │
+│[    12] TRACE cache::redis       Connection pool health check passed                                                 │
+│[    13]  INFO queue::worker      Token refresh completed for session                                                 │
+│[    14]  INFO api::handler       Cache hit ratio: 0.94                                                               │
+│[    15]  INFO core::runtime      Worker picked up job from queue                                                     │
+│[    16]  INFO metrics::push      Rate limit threshold approaching                                                    │
+│[    17]  INFO config::reload     Garbage collection cycle completed                                                  │
+│[    18]  INFO server::http       Metric batch flushed to backend                                                     │
+│[    19] DEBUG db::pool           Configuration hot-reload triggered                                                  │
+│[    20] DEBUG auth::jwt          Retry attempt 2/3 for downstream call                                               │
+│[    21] DEBUG cache::redis       Scheduled maintenance window check                                                  │
+│[    22]  WARN queue::worker      Request processed successfully                                                      │
+│[    23]  WARN api::handler       Connection pool health check passed                                                 │
+│[    24] ERROR core::runtime      Token refresh completed for session                                                 │
+│[    25] TRACE metrics::push      Cache hit ratio: 0.94                                                               │
+│[    26]  INFO config::reload     Worker picked up job from queue                                                     │
+│[    27]  INFO server::http       Rate limit threshold approaching                                                    │
+│[    28]  INFO db::pool           Garbage collection cycle completed                                                  │
+│[    29]  INFO auth::jwt          Metric batch flushed to backend                                                     │
+│[    30]  INFO cache::redis       Configuration hot-reload triggered                                                  │
+│[    31]  INFO queue::worker      Retry attempt 2/3 for downstream call                                               │
+│[    32] DEBUG api::handler       Scheduled maintenance window check                                                  │
+│[    33] DEBUG core::runtime      Request processed successfully                                                      │
+│[    34] DEBUG metrics::push      Connection pool health check passed                                                 │
+│[    35]  WARN config::reload     Token refresh completed for session                                                 │
+│[    36]  WARN server::http       Cache hit ratio: 0.94                                                            23 │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+ NORMAL | lines: 60 | gen: 60                                                                                           

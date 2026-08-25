@@ -1,0 +1,97 @@
+[package]
+name = "ftui-demo-showcase"
+version = "0.6.0"
+edition = "2024"
+publish = false
+default-run = "ftui-demo-showcase"
+license = "LicenseRef-MIT-OpenAI-Anthropic-Rider"
+description = "Demo showcase app and snapshots for FrankenTUI."
+repository = "https://github.com/Dicklesworthstone/frankentui"
+homepage = "https://github.com/Dicklesworthstone/frankentui"
+documentation = "https://docs.rs/ftui-demo-showcase"
+readme = "../../README.md"
+
+[dependencies]
+ftui-core = { path = "../ftui-core", version = "0.6.0", features = ["caps-probe"] }
+ftui-i18n = { path = "../ftui-i18n", version = "0.6.0" }
+ftui-render = { path = "../ftui-render", version = "0.6.0" }
+ftui-style = { path = "../ftui-style", version = "0.6.0", features = ["serde"] }
+ftui-text = { path = "../ftui-text", version = "0.6.0", features = ["markup", "bidi"] }
+ftui-layout = { path = "../ftui-layout", version = "0.6.0" }
+ftui-runtime = { path = "../ftui-runtime", version = "0.6.0", features = ["tracing"] }
+ftui-widgets = { path = "../ftui-widgets", version = "0.6.0", features = ["tracing"] }
+tracing = "0.1.41"
+ftui-extras = { path = "../ftui-extras", version = "0.6.0", features = [
+    "canvas",
+    "charts",
+    "console",
+    "doom",
+    "quake",
+    "export",
+    "filesize",
+    "filepicker",
+    "forms",
+    "live",
+    "markdown",
+    "stopwatch",
+    "syntax",
+    "text-effects",
+    "timer",
+    "traceback",
+    "theme",
+    "visual-fx",
+] }
+serde_json = "1.0.151"
+serde = { version = "1.0.229", features = ["derive"] }
+stats_alloc = "0.1.10"
+unicode-width = "0.2.2"
+unicode-segmentation = "1.13.3"
+web-time = "1.1.0"
+
+[features]
+debug-render = []
+caps-probe = ["ftui-core/caps-probe"]
+# Use the native ftui-tty backend instead of Crossterm.
+native-backend = ["ftui-runtime/native-backend"]
+# Legacy Crossterm backend (fallback when native-backend is disabled).
+crossterm-compat = ["ftui-runtime/crossterm-compat"]
+# Heavy optional features (excluded from WASM builds for binary size).
+clipboard = ["ftui-extras/clipboard"]
+image = ["ftui-extras/image"]
+logging = ["ftui-extras/logging"]
+# Mermaid/diagram screens (mermaid_showcase, mermaid_mega_showcase).
+screen-mermaid = ["ftui-extras/markdown-diagram"]
+default = ["caps-probe", "native-backend", "crossterm-compat", "clipboard", "image", "logging", "screen-mermaid"]
+# Enable test-support to expose test infrastructure (locks, guards) to integration tests
+test-support = []
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(coverage)", "cfg(coverage_nightly)"] }
+
+[dev-dependencies]
+blake3 = "1.6"
+ftui-harness = { path = "../ftui-harness", version = "0.6.0" }
+ftui-pty = { path = "../ftui-pty", version = "0.6.0" }
+ftui-web = { path = "../ftui-web", version = "0.6.0" }
+portable-pty = "0.9.0"
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.20", features = ["registry"] }
+criterion = { version = "0.8.2", features = ["html_reports"] }
+proptest = "1.7.0"
+serial_test = "3.5.0"
+
+[[bench]]
+name = "action_timeline_bench"
+harness = false
+
+[[bench]]
+name = "theme_studio_bench"
+harness = false
+
+[[bench]]
+name = "perf_hud_bench"
+harness = false
+
+[[bench]]
+name = "demo_pipeline_bench"
+harness = false

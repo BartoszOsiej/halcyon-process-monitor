@@ -1,0 +1,92 @@
+{
+  "contract_id": "opentui-licensing-provenance-guardrails",
+  "schema_version": "licensing-provenance-v1",
+  "contract_version": "2026-02-25",
+  "licensing_policy": {
+    "allowed_license_classes": ["permissive", "weak_copyleft"],
+    "blocked_license_classes": ["strong_copyleft", "proprietary", "unknown"],
+    "copyleft_boundary_action": "fail_safe",
+    "missing_license_action": "fail_safe",
+    "ambiguous_license_action": "needs_counsel",
+    "license_class_definitions": [
+      {
+        "class_id": "permissive",
+        "description": "MIT, BSD-2, BSD-3, Apache-2.0, ISC, Zlib, Unlicense",
+        "risk_level": "low"
+      },
+      {
+        "class_id": "weak_copyleft",
+        "description": "LGPL-2.1, LGPL-3.0, MPL-2.0, EPL-2.0, CDDL-1.0",
+        "risk_level": "medium"
+      },
+      {
+        "class_id": "strong_copyleft",
+        "description": "GPL-2.0, GPL-3.0, AGPL-3.0, SSPL-1.0, EUPL-1.2",
+        "risk_level": "critical"
+      },
+      {
+        "class_id": "proprietary",
+        "description": "All-rights-reserved or custom restrictive licenses",
+        "risk_level": "critical"
+      },
+      {
+        "class_id": "unknown",
+        "description": "No license detected or unrecognized SPDX identifier",
+        "risk_level": "high"
+      }
+    ]
+  },
+  "provenance_chain_policy": {
+    "required_stages": ["source_snapshot", "extraction", "ir_normalization", "translation", "generated_output"],
+    "hash_algorithm": "sha256",
+    "chain_must_be_unbroken": true,
+    "each_stage_must_record": ["input_hash", "output_hash", "tool_version", "timestamp"],
+    "attribution_required": true
+  },
+  "ip_artifact_statuses": ["clear", "expired", "unknown", "needs_counsel", "blocked"],
+  "fail_safe_defaults": {
+    "on_missing_provenance": "reject",
+    "on_broken_chain": "reject",
+    "on_blocked_license": "reject",
+    "on_unknown_license": "hold",
+    "on_expired_attribution": "hold",
+    "on_needs_counsel": "hold"
+  },
+  "attribution_template": {
+    "format": "NOTICE",
+    "required_fields": ["original_project_name", "original_license_spdx", "original_authors", "migration_tool_version", "migration_date"],
+    "optional_fields": ["original_project_url", "modifications_summary"]
+  },
+  "risk_flags": [
+    {
+      "flag_id": "lp-no-license-detected",
+      "severity": "high",
+      "description": "Source project has no detectable license file or SPDX header"
+    },
+    {
+      "flag_id": "lp-copyleft-contamination",
+      "severity": "critical",
+      "description": "Strong copyleft dependency detected in transitive closure"
+    },
+    {
+      "flag_id": "lp-provenance-gap",
+      "severity": "high",
+      "description": "One or more pipeline stages lack provenance records"
+    },
+    {
+      "flag_id": "lp-attribution-incomplete",
+      "severity": "medium",
+      "description": "Generated NOTICE file missing required attribution fields"
+    },
+    {
+      "flag_id": "lp-license-conflict",
+      "severity": "high",
+      "description": "Incompatible licenses detected across direct dependencies"
+    },
+    {
+      "flag_id": "lp-stale-provenance",
+      "severity": "medium",
+      "description": "Provenance records older than maximum allowed age"
+    }
+  ]
+}

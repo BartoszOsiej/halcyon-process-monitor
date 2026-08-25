@@ -1,0 +1,40 @@
+╭────────────────────────────────────────────────────Macro Recorder────────────────────────────────────────────────────╮
+│State: ⚠ Error   Events: 0   Duration: 0ms                                                                            │
+│Speed: 1.00x   Loop: Off   Progress:   0%   Filtered: 0                                                               │
+│Focus: [Controls]  [Timeline]  [Scenarios]   Ctrl/Alt+Arrows: ↑Controls  ←Timeline  →Scenarios                        │
+│Quick Start: Enter load scenario  Space record  ↑/↓ scrub timeline                                                    │
+│Space/r record/stop  Enter/p play/pause  Esc stop  L loop  +/- speed                                                  │
+│Press Space to record or Enter in Scenarios to load a demo                                                            │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭───────────────────────────────Timeline───────────────────────────────╮╭─────────────────Event Detail─────────────────╮
+│No macro loaded.                                                      ││Select a scenario or record a macro to see det│
+│Space to record, or select a scenario and press Enter.                ││                                              │
+│                                                                      ││                                              │
+│                                                                      ││                                              │
+│                                                                      ││                                              │
+│                                                                      ││                                              │
+│                                                                      ││                                              │
+│                                                                      ││                                              │
+│                                                                      ││                                              │
+│                                                                      ││                                              │
+│                                                                      ││                                              │
+│                                                                      ││                                              │
+│                                                                      ││                                              │
+│                                                                      ││                                              │
+│                                                                      ││                                              │
+│                                                                      ││                                              │
+│                                                                      ││                                              │
+│                                                                      ││                                              │
+│                                                                      ││                                              │
+│                                                                      │╰──────────────────────────────────────────────╯
+│                                                                      │╭───────────────Scenario Runner────────────────╮
+│                                                                      ││Preset scenarios (Enter to load)              │
+│                                                                      ││                                              │
+│                                                                      ││Tab Tour                                      │
+│                                                                      ││  Cycle tabs and toggle the help overlay      │
+│                                                                      ││                                              │
+│                                                                      ││Search Flow                                   │
+│                                                                      ││  Open palette, type a target, confirm        │
+│                                                                      ││                                              │
+│                                                                      ││Layout Lab                                    │
+╰──────────────────────────────────────────────────────────────────────╯╰──────────────────────────────────────────────╯

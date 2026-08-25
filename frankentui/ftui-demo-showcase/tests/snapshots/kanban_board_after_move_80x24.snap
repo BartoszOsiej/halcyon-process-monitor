@@ -1,0 +1,24 @@
+╭──────────Todo──────────╮┏━━━━━━In Progress━━━━━━━┓╭──────────Done──────────╮  
+│  Add input validation  │┃  Build nav component   ┃│  Project scaffolding   │  
+│  [Logic]               │┃  [UI]                  ┃│  [Ops]                 │  
+│                        │┃                        ┃│                        │  
+│  Write unit tests      │┃  Implement auth flow   ┃│                        │  
+│  [QA]                  │┃  [Logic]               ┃│                        │  
+│                        │┃                        ┃│                        │  
+│  Set up CI pipeline    │┃> Design login page     ┃│                        │  
+│  [Ops]                 │┃  [UI]                  ┃│                        │  
+│                        │┃                        ┃│                        │  
+│                        │┃                        ┃│                        │  
+│                        │┃                        ┃│                        │  
+│                        │┃                        ┃│                        │  
+│                        │┃                        ┃│                        │  
+│                        │┃                        ┃│                        │  
+│                        │┃                        ┃│                        │  
+│                        │┃                        ┃│                        │  
+│                        │┃                        ┃│                        │  
+│                        │┃                        ┃│                        │  
+│                        │┃                        ┃│                        │  
+│                        │┃                        ┃│                        │  
+│                        │┃                        ┃│                        │  
+╰────────────────────────╯┗━━━━━━━━━━━━━━━━━━━━━━━━┛╰────────────────────────╯  
+ h/l: column | j/k: card | H/L: move | u/r: undo/redo | mouse: drag | moves: 1  

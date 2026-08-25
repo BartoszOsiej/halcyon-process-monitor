@@ -1,0 +1,50 @@
+╔══════════════════════════════════════════════════════════════════sqlite3.c═══════════════════════════════════════════════════════════════════╗╭──────────────────────File Info───────────────────────╮
+║      1 /******************************************************************************                                                      █║│{                                                     │
+║      2 ** This file is an amalgamation of many separate C source files from SQLite                                                          │║│  "filename": "sqlite3.c",                            │
+║      3 ** version 3.48.0.  By combining all the individual C code files into this                                                           │║│  "lines": 261044,                                    │
+║      4 ** single large file, the entire code can be compiled as a single translation                                                        │║│  "size": "9.2 MB",                                   │
+║      5 ** unit.  This allows many compilers to do optimizations that would not be                                                           │║│  "size_bytes": 9215145,                              │
+║      6 ** possible if the files were compiled separately.  Performance improvements                                                         │║│  "language": "C",                                    │
+║      7 ** of 5% or more are commonly seen when SQLite is compiled as a single                                                               │║│  "description": "SQLite amalgamation"                │
+║      8 ** translation unit.                                                                                                                 │║│}                                                     │
+║      9 **                                                                                                                                   │║╰──────────────────────────────────────────────────────╯
+║     10 ** This file is all you need to compile SQLite.  To use SQLite in other                                                              │║╭───────────────────────Context────────────────────────╮
+║     11 ** programs, you need this file and the "sqlite3.h" header file that defines                                                         │║│Line 1                                                │
+║     12 ** the programming interface to the SQLite library.  (If you do not have                                                             │║│                                                      │
+║     13 ** the "sqlite3.h" header file at hand, you will find a copy embedded within                                                         │║│Nearest function:                                     │
+║     14 ** the text of this file.  Search for "Begin file sqlite3.h" to find the start                                                       │║│Top of file                                           │
+║     15 ** of the embedded sqlite3.h header file.) Additional code files may be needed                                                       │║│                                                      │
+║     16 ** if you want a wrapper to interface SQLite with your choice of programming                                                         │║│                                                      │
+║     17 ** language. The code for the "sqlite3" command-line shell is also in a                                                              │║│                                                      │
+║     18 ** separate file. This file contains only code for the core SQLite library.                                                          │║│                                                      │
+║     19 **                                                                                                                                   │║╰──────────────────────────────────────────────────────╯
+║     20 ** The content in this amalgamation comes from Fossil check-in                                                                       │║╭───────────────────────Hotspots───────────────────────╮
+║     21 ** d2fe6b05f38d9d7cd78c5d252e99ac59f1ae with changes in files:                                                                       │║│▶    583  sqlite3_open                                │
+║     22 **                                                                                                                                   │║│     587  sqlite3_prepare_v2                          │
+║     23 **                                                                                                                                   │║│     687  sqlite3_step                                │
+║     24 */                                                                                                                                   │║│     644  sqlite3_finalize                            │
+║     25 #ifndef SQLITE_AMALGAMATION                                                                                                          │║│     686  sqlite3_exec                                │
+║     26 #define SQLITE_CORE 1                                                                                                                │║│     584  sqlite3_close                               │
+║     27 #define SQLITE_AMALGAMATION 1                                                                                                        │║│    7281  pager                                       │
+║     28 #ifndef SQLITE_PRIVATE                                                                                                               │║│                                                      │
+║     29 # define SQLITE_PRIVATE static                                                                                                       │║╰──────────────────────────────────────────────────────╯
+║     30 #endif                                                                                                                               │║╭─────────────────────Match Radar──────────────────────╮
+║     31 /************** Begin file sqliteInt.h ***************************************/                                                      │║│Type / for instant highlights                         │
+║     32 /*                                                                                                                                   │║│                                                      │
+║     33 ** 2001 September 15                                                                                                                 │║│Awaiting query...                                     │
+╚══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════╝│                                                      │
+╭────────────────────────────────────────────────────────────────Telemetry Deck────────────────────────────────────────────────────────────────╮│                                                      │
+│IO Lane                                          Cache Hit                                      Lock + TX                                     ││                                                      │
+│                                                                                                LCK████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░   ││                                                      │
+│                                                                                                                                              ││                                                      │
+│                                                                                                                                              │╰──────────────────────────────────────────────────────╯
+│                                                                                                                                              │╭─────────────────FrankenTUI Spotlight─────────────────╮
+│                                                                                                                                              ││One-writer rule · deterministic terminal output       │
+│                                                                                                TX ████████████████████████████████░░░░░░░░   ││                                                      │
+│                                                                                                                                              ││                                                      │
+│                                                                                                                                              ││                                                      │
+│                                                                                                                                              ││                                                      │
+│                                                                                                                                              ││                                                      │
+│▄▅▆▆▇▇█████▇▇▆▅▅▄▃▂▂▁▁     ▁▁▂▃▄▄▅▆▇▇█████▇▇▆▆▅▄ █████▇▇▆▆▅▄▃▃▂▁▁     ▁▁▂▃▃▄▅▆▆▇▇█████▇▇▆▅▄▄▃▂▁                                               ││                                                      │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯╰──────────────────────────────────────────────────────╯
+ Mode: Source · Line 1/261044 (0%) · Matches: 0 | 9.2 MB | C                                                                                                                                            

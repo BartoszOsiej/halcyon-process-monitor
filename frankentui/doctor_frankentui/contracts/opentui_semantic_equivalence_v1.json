@@ -1,0 +1,176 @@
+{
+  "contract_id": "opentui-migration-semantic-equivalence",
+  "schema_version": "sem-eq-contract-v1",
+  "contract_version": "2026-02-25",
+  "equivalence_axes": {
+    "state_transition": "For equivalent inputs and initial state, observable state transition graph must remain semantically equivalent.",
+    "event_ordering": "Externally visible event ordering must preserve happens-before constraints and causal ordering.",
+    "side_effect_observability": "Side effects must remain observable with the same semantic intent and bounded timing variance policy."
+  },
+  "visual_tolerance_policy": {
+    "strict_classes": [
+      "diagnostic_text",
+      "command_output",
+      "cursor_position",
+      "selection_bounds"
+    ],
+    "strict_policy": "Byte-equivalent canonical screen cells and cursor semantics are required.",
+    "perceptual_classes": [
+      "spacing",
+      "decorative_color",
+      "nonsemantic_animation"
+    ],
+    "perceptual_policy": "Perceptual equivalence allowed within explicit threshold while preserving readability and interaction semantics.",
+    "max_perceptual_delta": 0.015
+  },
+  "improvement_envelope": {
+    "allowed_dimensions": [
+      "latency",
+      "throughput",
+      "memory_efficiency",
+      "accessibility",
+      "determinism_observability"
+    ],
+    "forbidden_rewrites": [
+      "behavioral_semantics_change_without_clause_exemption",
+      "widened_side_effect_surface",
+      "non_deterministic_tiebreak_introduction",
+      "silent_policy_downgrade"
+    ],
+    "required_safeguards": [
+      "explicit_clause_traceability",
+      "deterministic_replay_artifacts",
+      "rollback_safe_fallback"
+    ]
+  },
+  "deterministic_tie_breakers": [
+    {
+      "priority": 1,
+      "rule_id": "tb-minimize-behavior-risk",
+      "description": "Choose candidate with lowest semantic regression risk score."
+    },
+    {
+      "priority": 2,
+      "rule_id": "tb-maximize-user-value",
+      "description": "If tied on risk, choose candidate with highest user-facing improvement score."
+    },
+    {
+      "priority": 3,
+      "rule_id": "tb-minimize-runtime-cost",
+      "description": "If still tied, choose lower expected runtime and memory overhead."
+    },
+    {
+      "priority": 4,
+      "rule_id": "tb-stable-lexicographic-id",
+      "description": "Final tie-break: deterministic lexical order of strategy identifier."
+    }
+  ],
+  "clauses": [
+    {
+      "clause_id": "ST-001",
+      "title": "State transition equivalence",
+      "category": "state_transition",
+      "requirement": "Equivalent source and translated runs must preserve reachable semantic states and terminally visible outcomes.",
+      "severity": "critical"
+    },
+    {
+      "clause_id": "ST-002",
+      "title": "Transition guard preservation",
+      "category": "state_transition",
+      "requirement": "Guard predicates controlling state transitions must preserve truth behavior under equivalent inputs.",
+      "severity": "critical"
+    },
+    {
+      "clause_id": "EO-001",
+      "title": "Intra-cycle event ordering",
+      "category": "event_ordering",
+      "requirement": "Within a processing cycle, emitted events must preserve source happens-before ordering.",
+      "severity": "high"
+    },
+    {
+      "clause_id": "EO-002",
+      "title": "Asynchronous side-effect ordering",
+      "category": "event_ordering",
+      "requirement": "Asynchronous effects must preserve causal ordering and bounded commit timing semantics.",
+      "severity": "high"
+    },
+    {
+      "clause_id": "SE-001",
+      "title": "Side-effect observability",
+      "category": "side_effect_observability",
+      "requirement": "No side-effect class visible to operators may be dropped, duplicated, or re-scoped without an explicit waiver clause.",
+      "severity": "critical"
+    },
+    {
+      "clause_id": "VT-001",
+      "title": "Strict visual equivalence classes",
+      "category": "visual_tolerance",
+      "requirement": "Strict classes require exact canonical cell identity and cursor semantics.",
+      "severity": "critical"
+    },
+    {
+      "clause_id": "VT-002",
+      "title": "Perceptual visual classes",
+      "category": "visual_tolerance",
+      "requirement": "Perceptual classes may vary only within declared threshold and must not degrade readability or interaction.",
+      "severity": "medium"
+    },
+    {
+      "clause_id": "IE-001",
+      "title": "Allowed improvement dimensions",
+      "category": "improvement_envelope",
+      "requirement": "Improvements are permitted only in allowed dimensions and require evidence-backed benefit claims.",
+      "severity": "high"
+    },
+    {
+      "clause_id": "IE-002",
+      "title": "Forbidden rewrites",
+      "category": "improvement_envelope",
+      "requirement": "Forbidden rewrite classes are hard-gated unless a signed exemption artifact is present.",
+      "severity": "critical"
+    },
+    {
+      "clause_id": "TB-001",
+      "title": "Deterministic tie-break sequence",
+      "category": "deterministic_choice",
+      "requirement": "Translator candidate selection must follow explicit priority rules without hidden randomness.",
+      "severity": "high"
+    },
+    {
+      "clause_id": "TB-002",
+      "title": "Stable terminal tie-break",
+      "category": "deterministic_choice",
+      "requirement": "Final tie-break must be deterministic lexical ordering of strategy identifiers.",
+      "severity": "high"
+    }
+  ],
+  "validator_clause_map": {
+    "semantic_diff_validator": [
+      "ST-001",
+      "ST-002",
+      "EO-001",
+      "SE-001"
+    ],
+    "trace_replay_validator": [
+      "EO-001",
+      "EO-002",
+      "TB-001",
+      "TB-002"
+    ],
+    "visual_diff_validator": [
+      "VT-001",
+      "VT-002"
+    ],
+    "improvement_policy_validator": [
+      "IE-001",
+      "IE-002",
+      "TB-001"
+    ],
+    "release_gate_validator": [
+      "ST-001",
+      "SE-001",
+      "IE-002",
+      "TB-002"
+    ]
+  }
+}

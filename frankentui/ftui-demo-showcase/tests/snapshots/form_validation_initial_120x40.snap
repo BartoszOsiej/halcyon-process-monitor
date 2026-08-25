@@ -1,0 +1,40 @@
+Mode: Real-time [M to toggle]                                           ╭────────────────Error Summary─────────────────╮
+╭──────────────────────────Registration Form───────────────────────────╮│No validation errors                          │
+│Username:         Enter username (required)                           ││                                              │
+│Email:            user@example.com                                    ││                                              │
+│Password:         Min 8 characters                                    ││                                              │
+│Confirm Password: Re-enter password                                   ││                                              │
+│Age:                25                                                ││                                              │
+│Bio:              Max 100 characters                                  ││                                              │
+│Website:          https://example.com                                 ││                                              │
+│Role:               (Select a role)                                   ││                                              │
+│Accept Terms:     [ ]                                                 ││                                              │
+│                                                                      ││                                              │
+│                                                                      ││                                              │
+│                                                                      ││                                              │
+│                                                                      ││                                              │
+│                                                                      ││                                              │
+│                                                                      ││                                              │
+│                                                                      ││                                              │
+│                                                                      ││                                              │
+│                                                                      ││                                              │
+│                                                                      ││                                              │
+│                                                                      ││                                              │
+│                                                                      ││                                              │
+│                                                                      ││                                              │
+│                                                                      ││                                              │
+│                                                                      ││                                              │
+│                                                                      ││                                              │
+│                                                                      ││                                              │
+│                                                                      ││                                              │
+│                                                                      ││                                              │
+│                                                                      ││                                              │
+│                                                                      ││                                              │
+│                                                                      ││                                              │
+│                                                                      ││                                              │
+│                                                                      ││                                              │
+│                                                                      ││                                              │
+│                                                                      ││                                              │
+╰──────────────────────────────────────────────────────────────────────╯│                                              │
+Touched: 0/9 | Dirty: 0/9                                               │                                              │
+Tab/Arrow: navigate | Space: toggle | Enter: submit | M: mode toggle    ╰──────────────────────────────────────────────╯

@@ -1,0 +1,40 @@
+╔═════════════════════════════════════sqlite3.c══════════════════════════════════════╗╭───────────File Info────────────╮
+║     21 ** d2fe6b05f38d9d7cd78c5d252e99ac59f1ae with changes in files:             █║│{                               │
+║     22 **                                                                         │║│  "filename": "sqlite3.c",      │
+║     23 **                                                                         │║│  "lines": 261044,              │
+║     24 */                                                                         │║│  "size": "9.2 MB",             │
+║     25 #ifndef SQLITE_AMALGAMATION                                                │║│  "size_bytes": 9215145,        │
+║     26 #define SQLITE_CORE 1                                                      │║│  "language": "C",              │
+║     27 #define SQLITE_AMALGAMATION 1                                              │║╰────────────────────────────────╯
+║     28 #ifndef SQLITE_PRIVATE                                                     │║╭────────────Context─────────────╮
+║     29 # define SQLITE_PRIVATE static                                             │║│Line 21                         │
+║     30 #endif                                                                     │║│                                │
+║     31 /************** Begin file sqliteInt.h ************************************│║│Nearest function:               │
+║     32 /*                                                                         │║│Top of file                     │
+║     33 ** 2001 September 15                                                       │║│                                │
+║     34 **                                                                         │║│                                │
+║     35 ** The author disclaims copyright to this source code.  In place of        │║╰────────────────────────────────╯
+║     36 ** a legal notice, here is a blessing:                                     │║╭────────────Hotspots────────────╮
+║     37 **                                                                         │║│▶    583  sqlite3_open          │
+║     38 **    May you do good and not evil.                                        │║│     587  sqlite3_prepare_v2    │
+║     39 **    May you find forgiveness for yourself and forgive others.            │║│     687  sqlite3_step          │
+║     40 **    May you share freely, never taking more than you give.               │║│     644  sqlite3_finalize      │
+║     41 **                                                                         │║│     686  sqlite3_exec          │
+║     42 *************************************************************************  │║│                                │
+║     43 ** Internal interface definitions for SQLite.                              │║╰────────────────────────────────╯
+║     44 **                                                                         │║╭──────────Match Radar───────────╮
+║     45 */                                                                         │║│Type / for instant highlights   │
+║     46 #ifndef SQLITEINT_H                                                        │║│                                │
+╚════════════════════════════════════════════════════════════════════════════════════╝│Awaiting query...               │
+╭───────────────────────────────────Telemetry Deck───────────────────────────────────╮│                                │
+│IO Lane                      Cache Hit                   Lock + TX                  ││                                │
+│                                                         LCK████░░░░░░░░░░░░░░░░░   ││                                │
+│                                                                                    │╰────────────────────────────────╯
+│                                                                                    │╭──────FrankenTUI Spotlight──────╮
+│                                                                                    ││One-writer rule · deterministic │
+│                                                         TX █████████████████░░░░   ││                                │
+│                                                                                    ││                                │
+│                                                                                    ││                                │
+│▄▅▆▆▇▇█████▇▇▆▅▅▄▃▂▂▁▁     ▁ █████▇▇▆▆▅▄▃▃▂▁▁     ▁▁▂▃▃▄                            ││                                │
+╰────────────────────────────────────────────────────────────────────────────────────╯╰────────────────────────────────╯
+ Mode: Source · Line 21/261044 (0%) · Matches: 0 | 9.2 MB | C                                                           

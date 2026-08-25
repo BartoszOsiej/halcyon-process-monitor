@@ -2,6 +2,15 @@
 members = [
     "process-monitor",
     "process-monitor-ebpf",
+    "frankentui/ftui",
+    "frankentui/ftui-core",
+    "frankentui/ftui-render",
+    "frankentui/ftui-runtime",
+    "frankentui/ftui-layout",
+    "frankentui/ftui-style",
+    "frankentui/ftui-text",
+    "frankentui/ftui-widgets",
+    "frankentui/ftui-extras",
 ]
 # Default to the userspace crate only. The eBPF crate targets
 # bpfel-unknown-none and cannot be built/tested for the host; build.sh
@@ -10,7 +19,7 @@ default-members = ["process-monitor"]
 resolver = "2"
 
 [workspace.package]
-version = "0.3.0"
+version = "0.4.0"
 edition = "2021"
 license = "MIT"
 

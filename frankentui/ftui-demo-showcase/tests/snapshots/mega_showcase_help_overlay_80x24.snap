@@ -1,0 +1,24 @@
+┌────────────╭─ Help (? to close) ────────────────────────────────╮────────────┐
+│ Tier:auto G│                                                    │Dir:auto Pal│
+│            │ Navigation                                         │            │
+│            │  j / Down        Next sample                       │            │
+│            │  k / Up          Previous sample                   │            │
+└────────────│  Tab             Select next node                  │────────────┘
+┌ Flow Basic │  S-Tab           Select previous node              │────────────┐
+│            │  /               Sample filter/search              │            │
+│            │  Enter           Accept match (search)             │            │
+│            │  Up/Down         Cycle matches (search)            │            │
+│            │  Ctrl+U          Clear filter                      │            │
+│            │                                                    │            │
+│            │ Render Config                                      │            │
+│            │  t               Cycle tier (Auto/Compact/Normal/R │            │
+│            │  g               Toggle glyph mode (Unicode/ASCII) │            │
+│            │  b               Cycle render mode (Auto/Cell/Brai │            │
+│            │  s               Toggle styles (classDef/style)    │            │
+│            │  w               Cycle wrap mode (None/Word/Char/W │            │
+│            │  l               Cycle layout mode (Dense/Normal/S │            │
+│            │  A               Toggle auto-scale zoom (zoom-to-f │            │
+│            │  S               Toggle perf sweep (auto-run node  │            │
+└────────────│  O               Cycle direction (TB/LR/RL/BT/auto │────────────┘
+NORMAL  j/k:s│  r               Force relayout                    │an []/{}:size
+             ╰────────────────────────────────────────────────────╯             

@@ -1,0 +1,40 @@
+╭   Presets ────────────╮ ╭ ► Token Inspector ─────────────────────────────────────────────────────────────────────────╮
+│● Cyberpunk Aurora     │ │     fg::PRIMARY          #B3F4FF  13.6:1 AAA                                               │
+│  Darcula              │ │     fg::SECONDARY        #91C5D0  8.7:1  AAA                                               │
+│  Lumen Light          │ │     fg::MUTED            #739BA5  5.5:1  AA                                                │
+│  Nordic Frost         │ │     fg::DISABLED         #5A7883  3.5:1  AA Large                                          │
+│  Doom                 │ │     bg::DEEP             #14181F  1.1:1  Fail                                              │
+│  Quake                │ │▶    bg::BASE             #1A1F29  1.0:1  Fail                                              │
+│  Monokai              │ │     bg::SURFACE          #2B3540  1.3:1  Fail                                              │
+│  Solarized Dark       │ │     bg::OVERLAY          #50495C  1.9:1  Fail                                              │
+│  Solarized Light      │ │     bg::HIGHLIGHT        #606D78  3.1:1  AA Large                                          │
+│  Gruvbox Dark         │ │     accent::PRIMARY      #07B6FF  7.2:1  AAA                                               │
+│  Gruvbox Light        │ │     accent::SECONDARY    #F50DFF  5.0:1  AA                                                │
+│  One Dark             │ │     accent::SUCCESS      #11FAC0  12.2:1 AAA                                               │
+│  Tokyo Night          │ │     accent::WARNING      #F5F04A  13.7:1 AAA                                               │
+│  Catppuccin Mocha     │ │     accent::ERROR        #F5457F  4.7:1  AA                                                │
+│  Rose Pine            │ │     accent::INFO         #07FAFF  12.7:1 AAA                                               │
+│  Night Owl            │ │     accent::LINK         #44D1FF  9.3:1  AAA                                               │
+│  Dracula              │ │     StatusOpen           #11FAC0  12.2:1 AAA                                               │
+│  Material Ocean       │ │     StatusInProgress     #07FAFF  12.7:1 AAA                                               │
+│  Ayu Dark             │ │     StatusBlocked        #F5457F  4.7:1  AA                                                │
+│  Ayu Light            │ │     StatusClosed         #739BA5  5.5:1  AA                                                │
+│  Kanagawa Wave        │ │     PriorityP0           #F5457F  4.7:1  AA                                                │
+│  Everforest Dark      │ │     PriorityP1           #F5AC5F  8.6:1  AAA                                               │
+│  Everforest Light     │ │     PriorityP2           #F5F04A  13.7:1 AAA                                               │
+│  GitHub Dark          │ │     PriorityP3           #07FAFF  12.7:1 AAA                                               │
+│  GitHub Light         │ │     PriorityP4           #739BA5  5.5:1  AA                                                │
+│  Synthwave '84        │ │                                                                                            │
+│  Palenight            │ │                                                                                            │
+│  Horizon Dark         │ │                                                                                            │
+│  Nord                 │ │                                                                                            │
+│  One Light            │ │                                                                                            │
+│  Catppuccin Latte     │ │                                                                                            │
+│  Catppuccin Frappe    │ │                                                                                            │
+│  Catppuccin Macchiato │ │                                                                                            │
+│  Kanagawa Lotus       │ │                                                                                            │
+│  Nightfox             │ │                                                                                            │
+│  Dayfox               │ │                                                                                            │
+│  Oceanic Next         │ │                                                                                            │
+╰───────────────────────╯ ╰────────────────────────────────────────────────────────────────────────────────────────────╯
+Press E to export theme                                                                                                 

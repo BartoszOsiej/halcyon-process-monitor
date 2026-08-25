@@ -1,0 +1,24 @@
+╭────────Inspector─────────╮  ╭─────────────────────Layout─────────────────────╮
+│Scenario: FitContent Clamp│  │.FitContent 14.Min 10x14→34x14 [10..∞ x 0..∞]──╮│
+│Details: FitContent bounde│  ││          │  │                                ││
+│Step: Constraints - Inspec│  ││          │  │                                ││
+│                          │  ││          │  │                                ││
+│Overlay: on   Tree: on    │  ││          │  │                                ││
+│                          │  ││          │  │                                ││
+│Keys: n/p scenario  [/ ] s│  ││          │  │                                ││
+│                          │  ││          │  │                                ││
+│FitRoot  req 48x14  got 48│  ││          │  │                                ││
+│  FitContent  req 18x14  g│  ││          │  │                                ││
+│  Min  req 10x14  got 34x1│  ││          │  │                                ││
+│                          │  ││          │  │                                ││
+│                          │  ││          │  │                                ││
+│                          │  │.──────────╯  .──.─────.───────────────────────╯│
+│                          │  ╰────────────────────────────────────────────────╯
+│                          │                                                    
+│                          │  ╭──────────────────────Tree──────────────────────╮
+│                          │  │FitRoot req=48x14 got=48x14 min=0x0 max=0x0     │
+│                          │  │  FitContent req=18x14 got=12x14 min=12x0 max=18│
+│                          │  │  Min req=10x14 got=34x14 min=10x0 max=0x0      │
+│                          │  │                                                │
+│                          │  │                                                │
+╰──────────────────────────╯  ╰────────────────────────────────────────────────╯

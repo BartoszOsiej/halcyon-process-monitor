@@ -1,0 +1,24 @@
+╭──────────────────────── Accessibility Control Panel ─────────────────────────╮
+│Active Theme: High Contrast                                                   │
+│Base Theme: Cyberpunk Aurora  Mode: High Contrast                             │
+│Motion: Full (1.0x)  Large Text: OFF                                          │
+│Shortcuts: h = contrast, m = motion, l = large text                           │
+│                                                                              │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭────────────────────────────────── Toggles ───────────────────────────────────╮
+│ [h] High Contrast: ON                                                        │
+│ [m] Reduced Motion: OFF                                                      │
+│ [l] Large Text: OFF                                                          │
+│Shift+A opens the compact overlay                                             │
+│                                                                              │
+│                                                                              │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╰──────────────────────────────── Live Preview ────────────────────────────────╯
+╭─────────────────────────────── WCAG Contrast ────────────────────────────────╮
+│Primary on Base    21.0:1 AAA                                                 │
+│Secondary on Base  16.8:1 AAA                                                 │
+│Accent Primary     16.7:1 AAA                                                 │
+│Accent Warning     19.6:1 AAA                                                 │
+│Accent Error        7.3:1 AAA                                                 │
+│                                                                              │
+╰──────────────────────────────────────────────────────────────────────────────╯

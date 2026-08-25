@@ -1,0 +1,40 @@
+Tasks: 3 total | Queued: 0 | Running: 0 | Done: 2 | Failed: 0 | Policy: FIFO                                            
+╭──────────────────────────────Task Queue──────────────────────────────╮╭─────────────────Task Details─────────────────╮
+│> Canceled [M] Initial Setup                                          ││ID: 1                                         │
+│  Done     [L] Data Sync                                              ││Name: Initial Setup                           │
+│  Done     [H] Cache Warm                                             ││State: Canceled                               │
+│                                                                      ││Priority: 2                                   │
+│                                                                      ││Progress: 0%                                  │
+│                                                                      ││Elapsed: 0 ticks                              │
+│                                                                      ││Estimated: 30 ticks                           │
+│                                                                      ││                                              │
+│                                                                      ││                                              │
+│                                                                      ││                                              │
+│                                                                      ││                                              │
+│                                                                      ││                                              │
+│                                                                      ││                                              │
+│                                                                      ││                                              │
+│                                                                      ││                                              │
+│                                                                      ││                                              │
+│                                                                      ││                                              │
+│                                                                      │╰──────────────────────────────────────────────╯
+│                                                                      │╭───────────────────Activity───────────────────╮
+│                                                                      ││Spawned: Initial Setup                        │
+│                                                                      ││Spawned: Data Sync                            │
+│                                                                      ││Spawned: Cache Warm                           │
+│                                                                      ││Canceled: Initial Setup                       │
+│                                                                      ││Started: Data Sync                            │
+│                                                                      ││Started: Cache Warm                           │
+│                                                                      ││                                              │
+│                                                                      ││                                              │
+│                                                                      ││                                              │
+│                                                                      ││                                              │
+│                                                                      ││                                              │
+│                                                                      ││                                              │
+│                                                                      ││                                              │
+│                                                                      ││                                              │
+│                                                                      ││                                              │
+│                                                                      ││                                              │
+│                                                                      ││                                              │
+╰──────────────────────────────────────────────────────────────────────╯╰──────────────────────────────────────────────╯
+n:spawn  c:cancel  s:scheduler  r:retry  j/k:nav  q:quit                                                                

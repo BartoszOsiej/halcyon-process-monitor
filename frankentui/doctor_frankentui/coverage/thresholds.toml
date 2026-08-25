@@ -1,0 +1,112 @@
+[total]
+lines = 89.0
+branches = 69.0
+functions = 86.0
+
+[group.orchestration]
+# command-heavy modules where branch complexity is highest
+files = [
+  "crates/doctor_frankentui/src/capture.rs",
+  "crates/doctor_frankentui/src/doctor.rs",
+  "crates/doctor_frankentui/src/report.rs",
+  "crates/doctor_frankentui/src/seed.rs",
+  "crates/doctor_frankentui/src/suite.rs",
+]
+lines = 88.0
+branches = 66.0
+functions = 81.0
+
+[group.foundations]
+# lower-level parsing/format/helpers expected to stay highly covered
+files = [
+  "crates/doctor_frankentui/src/cli.rs",
+  "crates/doctor_frankentui/src/error.rs",
+  "crates/doctor_frankentui/src/keyseq.rs",
+  "crates/doctor_frankentui/src/main.rs",
+  "crates/doctor_frankentui/src/profile.rs",
+  "crates/doctor_frankentui/src/runmeta.rs",
+  "crates/doctor_frankentui/src/tape.rs",
+  "crates/doctor_frankentui/src/util.rs",
+]
+lines = 93.0
+branches = 80.0
+functions = 92.0
+
+# Per-module floors (prevents group averages from masking regressions)
+[group.module_capture]
+files = ["crates/doctor_frankentui/src/capture.rs"]
+lines = 78.0
+branches = 69.0
+functions = 75.0
+
+[group.module_cli]
+files = ["crates/doctor_frankentui/src/cli.rs"]
+lines = 99.0
+branches = 50.0
+functions = 100.0
+
+[group.module_doctor]
+files = ["crates/doctor_frankentui/src/doctor.rs"]
+lines = 91.0
+branches = 59.0
+functions = 92.0
+
+[group.module_error]
+files = ["crates/doctor_frankentui/src/error.rs"]
+lines = 96.0
+branches = 100.0
+functions = 100.0
+
+[group.module_keyseq]
+files = ["crates/doctor_frankentui/src/keyseq.rs"]
+lines = 94.0
+branches = 91.0
+functions = 100.0
+
+[group.module_main]
+files = ["crates/doctor_frankentui/src/main.rs"]
+lines = 100.0
+branches = 100.0
+functions = 100.0
+
+[group.module_profile]
+files = ["crates/doctor_frankentui/src/profile.rs"]
+lines = 100.0
+branches = 81.0
+functions = 100.0
+
+[group.module_report]
+files = ["crates/doctor_frankentui/src/report.rs"]
+lines = 98.5
+branches = 81.0
+functions = 87.0
+
+[group.module_runmeta]
+files = ["crates/doctor_frankentui/src/runmeta.rs"]
+lines = 100.0
+branches = 100.0
+functions = 100.0
+
+[group.module_seed]
+files = ["crates/doctor_frankentui/src/seed.rs"]
+lines = 97.0
+branches = 93.0
+functions = 100.0
+
+[group.module_suite]
+files = ["crates/doctor_frankentui/src/suite.rs"]
+lines = 97.5
+branches = 89.0
+functions = 82.0
+
+[group.module_tape]
+files = ["crates/doctor_frankentui/src/tape.rs"]
+lines = 100.0
+branches = 100.0
+functions = 100.0
+
+[group.module_util]
+files = ["crates/doctor_frankentui/src/util.rs"]
+lines = 97.0
+branches = 82.0
+functions = 91.0

@@ -1,0 +1,40 @@
+╭──────────────────────────Virtualized List (10000 items)───────────────────────────╮╭────────Performance Stats────────╮
+│[    1] DEBUG db::pool           Event #00001: simulated log entry with payload dat││Total items:  10000              │
+│[    2]  WARN auth::jwt          Event #00002: simulated log entry with payload dat││Selected:     21 / 10000         │
+│[    3] ERROR cache::redis       Event #00003: simulated log entry with payload dat││Scroll:       1                  │
+│[    4] TRACE queue::worker      Event #00004: simulated log entry with payload dat││Viewport:     37 rows            │
+│[    5]  INFO api::handler       Event #00005: simulated log entry with payload dat││Visible:      1..38              │
+│[    6] DEBUG core::runtime      Event #00006: simulated log entry with payload dat││Progress:     0.2%               │
+│[    7]  WARN server::http       Event #00007: simulated log entry with payload dat││Tick:         0                  │
+│[    8] ERROR db::pool           Event #00008: simulated log entry with payload dat││                                 │
+│[    9] TRACE auth::jwt          Event #00009: simulated log entry with payload dat││Only visible rows are rendered.  │
+│[   10]  INFO cache::redis       Event #00010: simulated log entry with payload dat││Rendering 37 of 10000 items.     │
+│[   11] DEBUG queue::worker      Event #00011: simulated log entry with payload dat││░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  │
+│[   12]  WARN api::handler       Event #00012: simulated log entry with payload dat││                                 │
+│[   13] ERROR core::runtime      Event #00013: simulated log entry with payload dat││                                 │
+│[   14] TRACE server::http       Event #00014: simulated log entry with payload dat││                                 │
+│[   15]  INFO db::pool           Event #00015: simulated log entry with payload dat││                                 │
+│[   16] DEBUG auth::jwt          Event #00016: simulated log entry with payload dat││                                 │
+│[   17]  WARN cache::redis       Event #00017: simulated log entry with payload dat││                                 │
+│[   18] ERROR queue::worker      Event #00018: simulated log entry with payload dat││                                 │
+│[   19] TRACE api::handler       Event #00019: simulated log entry with payload dat││                                 │
+│[   20]  INFO core::runtime      Event #00020: simulated log entry with payload dat││                                 │
+│[   21] DEBUG server::http       Event #00021: simulated log entry with payload dat││                                 │
+│[   22]  WARN db::pool           Event #00022: simulated log entry with payload dat││                                 │
+│[   23] ERROR auth::jwt          Event #00023: simulated log entry with payload dat││                                 │
+│[   24] TRACE cache::redis       Event #00024: simulated log entry with payload dat││                                 │
+│[   25]  INFO queue::worker      Event #00025: simulated log entry with payload dat││                                 │
+│[   26] DEBUG api::handler       Event #00026: simulated log entry with payload dat││                                 │
+│[   27]  WARN core::runtime      Event #00027: simulated log entry with payload dat││                                 │
+│[   28] ERROR server::http       Event #00028: simulated log entry with payload dat││                                 │
+│[   29] TRACE db::pool           Event #00029: simulated log entry with payload dat││                                 │
+│[   30]  INFO auth::jwt          Event #00030: simulated log entry with payload dat││                                 │
+│[   31] DEBUG cache::redis       Event #00031: simulated log entry with payload dat││                                 │
+│[   32]  WARN queue::worker      Event #00032: simulated log entry with payload dat││                                 │
+│[   33] ERROR api::handler       Event #00033: simulated log entry with payload dat││                                 │
+│[   34] TRACE core::runtime      Event #00034: simulated log entry with payload dat││                                 │
+│[   35]  INFO server::http       Event #00035: simulated log entry with payload dat││                                 │
+│[   36] DEBUG db::pool           Event #00036: simulated log entry with payload dat││                                 │
+│[   37]  WARN auth::jwt          Event #00037: simulated log entry with payload dat││                                 │
+╰───────────────────────────────────────────────────────────────────────────────────╯╰─────────────────────────────────╯
+Item 21/10000 | j/k: scroll | Ctrl+D/U: page | g/G: jump                                                                

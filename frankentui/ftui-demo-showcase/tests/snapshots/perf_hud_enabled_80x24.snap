@@ -1,0 +1,24 @@
+ 1: Tour │ 2: Dash │ 3: Shakes │ 4: Code │ 5: Widgets │ 6: Layout │ 7: Forms    
+╭╭───────────────────Perf HUD───────────────────╮──────────────────────────────╮
+││ Render FPS: 60.0                             │                              │
+││ Tick rate:     50.0 /s                       │──╮╭───Code · Rust (1/28)────╮│
+││ Tick avg:     20.00 ms                       │ b││// runtime.rs            ││
+││ Tick p95:     30.00 ms                       │6%││use std::{collections::Ha││
+││ Tick p99:     30.00 ms                       │1%││                         ││
+││ Tick range: 10.0..30.0 ms                    │14││use ftui_core::event::Eve││
+││                                              │49││Click → Code Explorer    ││
+││ Views:      100                              │7%│╰─────────────────────────╯│
+││ Ticks:      42                               │  │╭──────────Info───────────╮│
+││ Screen:     Dashboard                        │  ││Status:NOMINAL FPS:0     ││
+││ Terminal:   80x24                            │  ││Click → Performance      ││
+││ Samples:    11/120                           │──╯╰─────────────────────────╯│
+││                                              │─│╭Markdown · Streaming… 0%─╮ │
+││   ▁▂▃▄▄▅▆▇█                                  │ ││▌                        │ │
+│╰──────────────────────────────────────────────╯e││                         │ │
+││2 · FadeIn · S2  ⋮│                             ⋮│                         │ │
+││                 ││                             ││                         │ │
+││drag panes in das││Click → Action Timeline      ││Click → Markdown         │ │
+│╰─────────────────│╰─────────────────────────────│╰─────────────────────────╯ │
+│g:charts c:code e:fx m:md | drag bottom dividers: resize | 1-9:screens | t:the│
+╰──────────────────────────────────────────────────────────────────────────────╯
+ Dashboard [2/45] [h] [cmd] [P] [d]    Tab/Shift+Tab: next/prev     80x24 00:04 

@@ -1,0 +1,24 @@
+ 1: Tour │ 2: Dash │ 3: Shakes │ 4: Code │ 5: Widgets │ 6: Layout │ 7: Forms    
+╭──────────────────────────────────Dashboard───────────────────────────────────╮
+│FRANKENTUI DASHBOARD                                                          │
+│╭──────Plasma──────╮╭───────Charts · Pulse────────╮╭───Code · Rust (1/28)────╮│
+││⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿╔═════════ ⌨ Keyboard Shortcuts (Esc) ═════════╗rs            ││
+││⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿║ Navigation                                   ║ollections::Ha││
+││⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿║ [Ctrl+K]                 Open command palett ║              ││
+││⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿║                                              ║re::event::Eve││
+││⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿║ View                                         ║e Explorer    ││
+││⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿║ [?]                      Toggle this help ov ║──────────────╯│
+││⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿║ [Esc]                    Dismiss top overlay ║nfo───────────╮│
+││⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿║ [m / F6]                 Toggle mouse captur ║NAL FPS:0     ││
+││Click → Visual║ [Ctrl+P]                 Toggle performance  ║formance      ││
+│╰──────────────║ [Ctrl+I]                 Toggle evidence ins ║──────────────╯│
+│╭Text FX · 2-Up║ [Shift+A]                Toggle A11y panel   ║treaming… 0%─╮ │
+││Sample 1 of 3 ║ [F12]                    Toggle debug overla ║             │ │
+││1 · None · S1 ║                                              ║             │ │
+││2 · FadeIn · S║ Editing                                      ║             │ │
+││              ║                                              ║             │ │
+││drag panes in ╚═══════════Press ? or Esc to close════════════╝down         │ │
+│╰─────────────────│╰─────────────────────────────│╰─────────────────────────╯ │
+│g:charts c:code e:fx m:md | drag bottom dividers: resize | 1-9:screens | t:the│
+╰──────────────────────────────────────────────────────────────────────────────╯
+ Dashboard [2/45] [H] [cmd] [p] [d]    Tab/Shift+Tab: next/prev     80x24 00:00 

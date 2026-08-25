@@ -1,0 +1,24 @@
+ 1: Tour │ 2: Dash │ 3: Shakes │ 4: Code │ 5: Widgets │ 6: Layout │ 7: Forms    
+╭────────────────────────────────Code Explorer─────────────────────────────────╮
+│╔══════════════════════sqlite3.c═══════════════════════╗╭─────File Info──────╮│
+│║      1 /********************************************█║│{                   ││
+│║      2 ** This file is an amalgamation of many separ│║│  "filename": "sqlit││
+│║      3 ** version 3.48.0.  By combining all the indi│║│  "lines": 261044,  ││
+│║      4 ** single large file, the entire code can be │║│  "size": "9.2 MB", ││
+│║      5 ** unit.  This allows many compilers to do op│║│  "size_bytes": 9215││
+│║      6 ** possible if the files were compiled separa│║╰────────────────────╯│
+│║      7 ** of 5% or more are commonly seen when SQLit│║╭──────Context───────╮│
+│║      8 ** translation unit.                         │║│Line 1              ││
+│║      9 **                                           │║│                    ││
+│║     10 ** This file is all you need to compile SQLit│║│Nearest function:   ││
+│║     11 ** programs, you need this file and the "sqli│║│Top of file         ││
+│║     12 ** the programming interface to the SQLite li│║╰────────────────────╯│
+│╚══════════════════════════════════════════════════════╝╭Hotspots + Radar + S╮│
+│╭────────────────────Telemetry Deck────────────────────╮│╰─────Hotspots─────╯││
+││IO Lane            Cache Hit         Lock + TX        ││Type / for instant h││
+││                                     LCK██░░░░░░░░░   ││One-writer rule · de││
+││▄▅▆▆▇▇█████▇▇▆▅▅▄▃ █████▇▇▆▆▅▄▃▃▂▁▁  TX █████████░░   ││                    ││
+│╰──────────────────────────────────────────────────────╯╰────────────────────╯│
+│ Mode: Source · Line 1/261044 (0%) · Matches: 0 | 9.2 MB | C                  │
+╰──────────────────────────────────────────────────────────────────────────────╯
+ Code Explorer [4/45] [h] [cmd] [p] [d]   Tab/Shift+Tab: next/prev    0x0 00:00 

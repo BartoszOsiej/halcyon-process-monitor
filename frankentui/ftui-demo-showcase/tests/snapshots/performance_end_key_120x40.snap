@@ -1,0 +1,40 @@
+╭──────────────────────────Virtualized List (10000 items)───────────────────────────╮╭────────Performance Stats────────╮
+│[ 9980]  INFO api::handler       Event #09980: simulated log entry with payload dat││Total items:  10000              │
+│[ 9981] DEBUG core::runtime      Event #09981: simulated log entry with payload dat││Selected:     10000 / 10000      │
+│[ 9982]  WARN server::http       Event #09982: simulated log entry with payload dat││Scroll:       9980               │
+│[ 9983] ERROR db::pool           Event #09983: simulated log entry with payload dat││Viewport:     37 rows            │
+│[ 9984] TRACE auth::jwt          Event #09984: simulated log entry with payload dat││Visible:      9980..10000        │
+│[ 9985]  INFO cache::redis       Event #09985: simulated log entry with payload dat││Progress:     100.0%             │
+│[ 9986] DEBUG queue::worker      Event #09986: simulated log entry with payload dat││Tick:         0                  │
+│[ 9987]  WARN api::handler       Event #09987: simulated log entry with payload dat││                                 │
+│[ 9988] ERROR core::runtime      Event #09988: simulated log entry with payload dat││Only visible rows are rendered.  │
+│[ 9989] TRACE server::http       Event #09989: simulated log entry with payload dat││Rendering 20 of 10000 items.     │
+│[ 9990]  INFO db::pool           Event #09990: simulated log entry with payload dat││███████████████████████████████  │
+│[ 9991] DEBUG auth::jwt          Event #09991: simulated log entry with payload dat││                                 │
+│[ 9992]  WARN cache::redis       Event #09992: simulated log entry with payload dat││                                 │
+│[ 9993] ERROR queue::worker      Event #09993: simulated log entry with payload dat││                                 │
+│[ 9994] TRACE api::handler       Event #09994: simulated log entry with payload dat││                                 │
+│[ 9995]  INFO core::runtime      Event #09995: simulated log entry with payload dat││                                 │
+│[ 9996] DEBUG server::http       Event #09996: simulated log entry with payload dat││                                 │
+│[ 9997]  WARN db::pool           Event #09997: simulated log entry with payload dat││                                 │
+│[ 9998] ERROR auth::jwt          Event #09998: simulated log entry with payload dat││                                 │
+│[ 9999] TRACE cache::redis       Event #09999: simulated log entry with payload dat││                                 │
+│                                                                                   ││                                 │
+│                                                                                   ││                                 │
+│                                                                                   ││                                 │
+│                                                                                   ││                                 │
+│                                                                                   ││                                 │
+│                                                                                   ││                                 │
+│                                                                                   ││                                 │
+│                                                                                   ││                                 │
+│                                                                                   ││                                 │
+│                                                                                   ││                                 │
+│                                                                                   ││                                 │
+│                                                                                   ││                                 │
+│                                                                                   ││                                 │
+│                                                                                   ││                                 │
+│                                                                                   ││                                 │
+│                                                                                   ││                                 │
+│                                                                                   ││                                 │
+╰───────────────────────────────────────────────────────────────────────────────────╯╰─────────────────────────────────╯
+Item 10000/10000 | j/k: scroll | Ctrl+D/U: page | g/G: jump                                                             

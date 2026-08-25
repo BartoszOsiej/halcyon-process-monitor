@@ -1,0 +1,40 @@
+ 1: Tour │ 2: Dash │ 3: Shakes │ 4: Code │ 5: Widgets │ 6: Layout │ 7: Forms │ 8: DataViz │ 9: Files │ 0: Adv           
+╭──────────────────────────────────────────────────────Dashboard───────────────────────────────────────────────────────╮
+│FRANKENTUI DASHBOARD                                                                                                  │
+│╭────Plasma─────╮╭─────Charts · Pulse─────╮╭───Code · Rust (1/28)───╮╭─────Info──────╮  ┌─────── Pane Studio ────────┐│
+││⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿││g:cycle · sparklines + m││// runtime.rs           ││FrankenTUI Kern│  │mode:Focus sel:1 tl:0/0 ops:││
+││⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿││CPU ▃ ▃▃▂▂▁▁▄▃▄▂▅▅▅▆ 46%││use std::{collections::H││ INLINE        │  │┃            ││            │││
+││⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿││MEM ▅▂ ▃▁▄▄▂▂▇▅▃▅▂▃▄ 41%││                        ││Status: NOMINAL│  │┃ 14x13  @90 ││ 14x13  @10 │││
+││⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿││NET ▁▁▁▁▁  ▁   ▇▁▁    14││use ftui_core::event::Ev││FPS: 0 Size: 1 │  │┃            ││            │││
+││⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿││OUT ▁▁▁▃▁█  ▁▁ ▁  ▁▁▇149││use ftui_render::cell::C││Events/Theme:  │  │┃            ││            │││
+││⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿││EPS 77% DSK 67% IO  7%  ││use ftui_render::frame::││CPU:  4Alerts: │  │┃            ││            │││
+││⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿││                        ││use ftui_runtime::{Cmd, ││NET:   Pipelin │  │┃            ││            │││
+││⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿││                        ││                        ││Frame: Headroo │  │┃            ││            │││
+││⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿││                        ││#[derive(Debug, Clone)] ││               │  │┃            ││            │││
+││⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿││                        ││enum Msg {              ││               │  │┃            ││            │││
+││⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿││                        ││    Tick(u64),          ││               │  │┃            ││            │││
+││⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿││                        ││    Resize { w: u16, h: ││               │  │┃            ■│            │││
+││⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿││                        ││    Log(String),        ││CPU ███░░░  46%│  │─────■■■───────────■■■──────││
+││⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿││                        ││    Quit,               ││MEM ██░░░░  41%│  │╭──5 pane-3──■╭──7 pane-4──╮││
+││⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿││                        ││}                       ││NET ░░░░░░   8%│  ││            ■│            │││
+││⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿││                        ││                        ││FRM         n/a│  ││ 14x14  @90 ■│ 14x14  @10 │││
+││Click → Visual ││Click → Data Viz        ││Click → Code Explorer   ││Click → Perform│  ││            ││            │││
+│╰───────────────╯╰────────────────────────╯╰────────────────────────╯╰───────────────╯  ││            ││            │││
+│╭Text FX · 3-Up (1/2│╭────────────Activity────────────│╭─Markdown · Streaming… 0%──╮    ││            ││            │││
+││Sample 1 of 3 · 3-U││SEV TIME  COMP  MESSAGE         ││▌                          │    ││            ││            │││
+││1 · None · S1      ││ INFO  00:02   CPU spike detecte││                           │    ││            ││            │││
+││# FX Lab · Determin││                                ││                           │    ││            ││            │││
+││> *"Render truth, n││                                ││                           │    ││            ││            │││
+││2 · FadeIn · S2    ││                                ││                           │    ││            ││            │││
+││## GFM Stress · Led││                                ││                           │    ││            ││            │││
+││1. **Bold** + _ital⋮│                                ⋮│                           │    ││            ││            │││
+││3 · FadeOut · S3   ││                                ││                           │    │╰────────────│╰────────────╯││
+││### Runtime Ledger ││                                ││                           │    └────────────────────────────┘│
+││- [x] Tasks        ││                                ││                           │                                  │
+││                   ││                                ││                           │    ╭Pane Studio─────────────────╮│
+││                   ││                                ││                           │    │Drag docks | Right click mod││
+││drag panes in dashb││Click → Action Timeline         ││Click → Markdown           │    │                            ││
+│╰───────────────────│╰────────────────────────────────│╰───────────────────────────╯    ╰────────────────────────────╯│
+│g:charts c:code e:fx m:md | drag bottom dividers: resize | 1-9:screens | t:theme | q:quit                             │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+ Dashboard [2/45]  Cyberpunk Aurora [h] [cmd] [p] [d]  Mouse: AUTO (alt:ON)     Tab/Shift+Tab: next/prev      0x0 00:00 

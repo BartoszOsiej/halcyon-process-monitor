@@ -1,0 +1,8 @@
+# UBS ignore file for demo showcase scans
+# False-positive hardcoded-secret heuristic on demo fields/tokens.
+src/screens/code_explorer.rs
+src/screens/form_validation.rs
+src/screens/forms_input.rs
+src/screens/theme_studio.rs
+src/screens/widget_gallery.rs
+src/theme.rs

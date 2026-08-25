@@ -1,0 +1,40 @@
+ 1: Tour │ 2: Dash │ 3: Shakes │ 4: Code │ 5: Widgets │ 6: Layout │ 7: Forms │ 8: DataViz │ 9: Files │ 0: Adv           
+╭────────────────────────────────────────────────────Widget Gallery────────────────────────────────────────────────────╮
+│▸ A: Inputs │   B: Display │   C: Status │   D: Data Viz │   E: Navigation │   F: Layout │   G: Utility │   H: Advance│
+│╭TextInput─────╮╭Masked Input─╮╭Command Palette─────────╮╭Log Viewer────────────╮  ┌────────── Pane Studio ──────────┐│
+││o@example.com ││••••••       ││                        ││INFO  boot: FrankenTUI│  │mode:Focus sel:1 tl:0/0 ops:0 sp:││
+││              ││             ││ ╭─ Command Palette ──╮ ││demo started          │  │┃              ││               │││
+││              ││             ││ │>Type to search...  │ ││DEBUG layout: resolved│  │┃ 16x13  @85,4 ││ 17x13  @101,4 │││
+││              ││             ││ │> [App] Quit  Exit …│ ││6 constraints         │  │┃              ││               │││
+││              ││             ││ │  [File] Open File  │ ││WARN  io: slow disk   │  │┃              ││               │││
+│╰──────────────╯╰─────────────╯│ │  [File] Save File  │ ││detected, using cache │  │┃              ││               │││
+│╭TextArea─────────────────────╮│ │  [View] Cycle Theme│ ││INFO  render: diff    │  │┃              ││               │││
+││1  FrankenTUI text area      ││ │  [View] Toggle Per…│ ││cells=512 runs=18     │  │┃              ││               │││
+││2  - Multi-line editing      ││ ╰────────────────────╯ ││bytes=9.6KB           │  │┃              ││               │││
+││3  - Soft wrap enabled       ││                        ││INFO  net: connected  │  │┃              ││               │││
+││4  - Line numbers            │╰────────────────────────╯│to telemetry endpoint │  │┃              ││               │││
+││                             │╭File Picker─────────────╮│ERROR auth: token     │  │┃              ■│               │││
+││                             ││.                       │╰──────────────────────╯  │──────■■■──────────────■■■───────││
+││                             ││> ?? benches            │╭ProgressBar───────────╮  │╭───5 pane-3───■╭───7 pane-4────╮││
+││                             ││  ?? data               ││          0%          │  ││              ■│               │││
+││                             ││  ?? src                ││         25%          │  ││ 16x14  @85,1 ■│ 17x14  @101,1 │││
+││                             ││  ?? tests              ││         50%          │  ││              ││               │││
+││                             ││    .ubsignore          ││         75%          │  ││              ││               │││
+││                             ││    Cargo.toml          ││         100%         │  ││              ││               │││
+││                             ││                        ││                      │  ││              ││               │││
+│╰─────────────────────────────╯│                        ││                      │  ││              ││               │││
+│╭Checkbo╮╭Select╮╭Validation +╮│                        │╰──────────────────────╯  ││              ││               │││
+││[ ] Ena││Select││! Invalid e…│╰────────────────────────╯╭Spinners──────────────╮  ││              ││               │││
+││[x] Syn││Number││ETA  00:59  │╭Notifications───────────╮│⠋ Loading (DOTS)      │  ││              ││               │││
+││( ) Lig││Slider││[?]…        ││                        │╰──────────────────────╯  ││              ││               │││
+││(*) Dar││      ││            ││                        │╭Toast─────────────────╮  ││              ││               │││
+││       ││      ││            ││                        ││┌────────────────────┐│  │╰──────────────│╰───────────────╯││
+││       ││      ││            ││                        │││Success             ││  └─────────────────────────────────┘│
+││       ││      ││            ││                        │││✓ Settings saved suc││                                     │
+││       ││      ││            ││                        ││└────────────────────┘│  ╭Pane Studio──────────────────────╮│
+││       ││      ││            ││                        ││                      │  │Drag docks | Right click mode | W││
+││       ││      ││            ││                        ││                      │  │                                 ││
+│╰───────╯╰──────╯╰────────────╯╰────────────────────────╯╰──────────────────────╯  ╰─────────────────────────────────╯│
+│*.......                                                                                                              │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+ Widget Gallery [5/45] [h] [cmd] [p] [d]  Mouse: AUTO (alt:ON) A11y:HC      Tab/Shift+Tab: next/prev       120x40 00:00 

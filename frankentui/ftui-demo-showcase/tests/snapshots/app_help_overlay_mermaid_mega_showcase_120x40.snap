@@ -1,0 +1,40 @@
+ 1: Tour │ 2: Dash │ 3: Shakes │ 4: Code │ 5: Widgets │ 6: Layout │ 7: Forms │ 8: DataViz │ 9: Files │ 0: Adv           
+╭────────────────────────────────────────────────Mermaid Mega Showcase─────────────────────────────────────────────────╮
+│┌────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐│
+││ Tier:auto Glyph:unicode Render:braille Wrap:wordchar Layout:auto Dir:auto Palette:default Zoom:100% VP:auto Gen:n24││
+││                                                                                                                    ││
+││                                                                                                                    ││
+││                      ╔═════════════════════ ⌨ Keyboard Shortcuts (Esc) ═════════════════════╗                      ││
+│└──────────────────────║ Navigation                                                           ║──────────────────────┘│
+│┌ Flow Basic [default] ║ [Ctrl+K]                 Open command palette                        ║rics ─────────────────┐│
+││                      ║                                                                      ║                      ││
+││                      ║ View                                                                 ║: normal              ││
+││                      ║ [?]                      Toggle this help overlay                    ║le: Flow Basic        ││
+││                      ║ [Esc]                    Dismiss top overlay                         ║tte: default          ││
+││                      ║ [m / F6]                 Toggle mouse capture                        ║: -                   ││
+││                      ║ [Ctrl+P]                 Toggle performance HUD                      ║h: a0/l0/r0           ││
+││                      ║ [Ctrl+I]                 Toggle evidence inspector                   ║auto                  ││
+││                      ║ [Shift+A]                Toggle A11y panel                           ║                      ││
+││                      ║ [F12]                    Toggle debug overlay                        ║e: -                  ││
+││                      ║                                                                      ║ut: -                 ││
+││                      ║ Editing                                                              ║er: -                 ││
+││                      ║ [Ctrl+Z]                 Undo                                        ║                      ││
+││                      ║ [Ctrl+Y / Ctrl+Shift+Z]  Redo                                        ║                      ││
+││                      ║                                                                      ║e: 0/0                ││
+││                      ║ Global                                                               ║: MISS                ││
+││                      ║ [Ctrl+T]                 Cycle color theme                           ║                      ││
+││                      ║ [H/M/L]                  A11y: high contrast, reduced motion, large  ║                      ││
+││                      ║ [Ctrl+1..6]              Palette: filter by category                 ║                      ││
+││                      ║ [Ctrl+0]                 Palette: clear category filter              ║                      ││
+││                      ║ [Ctrl+F]                 Palette: toggle favorite                    ║                      ││
+││                      ║ [Ctrl+Shift+F]           Palette: favorites only                     ║                      ││
+││                      ║ [Ctrl+C]                 Quit application                            ║                      ││
+││                      ║ Categories: Tour Core Visuals Interact Text Systems                  ║                      ││
+││                      ║                                                                      ║                      ││
+││                      ╚═══════════════════════Press ? or Esc to close════════════════════════╝                      ││
+││                                                                                        ││                          ││
+│└────────────────────────────────────────────────────────────────────────────────────────┘└──────────────────────────┘│
+│NORMAL  j/k:sample u/U:nodes x/X:density t:tier p:palette H/J/K/L:pan []/{}:size o:reset /:filter Ctrl+U:clear ?:help │
+│                                                                                                                      │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+ Mermaid Mega Showcase [17/45] [H] [cmd] [p] [d]  Mouse: AUTO (alt:ON)      Tab/Shift+Tab: next/prev       120x40 00:00 

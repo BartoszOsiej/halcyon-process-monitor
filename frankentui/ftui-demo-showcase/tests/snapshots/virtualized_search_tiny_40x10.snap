@@ -1,0 +1,10 @@
+╭Search (/ to focus, Esc to clear)─────╮
+│Type to search...                     │
+╰──────────────────────────────────────╯
+╭───Items (10000 total)────╮╭──Stats───╮
+│[00000] Configuration :: C││Total:    │
+│[00001] Authentication :: ││Matches:  │
+│[00002] Database :: CoreSe││Selected: │
+│[00003] Network :: CoreSer││Query:    │
+│[00004] FileSystem :: Core││Top score:│
+╰──────────────────────────╯╰──────────╯

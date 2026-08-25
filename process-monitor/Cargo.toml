@@ -1,7 +1,7 @@
 [package]
 repository = "https://github.com/BartoszOsiej/halcyon-process-monitor"
 name = "process-monitor"
-version = "0.4.0"
+version = "0.5.0"
 edition = "2021"
 description = "eBPF-based real-time process and file operation monitor with TUI"
 license = "MIT"
@@ -19,14 +19,23 @@ clap = { version = "4", features = ["derive"] }
 colored = "2"
 crossterm = "0.29.0"
 libc = "0.2"
-ratatui = { version = "0.30", features = ["all-widgets"] }
 serde_json = "1"
+serde = { version = "1", features = ["derive"] }
+
+# FrankenTUI (path dependencies — full kernel)
+ftui = { path = "../frankentui/ftui" }
+ftui-core = { path = "../frankentui/ftui-core" }
+ftui-render = { path = "../frankentui/ftui-render" }
+ftui-runtime = { path = "../frankentui/ftui-runtime" }
+ftui-layout = { path = "../frankentui/ftui-layout" }
+ftui-style = { path = "../frankentui/ftui-style" }
+ftui-text = { path = "../frankentui/ftui-text" }
+ftui-widgets = { path = "../frankentui/ftui-widgets" }
 
 # Web server (optional, enabled with --features web)
 axum = { version = "0.8", features = ["ws"], optional = true }
 tokio = { version = "1", features = ["full"], optional = true }
 tower-http = { version = "0.6", features = ["cors", "fs"], optional = true }
-serde = { version = "1", features = ["derive"] }
 prometheus-client = { version = "0.22", optional = true }
 futures = { version = "0.3", optional = true }
 tokio-util = { version = "0.7", optional = true }

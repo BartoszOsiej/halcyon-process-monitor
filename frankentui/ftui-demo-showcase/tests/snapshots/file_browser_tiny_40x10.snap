@@ -1,0 +1,10 @@
+╭─────Project Tree──────╮  ╭Preview: ??╮
+│?? my-app              │  │Directory  │
+│├── ?? src             │  │Path: /home│
+││   ├── ?? main.rs     │  │Preview:   │
+││   ├── ?? lib.rs      │  │Directory c│
+││   └── ?? models      │  │  ?? .git  │
+││       ├── ?? user.rs │  │  ?? assets│
+││       └── ?? post.rs │  │  ?? docs  │
+╰───────────────────────╯  ╰───────────╯
+?? .git  | h/l: panels | j/k: navigate |

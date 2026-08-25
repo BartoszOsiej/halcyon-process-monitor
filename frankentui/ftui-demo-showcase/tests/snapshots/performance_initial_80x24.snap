@@ -1,0 +1,24 @@
+╭──────Virtualized List (10000 items)───────╮╭────────Performance Stats────────╮
+│[    0]  INFO server::http       Event #000││Total items:  10000              │
+│[    1] DEBUG db::pool           Event #000││Selected:     1 / 10000          │
+│[    2]  WARN auth::jwt          Event #000││Scroll:       0                  │
+│[    3] ERROR cache::redis       Event #000││Viewport:     21 rows            │
+│[    4] TRACE queue::worker      Event #000││Visible:      0..21              │
+│[    5]  INFO api::handler       Event #000││Progress:     0.0%               │
+│[    6] DEBUG core::runtime      Event #000││Tick:         0                  │
+│[    7]  WARN server::http       Event #000││                                 │
+│[    8] ERROR db::pool           Event #000││Only visible rows are rendered.  │
+│[    9] TRACE auth::jwt          Event #000││Rendering 21 of 10000 items.     │
+│[   10]  INFO cache::redis       Event #000││░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  │
+│[   11] DEBUG queue::worker      Event #000││                                 │
+│[   12]  WARN api::handler       Event #000││                                 │
+│[   13] ERROR core::runtime      Event #000││                                 │
+│[   14] TRACE server::http       Event #000││                                 │
+│[   15]  INFO db::pool           Event #000││                                 │
+│[   16] DEBUG auth::jwt          Event #000││                                 │
+│[   17]  WARN cache::redis       Event #000││                                 │
+│[   18] ERROR queue::worker      Event #000││                                 │
+│[   19] TRACE api::handler       Event #000││                                 │
+│[   20]  INFO core::runtime      Event #000││                                 │
+╰───────────────────────────────────────────╯╰─────────────────────────────────╯
+Item 1/10000 | j/k: scroll | Ctrl+D/U: page | g/G: jump                         

@@ -1,0 +1,40 @@
+╭────────────────────────────────────────────────────────Search────────────────────────────────────────────────────────╮
+│Query:    Search in editor (Ctrl+F)                                                                   0 matches       │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+                                                                                                                        
+╭──────────────────────────Editor──────────────────────────╮ ╭─────────────────────────Preview─────────────────────────╮
+│ 1  # Live Markdown Editor                                │ │Live Markdown Editor                                     │
+│ 2                                                        │ │                                                         │
+│ 3  Write Markdown on the left, preview on the right.     │ │Write Markdown on the left, preview on the right.        │
+│ 4                                                        │ │                                                         │
+│ 5  ## Goals                                              │ │Goals                                                    │
+│ 6                                                        │ │• Split view editor + preview                            │
+│ 7  - Split view editor + preview                         │ │• Live updates without flicker                           │
+│ 8  - Live updates without flicker                        │ │• Search with highlighted matches                        │
+│ 9  - Search with highlighted matches                     │ │• Diff mode: raw vs rendered width                       │
+│10  - Diff mode: raw vs rendered width                    │ │                                                         │
+│11                                                        │ │Notes                                                    │
+│12  ## Notes                                              │ │                                                         │
+│13                                                        │ │Inline math: E = mc²                                     │
+│14  Inline math: $E = mc^2$                               │ │                                                         │
+│15                                                        │ │─── rust ───                                             │
+│16  ```rust                                               │ │  fn render(frame: &mut Frame) {                         │
+│17  fn render(frame: &mut Frame) {                        │ │      // Draw widgets then diff                          │
+│18      // Draw widgets then diff                         │ │  }                                                      │
+│19  }                                                     │ │                                                         │
+│20  ```                                                   │ │┌──────────────┬────────┐                                │
+│21                                                        │ ││ Feature      │ Status │                                │
+│22  | Feature | Status |                                  │ │├──────────────┼────────┤                                │
+│23  | --- | --- |                                         │ ││ Live preview │ on     │                                │
+│24  | Live preview | on |                                 │ ││ Search       │ on     │                                │
+│25  | Search | on |                                       │ ││ Diff mode    │ Ctrl+D │                                │
+│26  | Diff mode | Ctrl+D |                                │ │└──────────────┴────────┘                                │
+│27                                                        │ │                                                         │
+│                                                          │ │                                                         │
+│                                                          │ │                                                         │
+│                                                          │ │                                                         │
+│                                                          │ │                                                         │
+│                                                          │ │                                                         │
+│                                                          │ │                                                         │
+│                                                          │ │                                                         │
+╰──────────────────────────────────────────────────────────╯ ╰─────────────────────────────────────────────────────────╯
