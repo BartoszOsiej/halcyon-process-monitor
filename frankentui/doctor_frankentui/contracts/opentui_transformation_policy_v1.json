@@ -1,0 +1,378 @@
+{
+  "policy_id": "opentui-transform-policy-matrix",
+  "schema_version": "transform-policy-v1",
+  "policy_version": "2026-02-25",
+  "categories": [
+    {
+      "category_id": "state",
+      "description": "State ownership, transitions, and command dispatch semantics."
+    },
+    {
+      "category_id": "layout",
+      "description": "Spatial composition rules and viewport geometry constraints."
+    },
+    {
+      "category_id": "style",
+      "description": "Visual style tokens, attributes, and theming surfaces."
+    },
+    {
+      "category_id": "effects",
+      "description": "Asynchronous effects, subprocess work, and scheduling behavior."
+    },
+    {
+      "category_id": "accessibility",
+      "description": "Keyboard flow, focus semantics, and assistive metadata."
+    },
+    {
+      "category_id": "terminal_capability",
+      "description": "Terminal feature negotiation and capability-dependent behavior."
+    }
+  ],
+  "construct_catalog": [
+    {
+      "construct_signature": "a11y.focus-order",
+      "category_id": "accessibility",
+      "summary": "Deterministic keyboard focus progression across interactive regions."
+    },
+    {
+      "construct_signature": "a11y.keyboard-shortcut-hint",
+      "category_id": "accessibility",
+      "summary": "Human-readable shortcut hint surfaces for command discoverability."
+    },
+    {
+      "construct_signature": "a11y.screen-reader-label",
+      "category_id": "accessibility",
+      "summary": "Screen-reader labels and semantic role annotations."
+    },
+    {
+      "construct_signature": "effects.interval-tick",
+      "category_id": "effects",
+      "summary": "Periodic tick scheduling with deterministic cadence controls."
+    },
+    {
+      "construct_signature": "effects.process-spawn",
+      "category_id": "effects",
+      "summary": "External subprocess spawning and IPC side effects."
+    },
+    {
+      "construct_signature": "effects.promise-completion",
+      "category_id": "effects",
+      "summary": "Future/promise completion callbacks and state update delivery."
+    },
+    {
+      "construct_signature": "layout.absolute-overlay",
+      "category_id": "layout",
+      "summary": "Absolute-position overlay composition on top of base content."
+    },
+    {
+      "construct_signature": "layout.flex-column",
+      "category_id": "layout",
+      "summary": "Column-direction flex layout with grow/shrink constraints."
+    },
+    {
+      "construct_signature": "layout.flex-row",
+      "category_id": "layout",
+      "summary": "Row-direction flex layout with deterministic packing rules."
+    },
+    {
+      "construct_signature": "layout.grid",
+      "category_id": "layout",
+      "summary": "Grid-template layout with fixed/fractional track semantics."
+    },
+    {
+      "construct_signature": "state.async-command-dispatch",
+      "category_id": "state",
+      "summary": "State update dispatch triggered by async command completions."
+    },
+    {
+      "construct_signature": "state.component-local-state",
+      "category_id": "state",
+      "summary": "Component-local mutable state with deterministic reducers."
+    },
+    {
+      "construct_signature": "state.derived-selector",
+      "category_id": "state",
+      "summary": "Memoized derived state selectors preserving dependency semantics."
+    },
+    {
+      "construct_signature": "style.text-attributes",
+      "category_id": "style",
+      "summary": "Bold/italic/underline/reverse and related text attribute semantics."
+    },
+    {
+      "construct_signature": "style.theme-variant",
+      "category_id": "style",
+      "summary": "Theme variant selection driven by capability and profile state."
+    },
+    {
+      "construct_signature": "style.token-color",
+      "category_id": "style",
+      "summary": "Named semantic color token mapping for UI states."
+    },
+    {
+      "construct_signature": "term.alternate-screen",
+      "category_id": "terminal_capability",
+      "summary": "Alt-screen mode transitions and restoration semantics."
+    },
+    {
+      "construct_signature": "term.mouse-tracking",
+      "category_id": "terminal_capability",
+      "summary": "Mouse event enablement and decode path for click/drag/scroll."
+    },
+    {
+      "construct_signature": "term.truecolor",
+      "category_id": "terminal_capability",
+      "summary": "24-bit color capability usage with graceful degradations."
+    },
+    {
+      "construct_signature": "term.unicode-grapheme-width",
+      "category_id": "terminal_capability",
+      "summary": "Unicode grapheme cluster width and cursor math semantics."
+    }
+  ],
+  "policy_cells": [
+    {
+      "construct_signature": "a11y.focus-order",
+      "handling_class": "exact",
+      "rationale": "FrankenTUI runtime and widget focus APIs can preserve source focus traversal semantics exactly.",
+      "risk_level": "low",
+      "fallback_behavior": "If focus graph cannot be inferred statically, derive from render tree order and emit explicit focus map artifact.",
+      "user_messaging": "Focus ordering preserved; if inferred, migration report includes explicit focus map for review.",
+      "planner_strategy": "direct-focus-graph-lowering",
+      "semantic_clause_links": ["ST-001", "SE-001", "IE-001"],
+      "certification_evidence": ["focus_trace_replay", "keyboard_navigation_snapshot"]
+    },
+    {
+      "construct_signature": "a11y.keyboard-shortcut-hint",
+      "handling_class": "approximate",
+      "rationale": "Shortcut hints can be preserved semantically, with formatting approximations when source uses unsupported rich glyph styling.",
+      "risk_level": "medium",
+      "fallback_behavior": "Render plain-text hints with deterministic ordering and include unsupported style tokens in migration warnings.",
+      "user_messaging": "Keyboard hints preserved with possible style simplification; behavior remains unchanged.",
+      "planner_strategy": "hint-surface-normalization",
+      "semantic_clause_links": ["SE-001", "VT-002", "IE-001"],
+      "certification_evidence": ["hint_surface_diff", "shortcut_invocation_trace"]
+    },
+    {
+      "construct_signature": "a11y.screen-reader-label",
+      "handling_class": "extend_ftui",
+      "rationale": "Core ftui metadata channels need extension points to carry source semantic labels through adapters and reports.",
+      "risk_level": "high",
+      "fallback_behavior": "Until extension lands, emit deterministic metadata sidecar consumed by assistive adapters.",
+      "user_messaging": "Accessibility labels retained via metadata sidecar while native label channels are being extended.",
+      "planner_strategy": "metadata-sidecar-with-native-upgrade-path",
+      "semantic_clause_links": ["SE-001", "IE-001", "IE-002"],
+      "certification_evidence": ["a11y_metadata_manifest", "adapter_replay_trace"]
+    },
+    {
+      "construct_signature": "effects.interval-tick",
+      "handling_class": "exact",
+      "rationale": "Runtime subscription/tick primitives can map periodic scheduling semantics directly with deterministic clock policy.",
+      "risk_level": "medium",
+      "fallback_behavior": "If exact cadence is unavailable, clamp to nearest deterministic interval and annotate bounds in report.",
+      "user_messaging": "Tick cadence preserved within declared deterministic bounds.",
+      "planner_strategy": "subscription-tick-lowering",
+      "semantic_clause_links": ["EO-001", "EO-002", "TB-001"],
+      "certification_evidence": ["tick_order_trace", "cadence_bounds_report"]
+    },
+    {
+      "construct_signature": "effects.process-spawn",
+      "handling_class": "unsupported",
+      "rationale": "Untrusted subprocess spawning exceeds default migration trust envelope and must remain explicit user opt-in.",
+      "risk_level": "critical",
+      "fallback_behavior": "Generate manual action item plus stub command adapter that fails closed unless user enables capability.",
+      "user_messaging": "Process spawning is not auto-migrated; a secure manual integration step is required.",
+      "planner_strategy": "fail-closed-manual-bridge",
+      "semantic_clause_links": ["SE-001", "IE-002", "TB-002"],
+      "certification_evidence": ["unsupported_construct_report", "manual_gate_checklist"]
+    },
+    {
+      "construct_signature": "effects.promise-completion",
+      "handling_class": "exact",
+      "rationale": "Cmd completion and message dispatch model aligns with promise completion semantics under causal ordering constraints.",
+      "risk_level": "medium",
+      "fallback_behavior": "Wrap completion handlers with deterministic ordering queue when source emits same-cycle races.",
+      "user_messaging": "Async completion behavior preserved; deterministic queueing is enabled when needed.",
+      "planner_strategy": "cmd-completion-rewrite",
+      "semantic_clause_links": ["EO-001", "EO-002", "ST-001"],
+      "certification_evidence": ["async_completion_trace", "state_transition_diff"]
+    },
+    {
+      "construct_signature": "layout.absolute-overlay",
+      "handling_class": "extend_ftui",
+      "rationale": "Overlay z-order and clipping semantics require extension hooks in compositor/scissor APIs for full fidelity.",
+      "risk_level": "high",
+      "fallback_behavior": "Degrade to deterministic stacked panes with explicit z-order warnings in generated report.",
+      "user_messaging": "Overlay behavior retained via compatibility layer with an explicit note on potential clipping differences.",
+      "planner_strategy": "overlay-extension-or-stacked-pane-fallback",
+      "semantic_clause_links": ["ST-001", "VT-001", "IE-002"],
+      "certification_evidence": ["overlay_snapshot_suite", "clip_region_diff_report"]
+    },
+    {
+      "construct_signature": "layout.flex-column",
+      "handling_class": "exact",
+      "rationale": "ftui-layout flex solver directly supports column axis constraints and deterministic track sizing.",
+      "risk_level": "low",
+      "fallback_behavior": "If fractional constraints exceed solver limits, use normalized ratios with exact sum guarantees.",
+      "user_messaging": "Column layout migrated exactly with deterministic size normalization where required.",
+      "planner_strategy": "direct-flex-column-lowering",
+      "semantic_clause_links": ["ST-001", "VT-001", "TB-001"],
+      "certification_evidence": ["layout_solver_snapshot", "resize_replay_trace"]
+    },
+    {
+      "construct_signature": "layout.flex-row",
+      "handling_class": "exact",
+      "rationale": "Row flex constraints map one-to-one to existing ftui-layout capabilities.",
+      "risk_level": "low",
+      "fallback_behavior": "Normalize conflicting min/max constraints deterministically and document reconciliation in report.",
+      "user_messaging": "Row layout migrated exactly with deterministic constraint reconciliation when needed.",
+      "planner_strategy": "direct-flex-row-lowering",
+      "semantic_clause_links": ["ST-001", "VT-001", "TB-001"],
+      "certification_evidence": ["layout_solver_snapshot", "constraint_reconciliation_log"]
+    },
+    {
+      "construct_signature": "layout.grid",
+      "handling_class": "approximate",
+      "rationale": "Grid semantics are largely representable, but rare implicit auto-placement variants require bounded approximation.",
+      "risk_level": "medium",
+      "fallback_behavior": "Switch to explicit placement plan generated from static analysis for ambiguous auto-placement cases.",
+      "user_messaging": "Grid behavior preserved with explicit placement synthesis for ambiguous source patterns.",
+      "planner_strategy": "grid-explicit-placement-synthesis",
+      "semantic_clause_links": ["ST-001", "VT-002", "IE-001"],
+      "certification_evidence": ["grid_placement_plan", "viewport_diff_report"]
+    },
+    {
+      "construct_signature": "state.async-command-dispatch",
+      "handling_class": "approximate",
+      "rationale": "Dispatch semantics are preserved, but source microtask ordering can require explicit queue normalization.",
+      "risk_level": "high",
+      "fallback_behavior": "Inject deterministic command queue barrier for equivalent happens-before guarantees.",
+      "user_messaging": "Async dispatch preserved with deterministic ordering barrier where source behavior is ambiguous.",
+      "planner_strategy": "queue-normalized-dispatch",
+      "semantic_clause_links": ["ST-001", "EO-001", "TB-001"],
+      "certification_evidence": ["dispatch_order_trace", "queue_barrier_log"]
+    },
+    {
+      "construct_signature": "state.component-local-state",
+      "handling_class": "exact",
+      "rationale": "Component-local mutable state maps directly to model/stateful widget patterns.",
+      "risk_level": "low",
+      "fallback_behavior": "If state shape inference is incomplete, emit explicit typed state shim preserving observable transitions.",
+      "user_messaging": "Component-local state migrated exactly.",
+      "planner_strategy": "direct-model-state-lowering",
+      "semantic_clause_links": ["ST-001", "ST-002", "TB-001"],
+      "certification_evidence": ["state_transition_diff", "state_shape_manifest"]
+    },
+    {
+      "construct_signature": "state.derived-selector",
+      "handling_class": "exact",
+      "rationale": "Deterministic memoization semantics align with derived selector computation in ftui runtime state graph.",
+      "risk_level": "low",
+      "fallback_behavior": "Fallback to recompute-on-update with equivalence guard if dependency graph extraction is partial.",
+      "user_messaging": "Derived selector semantics preserved; recompute fallback only used if dependency extraction is incomplete.",
+      "planner_strategy": "selector-graph-lowering",
+      "semantic_clause_links": ["ST-001", "ST-002", "IE-001"],
+      "certification_evidence": ["selector_dependency_graph", "derived_state_consistency_report"]
+    },
+    {
+      "construct_signature": "style.text-attributes",
+      "handling_class": "exact",
+      "rationale": "Core text attributes are natively supported in ftui style/presenter stack.",
+      "risk_level": "low",
+      "fallback_behavior": "If terminal lacks an attribute, apply deterministic nearest-safe style downgrade.",
+      "user_messaging": "Text attribute semantics migrated exactly with capability-aware downgrades when terminal support is limited.",
+      "planner_strategy": "direct-style-attribute-lowering",
+      "semantic_clause_links": ["VT-001", "VT-002", "SE-001"],
+      "certification_evidence": ["style_snapshot_diff", "terminal_capability_downgrade_log"]
+    },
+    {
+      "construct_signature": "style.theme-variant",
+      "handling_class": "extend_ftui",
+      "rationale": "Source theme-variant switching may need richer variant provenance than current theme APIs expose.",
+      "risk_level": "high",
+      "fallback_behavior": "Generate deterministic variant mapping table and inject compatibility adapter until native extension lands.",
+      "user_messaging": "Theme variants retained via compatibility mapping while native variant provenance support is extended.",
+      "planner_strategy": "variant-mapping-adapter",
+      "semantic_clause_links": ["VT-002", "IE-001", "IE-002"],
+      "certification_evidence": ["variant_mapping_table", "theme_switch_replay"]
+    },
+    {
+      "construct_signature": "style.token-color",
+      "handling_class": "approximate",
+      "rationale": "Semantic token colors map cleanly, but exact palette fidelity can vary by terminal capability.",
+      "risk_level": "medium",
+      "fallback_behavior": "Use deterministic palette quantization with delta report when capability is below source requirement.",
+      "user_messaging": "Color semantics preserved with deterministic palette quantization on limited terminals.",
+      "planner_strategy": "token-palette-quantization",
+      "semantic_clause_links": ["VT-001", "VT-002", "IE-001"],
+      "certification_evidence": ["palette_delta_report", "semantic_color_snapshot"]
+    },
+    {
+      "construct_signature": "term.alternate-screen",
+      "handling_class": "exact",
+      "rationale": "Alt-screen transitions are first-class in ftui screen-mode lifecycle management.",
+      "risk_level": "low",
+      "fallback_behavior": "If environment blocks alt-screen, run inline mode shim and emit explicit restoration guarantees.",
+      "user_messaging": "Screen-mode semantics preserved; inline shim enabled only where alt-screen is unavailable.",
+      "planner_strategy": "screen-mode-lifecycle-lowering",
+      "semantic_clause_links": ["SE-001", "TB-001", "TB-002"],
+      "certification_evidence": ["screen_mode_transition_trace", "cleanup_restoration_check"]
+    },
+    {
+      "construct_signature": "term.mouse-tracking",
+      "handling_class": "exact",
+      "rationale": "Mouse capture/event decoding maps directly to ftui-core event parsing and capability toggles.",
+      "risk_level": "medium",
+      "fallback_behavior": "If unsupported by terminal, disable mouse paths deterministically and surface keyboard alternatives.",
+      "user_messaging": "Mouse interaction preserved where terminal supports it; keyboard fallback guidance provided otherwise.",
+      "planner_strategy": "capability-gated-mouse-lowering",
+      "semantic_clause_links": ["EO-001", "SE-001", "IE-001"],
+      "certification_evidence": ["mouse_event_trace", "capability_gate_report"]
+    },
+    {
+      "construct_signature": "term.truecolor",
+      "handling_class": "approximate",
+      "rationale": "Truecolor behavior is capability dependent and may require quantized fallback on lower-color terminals.",
+      "risk_level": "medium",
+      "fallback_behavior": "Quantize to 256-color palette with deterministic nearest-match and publish color delta metrics.",
+      "user_messaging": "Truecolor behavior preserved when available; deterministic palette fallback applied on limited terminals.",
+      "planner_strategy": "truecolor-capability-negotiation",
+      "semantic_clause_links": ["VT-002", "IE-001", "TB-001"],
+      "certification_evidence": ["color_capability_probe", "palette_quantization_metrics"]
+    },
+    {
+      "construct_signature": "term.unicode-grapheme-width",
+      "handling_class": "exact",
+      "rationale": "ftui-text width and grapheme handling already enforce deterministic cursor and wrapping semantics.",
+      "risk_level": "low",
+      "fallback_behavior": "On ambiguous code points, use ftui canonical width table and emit discrepancy audit entry.",
+      "user_messaging": "Unicode grapheme width semantics preserved with deterministic canonicalization for ambiguous code points.",
+      "planner_strategy": "canonical-grapheme-width-lowering",
+      "semantic_clause_links": ["VT-001", "ST-001", "TB-002"],
+      "certification_evidence": ["grapheme_width_conformance", "cursor_position_replay"]
+    }
+  ],
+  "planner_projection": {
+    "required_fields": [
+      "construct_signature",
+      "category_id",
+      "handling_class",
+      "planner_strategy",
+      "fallback_behavior",
+      "risk_level"
+    ],
+    "deterministic_sort_key": "construct_signature"
+  },
+  "certification_projection": {
+    "required_fields": [
+      "construct_signature",
+      "handling_class",
+      "risk_level",
+      "semantic_clause_links",
+      "certification_evidence",
+      "user_messaging"
+    ],
+    "required_risk_levels": ["low", "medium", "high", "critical"],
+    "requires_clause_traceability": true
+  }
+}

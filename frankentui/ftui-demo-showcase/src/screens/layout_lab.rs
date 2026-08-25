@@ -1,0 +1,4292 @@
+#![forbid(unsafe_code)]
+
+//! Layout Laboratory screen — interactive constraint solver and layout widget demos.
+
+use std::cell::Cell;
+use std::collections::BTreeSet;
+
+use ftui_core::event::{
+    Event, KeyCode, KeyEventKind, Modifiers, MouseButton, MouseEvent, MouseEventKind,
+};
+use ftui_core::geometry::{Rect, Sides};
+use ftui_layout::{
+    Alignment as FlexAlignment, Constraint, Flex, PANE_EDGE_GRIP_INSET_CELLS,
+    PANE_MAGNETIC_FIELD_CELLS, PaneId, PaneInertialThrow, PaneInteractionTimeline,
+    PaneLayoutIntelligenceMode, PaneMotionVector, PaneNodeKind, PanePointerPosition,
+    PanePressureSnapProfile, PaneResizeTarget, PaneSelectionState, PaneTree, WorkspaceMetadata,
+    WorkspaceSnapshot, decode_workspace_snapshot_json, to_canonical_workspace_snapshot_json,
+};
+use ftui_render::cell::{Cell as RenderCell, PackedRgba};
+use ftui_render::drawing::Draw;
+use ftui_render::frame::Frame;
+use ftui_runtime::{Cmd, PaneTerminalAdapter, PaneTerminalAdapterConfig};
+use ftui_style::{Style, StyleFlags};
+use ftui_text::{display_width, truncate_to_width};
+use ftui_widgets::Widget;
+use ftui_widgets::align::{Align, VerticalAlignment};
+use ftui_widgets::block::{Alignment, Block};
+use ftui_widgets::borders::{BorderType, Borders};
+use ftui_widgets::columns::Columns;
+use ftui_widgets::group::Group;
+use ftui_widgets::padding::Padding;
+use ftui_widgets::paragraph::Paragraph;
+use ftui_widgets::rule::Rule;
+
+use super::{HelpEntry, Screen};
+use crate::pane_interaction::{
+    ActivePaneGesture, PaneDragSemanticsContext, PaneDragSemanticsInput, PaneGestureArmState,
+    PaneGestureMode, PanePreviewState, PaneSplitterPrimitive, PaneSplitterVisualState,
+    PaneTimelineApplyState, PaneTimelineStatus, apply_drag_semantics,
+    apply_operations_with_timeline, apply_resize_operations_with_timeline, arm_active_gesture,
+    collect_splitter_primitives, default_pane_layout_tree, pointer_down_context_at,
+    rollback_timeline_to_cursor, update_selection_for_pointer_down,
+};
+use crate::theme;
+
+/// The five layout presets available.
+const PRESET_COUNT: usize = 5;
+
+/// Names for each preset.
+const PRESET_NAMES: [&str; PRESET_COUNT] = [
+    "Flex Vertical",
+    "Flex Horizontal",
+    "Grid 3x3",
+    "Nested Flex",
+    "Real-World Layout",
+];
+
+/// Whether the flex direction is vertical or horizontal.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Direction {
+    Vertical,
+    Horizontal,
+}
+
+impl Direction {
+    fn label(self) -> &'static str {
+        match self {
+            Direction::Vertical => "Vertical",
+            Direction::Horizontal => "Horizontal",
+        }
+    }
+
+    fn toggle(self) -> Self {
+        match self {
+            Direction::Vertical => Direction::Horizontal,
+            Direction::Horizontal => Direction::Vertical,
+        }
+    }
+}
+
+/// Fallback snap pressure for adapter-driven splitter resize before the
+/// terminal adapter has derived motion (e.g. the very first drag sample).
+/// Mirrors the neutral profile used by the `ftui-runtime` integration tests.
+const NEUTRAL_RESIZE_PRESSURE: PanePressureSnapProfile = PanePressureSnapProfile {
+    strength_bps: 5_000,
+    hysteresis_bps: 100,
+};
+
+/// Layout Lab screen state.
+pub struct LayoutLab {
+    /// Current preset index (0-4).
+    current_preset: usize,
+    /// Which constraint is selected for editing (within presets 0/1).
+    selected_constraint: usize,
+    /// Flex direction for presets 0/1.
+    direction: Direction,
+    /// Alignment mode index (0-4).
+    alignment_idx: usize,
+    /// Gap between items.
+    gap: u16,
+    /// Margin around layout.
+    margin: u16,
+    /// Padding amount for Padding widget demo.
+    padding_amount: u16,
+    /// Align demo position index (0-8 for 9 positions).
+    align_pos: usize,
+    /// Mutable preset constraints (one vector per preset).
+    preset_constraints_by_preset: Vec<Vec<Constraint>>,
+    /// Show debug overlay.
+    show_debug: bool,
+    /// Cached preview area for mouse hit-testing.
+    layout_preview: Cell<Rect>,
+    /// Cached controls area for mouse hit-testing.
+    layout_controls: Cell<Rect>,
+    /// Cached pane preview area for hit-testing.
+    pane_preview: Cell<Rect>,
+    /// Interactive pane workspace tree.
+    pane_tree: PaneTree,
+    /// Persistent interaction timeline for undo/redo/replay.
+    pane_timeline: PaneInteractionTimeline,
+    /// Multi-pane selection state (shift-click cluster).
+    pane_selection: PaneSelectionState,
+    /// Active pointer gesture state.
+    pane_active_gesture: Cell<Option<ActivePaneGesture>>,
+    /// Timeline cursor at gesture start for rollback on cancel.
+    pane_gesture_timeline_cursor_start: Option<usize>,
+    /// Last applied live-reflow signature for dedupe.
+    pane_live_reflow_signature: Option<u64>,
+    /// Current docking ghost/alternatives preview.
+    pane_preview_state: PanePreviewState,
+    /// Monotonic operation id sequence.
+    pane_next_operation_id: u64,
+    /// Workspace generation counter.
+    pane_workspace_generation: u64,
+    /// Last workspace generation acknowledged as durably saved.
+    pane_last_saved_workspace_generation: u64,
+    /// Latest recovery decision that should be visible to the user.
+    pane_workspace_recovery_notice: Option<PaneWorkspaceRecoveryNotice>,
+    /// Monotonic semantic input sequence.
+    pane_sequence: u64,
+    /// Last pointer position while dragging.
+    pane_last_pointer: Option<PanePointerPosition>,
+    /// Last computed motion vector.
+    pane_last_motion: PaneMotionVector,
+    /// Direction-change count in active gesture.
+    pane_drag_direction_changes: u16,
+    /// Last delta signs for direction-change detection.
+    pane_last_delta_sign: Option<(i8, i8)>,
+    /// Last number of operations applied from one interaction sample.
+    pane_last_applied_ops: usize,
+    /// Last splitter primitive count (render diagnostics).
+    pane_splitter_total: Cell<u16>,
+    /// Last hovered splitter count (render diagnostics).
+    pane_splitter_hovered: Cell<u16>,
+    /// Last active splitter count (render diagnostics).
+    pane_splitter_active: Cell<u16>,
+    /// Deterministic splitter render work units (cell-area proxy).
+    pane_splitter_work_units: Cell<u32>,
+    /// Latest pointer position used for splitter hover affordances.
+    pane_hover_pointer: Cell<Option<PanePointerPosition>>,
+    /// Current adaptive intelligence mode.
+    pane_intelligence_mode: PaneLayoutIntelligenceMode,
+    /// Adjustable magnetic docking attraction radius.
+    pane_magnetic_field_cells: f64,
+    /// Terminal input adapter owning the splitter drag-resize state machine.
+    ///
+    /// Single-pane splitter resize gestures are translated through this adapter
+    /// into `PaneDragResizeTransition` values that the layout bridge
+    /// (`PaneTree::operations_for_transition`) turns into live tree mutations —
+    /// the same production path proven by the `ftui-runtime` integration tests,
+    /// now driving the demo instead of locally synthesized motion.
+    pane_terminal_adapter: PaneTerminalAdapter,
+    /// Splitter target the terminal adapter armed on the active pointer-down.
+    /// `Some` only while an adapter-driven single-pane resize is in flight; its
+    /// presence also routes drag samples to the adapter path.
+    pane_resize_target: Option<PaneResizeTarget>,
+}
+
+/// User-visible summary of the latest pane workspace recovery decision.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PaneWorkspaceRecoveryNotice {
+    decision: &'static str,
+    source_version: String,
+    source_checksum: String,
+    preserved_path: Option<String>,
+    detail: String,
+}
+
+impl PaneWorkspaceRecoveryNotice {
+    #[must_use]
+    pub fn fallback_default(
+        source_version: String,
+        source_checksum: String,
+        preserved_path: Option<String>,
+        detail: String,
+    ) -> Self {
+        Self {
+            decision: "fallback_default",
+            source_version,
+            source_checksum,
+            preserved_path,
+            detail,
+        }
+    }
+
+    #[must_use]
+    pub fn summary(&self) -> String {
+        let evidence = if self.preserved_path.is_some() {
+            "saved"
+        } else {
+            "missing"
+        };
+        format!(
+            "Recovery: {} src:{} sum:{} {evidence}",
+            self.decision, self.source_version, self.source_checksum
+        )
+    }
+
+    #[must_use]
+    pub fn detail(&self) -> &str {
+        &self.detail
+    }
+
+    #[must_use]
+    pub fn preserved_path(&self) -> Option<&str> {
+        self.preserved_path.as_deref()
+    }
+}
+
+/// The 5 alignment modes.
+const ALIGNMENTS: [FlexAlignment; 5] = [
+    FlexAlignment::Start,
+    FlexAlignment::Center,
+    FlexAlignment::End,
+    FlexAlignment::SpaceBetween,
+    FlexAlignment::SpaceAround,
+];
+
+const ALIGNMENT_NAMES: [&str; 5] = ["Start", "Center", "End", "SpaceBetween", "SpaceAround"];
+
+/// Colors for layout regions (theme-aware accents).
+fn region_colors() -> [PackedRgba; 6] {
+    [
+        theme::accent::ACCENT_1.into(),
+        theme::accent::ACCENT_2.into(),
+        theme::accent::ACCENT_3.into(),
+        theme::accent::ACCENT_4.into(),
+        theme::accent::ACCENT_5.into(),
+        theme::accent::ACCENT_6.into(),
+    ]
+}
+
+impl Default for LayoutLab {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl LayoutLab {
+    pub fn new() -> Self {
+        let pane_tree = default_pane_layout_tree();
+        let mut pane_selection = PaneSelectionState::default();
+        if let Some(primary) = first_leaf_id(&pane_tree) {
+            pane_selection.anchor = Some(primary);
+            let _ = pane_selection.selected.insert(primary);
+        }
+        Self {
+            current_preset: 0,
+            selected_constraint: 0,
+            direction: Direction::Vertical,
+            alignment_idx: 0,
+            gap: 0,
+            margin: 0,
+            padding_amount: theme::spacing::XS,
+            align_pos: 4, // Center/Middle
+            preset_constraints_by_preset: (0..PRESET_COUNT)
+                .map(Self::default_constraints_for_preset)
+                .collect(),
+            show_debug: false,
+            layout_preview: Cell::new(Rect::default()),
+            layout_controls: Cell::new(Rect::default()),
+            pane_preview: Cell::new(Rect::default()),
+            pane_timeline: PaneInteractionTimeline::with_baseline(&pane_tree),
+            pane_tree,
+            pane_selection,
+            pane_active_gesture: Cell::new(None),
+            pane_gesture_timeline_cursor_start: None,
+            pane_live_reflow_signature: None,
+            pane_preview_state: PanePreviewState::default(),
+            pane_next_operation_id: 1,
+            pane_workspace_generation: 0,
+            pane_last_saved_workspace_generation: 0,
+            pane_workspace_recovery_notice: None,
+            pane_sequence: 0,
+            pane_last_pointer: None,
+            pane_last_motion: PaneMotionVector::from_delta(0, 0, 16, 0),
+            pane_drag_direction_changes: 0,
+            pane_last_delta_sign: None,
+            pane_last_applied_ops: 0,
+            pane_splitter_total: Cell::new(0),
+            pane_splitter_hovered: Cell::new(0),
+            pane_splitter_active: Cell::new(0),
+            pane_splitter_work_units: Cell::new(0),
+            pane_hover_pointer: Cell::new(None),
+            pane_intelligence_mode: PaneLayoutIntelligenceMode::Focus,
+            pane_magnetic_field_cells: PANE_MAGNETIC_FIELD_CELLS,
+            pane_terminal_adapter: PaneTerminalAdapter::new(PaneTerminalAdapterConfig::default())
+                .expect("default pane terminal adapter config is valid"),
+            pane_resize_target: None,
+        }
+    }
+
+    fn default_constraints_for_preset(preset: usize) -> Vec<Constraint> {
+        match preset {
+            0 | 1 => vec![
+                Constraint::Fixed(5),
+                Constraint::Percentage(30.0),
+                Constraint::Min(3),
+                Constraint::Max(10),
+                Constraint::Ratio(1, 3),
+            ],
+            2 => vec![
+                // Grid: 3 columns
+                Constraint::Ratio(1, 3),
+                Constraint::Ratio(1, 3),
+                Constraint::Ratio(1, 3),
+            ],
+            3 => vec![
+                // Nested: outer 60/40
+                Constraint::Percentage(60.0),
+                Constraint::Percentage(40.0),
+            ],
+            4 => vec![
+                // Real-world: sidebar + main + aside
+                Constraint::Fixed(20),
+                Constraint::Min(40),
+                Constraint::Max(30),
+            ],
+            _ => vec![Constraint::Min(0)],
+        }
+    }
+
+    /// Get the constraints for the current preset.
+    fn preset_constraints(&self) -> Vec<Constraint> {
+        self.preset_constraints_by_preset
+            .get(self.current_preset)
+            .cloned()
+            .unwrap_or_else(|| Self::default_constraints_for_preset(self.current_preset))
+    }
+
+    fn constraint_label(c: &Constraint) -> String {
+        match c {
+            Constraint::Fixed(v) => format!("Fixed({v})"),
+            Constraint::Percentage(v) => format!("Pct({v:.0}%)"),
+            Constraint::Min(v) => format!("Min({v})"),
+            Constraint::Max(v) => format!("Max({v})"),
+            Constraint::Ratio(n, d) => format!("Ratio({n}/{d})"),
+            Constraint::Fill => "Fill".to_string(),
+            Constraint::FitContent => "FitContent".to_string(),
+            Constraint::FitContentBounded { min, max } => format!("FitContent({min}..{max})"),
+            Constraint::FitMin => "FitMin".to_string(),
+        }
+    }
+
+    fn current_alignment(&self) -> FlexAlignment {
+        ALIGNMENTS[self.alignment_idx]
+    }
+
+    fn pane_timeline_status(&self) -> PaneTimelineStatus {
+        PaneTimelineStatus {
+            cursor: self.pane_timeline.cursor,
+            len: self.pane_timeline.entries.len(),
+        }
+    }
+
+    /// Render just the interactive pane workspace panel for embedding in
+    /// other screens (for example, Dashboard/Widget Gallery).
+    pub fn render_embedded_pane_workspace(&self, frame: &mut Frame, area: Rect) {
+        self.render_pane_preview_panel(frame, area);
+    }
+
+    /// True if the embedded pane workspace should consume this mouse sample.
+    ///
+    /// This stays true during active drags so capture remains robust even when
+    /// the pointer briefly leaves the preview bounds.
+    pub fn pane_workspace_wants_mouse(&self, x: u16, y: u16) -> bool {
+        self.pane_preview.get().contains(x, y)
+            || self.pane_active_gesture.get().is_some()
+            || self.pane_hover_pointer.get().is_some()
+    }
+
+    /// Route a mouse event into the pane workspace interaction model.
+    pub fn update_embedded_pane_workspace_mouse(
+        &mut self,
+        kind: MouseEventKind,
+        x: u16,
+        y: u16,
+        modifiers: Modifiers,
+    ) {
+        if self.pane_workspace_wants_mouse(x, y) {
+            self.handle_mouse(kind, x, y, modifiers);
+        }
+    }
+
+    /// Clear any in-flight pane drag to avoid latched gesture state when
+    /// embedding this component inside another screen.
+    pub fn cancel_embedded_pane_workspace_drag(&mut self) {
+        self.cancel_pane_gesture();
+    }
+
+    /// Clear cached pane workspace bounds when the embedding screen no longer
+    /// renders the pane studio panel.
+    pub fn clear_embedded_pane_workspace_bounds(&self) {
+        self.pane_preview.set(Rect::default());
+        self.pane_active_gesture.set(None);
+        self.pane_hover_pointer.set(None);
+    }
+
+    /// Current embedded pane workspace bounds used for hit-testing.
+    pub fn embedded_pane_workspace_bounds(&self) -> Rect {
+        self.pane_preview.get()
+    }
+}
+
+impl LayoutLab {
+    /// Handle mouse interactions.
+    fn handle_mouse(&mut self, kind: MouseEventKind, x: u16, y: u16, modifiers: Modifiers) {
+        let preview = self.layout_preview.get();
+        let controls = self.layout_controls.get();
+        let pane_preview = self.pane_preview.get();
+        let pointer = PanePointerPosition::new(i32::from(x), i32::from(y));
+        if pane_preview.contains(x, y) {
+            self.pane_hover_pointer.set(Some(pointer));
+        } else if self.pane_active_gesture.get().is_none() {
+            self.pane_hover_pointer.set(None);
+        }
+
+        if pane_preview.contains(x, y) || self.pane_active_gesture.get().is_some() {
+            match kind {
+                MouseEventKind::Down(MouseButton::Left) if pane_preview.contains(x, y) => {
+                    self.handle_pane_pointer_down(pointer, modifiers.contains(Modifiers::SHIFT));
+                    return;
+                }
+                MouseEventKind::Drag(MouseButton::Left)
+                    if self.pane_active_gesture.get().is_some() =>
+                {
+                    self.apply_pane_drag(pointer, false);
+                    return;
+                }
+                MouseEventKind::Up(MouseButton::Left)
+                    if self.pane_active_gesture.get().is_some() =>
+                {
+                    self.apply_pane_drag(pointer, true);
+                    self.finish_pane_gesture();
+                    return;
+                }
+                MouseEventKind::Down(MouseButton::Right) if pane_preview.contains(x, y) => {
+                    self.cycle_pane_intelligence_mode();
+                    return;
+                }
+                MouseEventKind::ScrollUp if pane_preview.contains(x, y) => {
+                    self.pane_magnetic_field_cells =
+                        (self.pane_magnetic_field_cells - 0.4).max(2.0);
+                    return;
+                }
+                MouseEventKind::ScrollDown if pane_preview.contains(x, y) => {
+                    self.pane_magnetic_field_cells =
+                        (self.pane_magnetic_field_cells + 0.4).min(14.0);
+                    return;
+                }
+                _ => {}
+            }
+        }
+
+        match kind {
+            MouseEventKind::Down(MouseButton::Left) => {
+                if controls.contains(x, y) {
+                    self.direction = self.direction.toggle();
+                } else if preview.contains(x, y) {
+                    self.show_debug = !self.show_debug;
+                }
+            }
+            MouseEventKind::Down(MouseButton::Right) if preview.contains(x, y) => {
+                self.current_preset = (self.current_preset + 1) % PRESET_COUNT;
+                self.selected_constraint = 0;
+            }
+            MouseEventKind::ScrollUp => {
+                if preview.contains(x, y) {
+                    self.gap = self.gap.saturating_sub(1);
+                } else if controls.contains(x, y) {
+                    self.alignment_idx = if self.alignment_idx == 0 {
+                        ALIGNMENTS.len() - 1
+                    } else {
+                        self.alignment_idx - 1
+                    };
+                }
+            }
+            MouseEventKind::ScrollDown => {
+                if preview.contains(x, y) {
+                    self.gap = self.gap.saturating_add(1).min(5);
+                } else if controls.contains(x, y) {
+                    self.alignment_idx = (self.alignment_idx + 1) % ALIGNMENTS.len();
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+impl Screen for LayoutLab {
+    type Message = Event;
+
+    fn update(&mut self, event: &Event) -> Cmd<Self::Message> {
+        if let Event::Mouse(mouse) = event {
+            self.handle_mouse(mouse.kind, mouse.x, mouse.y, mouse.modifiers);
+            return Cmd::None;
+        }
+        if let Event::Key(key) = event {
+            if key.kind != KeyEventKind::Press {
+                return Cmd::None;
+            }
+
+            match (key.code, key.modifiers) {
+                // Preset selection: 1-5
+                (KeyCode::Char('1'), Modifiers::NONE) => {
+                    self.current_preset = 0;
+                    self.selected_constraint = 0;
+                }
+                (KeyCode::Char('2'), Modifiers::NONE) => {
+                    self.current_preset = 1;
+                    self.selected_constraint = 0;
+                }
+                (KeyCode::Char('3'), Modifiers::NONE) => {
+                    self.current_preset = 2;
+                    self.selected_constraint = 0;
+                }
+                (KeyCode::Char('4'), Modifiers::NONE) => {
+                    self.current_preset = 3;
+                    self.selected_constraint = 0;
+                }
+                (KeyCode::Char('5'), Modifiers::NONE) => {
+                    self.current_preset = 4;
+                    self.selected_constraint = 0;
+                }
+                (KeyCode::Char('u'), Modifiers::NONE) => {
+                    self.pane_undo();
+                }
+                (KeyCode::Char('y'), Modifiers::NONE) => {
+                    self.pane_redo();
+                }
+                (KeyCode::Char('R'), Modifiers::NONE) | (KeyCode::Char('r'), Modifiers::SHIFT) => {
+                    self.pane_replay();
+                }
+                (KeyCode::Char('f'), Modifiers::NONE) => {
+                    self.apply_pane_intelligence_mode(PaneLayoutIntelligenceMode::Focus);
+                }
+                (KeyCode::Char('c'), Modifiers::NONE) => {
+                    self.apply_pane_intelligence_mode(PaneLayoutIntelligenceMode::Compare);
+                }
+                (KeyCode::Char('n'), Modifiers::NONE) => {
+                    self.apply_pane_intelligence_mode(PaneLayoutIntelligenceMode::Monitor);
+                }
+                (KeyCode::Char('k'), Modifiers::NONE) => {
+                    self.apply_pane_intelligence_mode(PaneLayoutIntelligenceMode::Compact);
+                }
+                (KeyCode::Char('x'), Modifiers::NONE) => {
+                    self.reset_pane_workspace();
+                }
+                (KeyCode::Escape, Modifiers::NONE) => {
+                    self.cancel_pane_gesture();
+                }
+
+                // Direction toggle
+                (KeyCode::Char('d'), Modifiers::NONE) => {
+                    self.direction = self.direction.toggle();
+                }
+
+                // Alignment cycle
+                (KeyCode::Char('a'), Modifiers::NONE) => {
+                    self.alignment_idx = (self.alignment_idx + 1) % ALIGNMENTS.len();
+                }
+
+                // Gap adjustment
+                (KeyCode::Char('+'), _) | (KeyCode::Char('='), _) => {
+                    self.gap = self.gap.saturating_add(1).min(5);
+                }
+                (KeyCode::Char('-'), Modifiers::NONE) => {
+                    self.gap = self.gap.saturating_sub(1);
+                }
+
+                // Margin adjustment
+                (KeyCode::Char('m'), Modifiers::NONE) => {
+                    self.margin = self.margin.saturating_add(1).min(4);
+                }
+                (KeyCode::Char('M'), Modifiers::NONE) | (KeyCode::Char('m'), Modifiers::SHIFT) => {
+                    self.margin = self.margin.saturating_sub(1);
+                }
+
+                // Padding adjustment
+                (KeyCode::Char('p'), Modifiers::NONE) => {
+                    self.padding_amount = self.padding_amount.saturating_add(1).min(4);
+                }
+                (KeyCode::Char('P'), Modifiers::NONE) | (KeyCode::Char('p'), Modifiers::SHIFT) => {
+                    self.padding_amount = self.padding_amount.saturating_sub(1);
+                }
+
+                // Constraint selection (Tab to cycle)
+                (KeyCode::Tab, Modifiers::NONE) => {
+                    let count = self.preset_constraints().len();
+                    self.selected_constraint = (self.selected_constraint + 1) % count;
+                }
+
+                // Arrow keys to adjust selected constraint value
+                (KeyCode::Right, Modifiers::NONE) => self.adjust_constraint(1),
+                (KeyCode::Left, Modifiers::NONE) => self.adjust_constraint(-1),
+
+                // Align position cycle
+                (KeyCode::Char('l'), Modifiers::NONE) => {
+                    self.align_pos = (self.align_pos + 1) % 9;
+                }
+
+                // Debug overlay toggle
+                (KeyCode::Char('D'), Modifiers::NONE) | (KeyCode::Char('d'), Modifiers::SHIFT) => {
+                    self.show_debug = !self.show_debug;
+                }
+
+                _ => {}
+            }
+        }
+        Cmd::None
+    }
+
+    fn view(&self, frame: &mut Frame, area: Rect) {
+        if area.height < 4 || area.width < 8 {
+            self.layout_preview.set(Rect::default());
+            self.layout_controls.set(Rect::default());
+            self.pane_preview.set(Rect::default());
+            Paragraph::new("Terminal too small for Layout Lab")
+                .style(theme::muted())
+                .render(area, frame);
+            return;
+        }
+
+        // Keep pane interactions available at smaller heights by rendering the
+        // preview region only instead of hard-gating the entire screen.
+        if area.height < 11 {
+            self.layout_preview.set(area);
+            self.layout_controls.set(Rect::default());
+            self.render_preview(frame, area);
+            return;
+        }
+
+        // Top-level: upper preview + lower controls/demos
+        let main_chunks = Flex::vertical()
+            .constraints([
+                Constraint::Percentage(58.0),
+                Constraint::Fixed(1),
+                Constraint::Min(6),
+            ])
+            .split(area);
+
+        self.layout_preview.set(main_chunks[0]);
+        self.render_preview(frame, main_chunks[0]);
+        Rule::new()
+            .style(Style::new().fg(theme::fg::MUTED))
+            .render(main_chunks[1], frame);
+        self.render_bottom(frame, main_chunks[2]);
+    }
+
+    fn keybindings(&self) -> Vec<HelpEntry> {
+        vec![
+            HelpEntry {
+                key: "1-5",
+                action: "Switch preset",
+            },
+            HelpEntry {
+                key: "d",
+                action: "Toggle direction",
+            },
+            HelpEntry {
+                key: "a",
+                action: "Cycle alignment",
+            },
+            HelpEntry {
+                key: "+/-",
+                action: "Adjust gap",
+            },
+            HelpEntry {
+                key: "m/M",
+                action: "Adjust margin",
+            },
+            HelpEntry {
+                key: "p/P",
+                action: "Adjust padding",
+            },
+            HelpEntry {
+                key: "Tab",
+                action: "Select constraint",
+            },
+            HelpEntry {
+                key: "Left/Right",
+                action: "Adjust constraint",
+            },
+            HelpEntry {
+                key: "l",
+                action: "Cycle align pos",
+            },
+            HelpEntry {
+                key: "D",
+                action: "Toggle debug",
+            },
+            HelpEntry {
+                key: "u/y/R",
+                action: "Pane undo/redo/replay",
+            },
+            HelpEntry {
+                key: "f/c/n/k",
+                action: "Focus/Compare/Monitor/Compact",
+            },
+            HelpEntry {
+                key: "x",
+                action: "Reset pane workspace",
+            },
+            HelpEntry {
+                key: "Shift+Click",
+                action: "Multi-pane select cluster",
+            },
+            HelpEntry {
+                key: "Click",
+                action: "Toggle debug/direction",
+            },
+            HelpEntry {
+                key: "Right-click",
+                action: "Cycle preset",
+            },
+            HelpEntry {
+                key: "Scroll",
+                action: "Adjust gap/alignment",
+            },
+        ]
+    }
+
+    fn title(&self) -> &'static str {
+        "Layout Laboratory"
+    }
+
+    fn tab_label(&self) -> &'static str {
+        "Layout"
+    }
+}
+
+impl LayoutLab {
+    /// Adjust the selected constraint's value by delta.
+    fn adjust_constraint(&mut self, delta: i16) {
+        let step = delta.signum();
+        if step == 0 {
+            return;
+        }
+        let Some(constraints) = self
+            .preset_constraints_by_preset
+            .get_mut(self.current_preset)
+        else {
+            return;
+        };
+        if constraints.is_empty() {
+            return;
+        }
+        let idx = self
+            .selected_constraint
+            .min(constraints.len().saturating_sub(1));
+        match &mut constraints[idx] {
+            Constraint::Fixed(v) | Constraint::Min(v) | Constraint::Max(v) => {
+                let next = i32::from(*v) + i32::from(step);
+                *v = next.clamp(1, 400) as u16;
+            }
+            Constraint::Percentage(v) => {
+                *v = (*v + f32::from(step) * 2.5).clamp(5.0, 95.0);
+            }
+            Constraint::Ratio(n, d) => {
+                let next_num = i32::try_from(*n).unwrap_or(1) + i32::from(step);
+                *n = next_num.clamp(1, 24) as u32;
+                if *d == 0 {
+                    *d = 1;
+                }
+            }
+            Constraint::FitContentBounded { min, max } => {
+                let min_i = i32::from(*min);
+                let max_i = i32::from(*max);
+                let next_min = (min_i + i32::from(step)).clamp(1, max_i.max(1));
+                *min = next_min as u16;
+            }
+            Constraint::Fill | Constraint::FitContent | Constraint::FitMin => {}
+        }
+    }
+
+    /// Render the upper half: layout preview with colored blocks.
+    fn render_preview(&self, frame: &mut Frame, area: Rect) {
+        let block = Block::new()
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .title(" Layout + Pane Studio ")
+            .title_alignment(Alignment::Center)
+            .style(theme::content_border());
+        let inner = block.inner(area);
+        block.render(area, frame);
+
+        if inner.width >= 84 {
+            let cols = Flex::horizontal()
+                .gap(theme::spacing::XS)
+                .constraints([Constraint::Percentage(54.0), Constraint::Percentage(46.0)])
+                .split(inner);
+            self.render_layout_preview_panel(frame, cols[0]);
+            self.render_pane_preview_panel(frame, cols[1]);
+        } else if inner.height >= 14 {
+            let rows = Flex::vertical()
+                .gap(theme::spacing::XS)
+                .constraints([Constraint::Percentage(54.0), Constraint::Percentage(46.0)])
+                .split(inner);
+            self.render_layout_preview_panel(frame, rows[0]);
+            self.render_pane_preview_panel(frame, rows[1]);
+        } else {
+            // Ultra-compact mode keeps pane interactions available instead of
+            // hard-disabling them at narrower widths.
+            self.render_pane_preview_panel(frame, inner);
+        }
+    }
+
+    fn render_layout_preview_panel(&self, frame: &mut Frame, area: Rect) {
+        let title = format!(
+            " Preset {}: {} ",
+            self.current_preset + 1,
+            PRESET_NAMES[self.current_preset]
+        );
+        let block = Block::new()
+            .borders(Borders::ALL)
+            .border_type(BorderType::Square)
+            .title(&title)
+            .title_alignment(Alignment::Center)
+            .style(
+                Style::new()
+                    .fg(theme::accent::ACCENT_6)
+                    .bg(theme::alpha::SURFACE),
+            );
+        let inner = block.inner(area);
+        block.render(area, frame);
+
+        match self.current_preset {
+            0 | 1 => self.render_flex_preset(frame, inner),
+            2 => self.render_grid_preset(frame, inner),
+            3 => self.render_nested_preset(frame, inner),
+            4 => self.render_realworld_preset(frame, inner),
+            _ => {}
+        }
+
+        if self.show_debug {
+            let debug_width = 40u16.min(inner.width);
+            let debug_height = 6u16.min(inner.height);
+            let debug_area = Rect::new(
+                inner.x + inner.width.saturating_sub(debug_width),
+                inner.y + inner.height.saturating_sub(debug_height),
+                debug_width,
+                debug_height,
+            );
+            let debug_block = Block::new()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Double)
+                .title("Debug")
+                .style(Style::new().fg(theme::accent::WARNING).bg(theme::bg::DEEP));
+            let debug_inner = debug_block.inner(debug_area);
+            debug_block.render(debug_area, frame);
+
+            let constraints = self.preset_constraints();
+            let debug_text: String = constraints
+                .iter()
+                .enumerate()
+                .map(|(i, c)| {
+                    let marker = if i == self.selected_constraint {
+                        ">"
+                    } else {
+                        " "
+                    };
+                    format!("{marker} {}", Self::constraint_label(c))
+                })
+                .collect::<Vec<_>>()
+                .join("\n");
+            Paragraph::new(debug_text)
+                .style(Style::new().fg(theme::fg::PRIMARY))
+                .render(debug_inner, frame);
+        }
+    }
+
+    fn render_pane_preview_panel(&self, frame: &mut Frame, area: Rect) {
+        let block = Block::new()
+            .borders(Borders::ALL)
+            .border_type(BorderType::Square)
+            .title(" Pane Studio ")
+            .title_alignment(Alignment::Center)
+            .style(
+                Style::new()
+                    .fg(theme::accent::ACCENT_8)
+                    .bg(theme::alpha::SURFACE),
+            );
+        let inner = block.inner(area);
+        block.render(area, frame);
+        self.pane_preview.set(inner);
+
+        if inner.width < 8 || inner.height < 4 {
+            self.record_splitter_diagnostics(&[]);
+            Paragraph::new("Pane studio needs a bit more space.")
+                .style(theme::muted())
+                .render(inner, frame);
+            return;
+        }
+
+        let Ok(layout) = self.pane_tree.solve_layout(inner) else {
+            self.record_splitter_diagnostics(&[]);
+            Paragraph::new("Pane layout solve failed.")
+                .style(Style::new().fg(theme::accent::ERROR))
+                .render(inner, frame);
+            return;
+        };
+        let splitters = collect_splitter_primitives(
+            &self.pane_tree,
+            &layout,
+            inner,
+            self.pane_hover_pointer.get(),
+            self.pane_active_gesture.get(),
+        );
+        self.record_splitter_diagnostics(&splitters);
+
+        for node in self.pane_tree.nodes() {
+            let PaneNodeKind::Leaf(leaf) = &node.kind else {
+                continue;
+            };
+            let Some(rect) = layout.rect(node.id) else {
+                continue;
+            };
+            if rect.is_empty() {
+                continue;
+            }
+
+            let selected = self.pane_selection.selected.contains(&node.id);
+            let anchor = self.pane_selection.anchor == Some(node.id);
+            let active = self
+                .pane_active_gesture
+                .get()
+                .is_some_and(|gesture| gesture.leaf == node.id);
+            let accent = if active {
+                theme::accent::WARNING
+            } else if selected {
+                theme::accent::SUCCESS
+            } else {
+                theme::accent::ACCENT_9
+            };
+
+            let title = if anchor {
+                format!("*{} {}", node.id.get(), leaf.surface_key)
+            } else {
+                format!("{} {}", node.id.get(), leaf.surface_key)
+            };
+            let pane_block = Block::new()
+                .borders(Borders::ALL)
+                .border_type(if selected {
+                    BorderType::Double
+                } else {
+                    BorderType::Rounded
+                })
+                .title(title.as_str())
+                .title_alignment(Alignment::Center)
+                .style(Style::new().fg(accent).bg(theme::alpha::SURFACE));
+            pane_block.render(rect, frame);
+
+            let visual_rect = layout
+                .visual_rect(node.id)
+                .unwrap_or_else(|| pane_block.inner(rect));
+            if !visual_rect.is_empty() {
+                let pane_info = format!("{}x{}  @{},{}", rect.width, rect.height, rect.x, rect.y);
+                Paragraph::new(pane_info)
+                    .style(Style::new().fg(theme::fg::SECONDARY))
+                    .render(visual_rect, frame);
+            }
+        }
+
+        if let Some(cluster_bounds) = layout.cluster_bounds(&self.pane_selection.selected) {
+            let cluster_rect = cluster_bounds.intersection(&inner);
+            if !cluster_rect.is_empty() {
+                Block::new()
+                    .borders(Borders::ALL)
+                    .border_type(BorderType::Heavy)
+                    .title("Cluster")
+                    .style(Style::new().fg(theme::accent::ACCENT_5))
+                    .render(cluster_rect, frame);
+            }
+        }
+
+        self.render_splitter_primitives(frame, &splitters);
+        self.render_pane_preview_overlays(frame, inner);
+
+        let mode_label = pane_mode_label(self.pane_intelligence_mode);
+        let timeline_status = self.pane_timeline_status();
+        let status = format!(
+            "mode:{mode_label} sel:{} tl:{}/{} ops:{} sp:{}/h{}/a{}",
+            self.pane_selection.selected.len(),
+            timeline_status.cursor,
+            timeline_status.len,
+            self.pane_last_applied_ops,
+            self.pane_splitter_total.get(),
+            self.pane_splitter_hovered.get(),
+            self.pane_splitter_active.get(),
+        );
+        let status_area = Rect::new(inner.x, inner.y, inner.width.min(48), 1);
+        Paragraph::new(truncate_to_width(&status, usize::from(status_area.width)))
+            .style(theme::muted())
+            .render(status_area, frame);
+
+        if let Some(notice) = &self.pane_workspace_recovery_notice
+            && inner.height > 1
+        {
+            let notice_area = Rect::new(inner.x, inner.y.saturating_add(1), inner.width.min(72), 1);
+            Paragraph::new(truncate_to_width(
+                &notice.summary(),
+                usize::from(notice_area.width),
+            ))
+            .style(Style::new().fg(theme::accent::WARNING))
+            .render(notice_area, frame);
+        }
+    }
+
+    fn render_pane_preview_overlays(&self, frame: &mut Frame, viewport: Rect) {
+        let zone = self
+            .pane_preview_state
+            .zone
+            .map(pane_zone_label)
+            .unwrap_or("none");
+        if let Some(rect) = self.pane_preview_state.ghost_rect {
+            let ghost = rect.intersection(&viewport);
+            if !ghost.is_empty() {
+                let title = format!(
+                    "Dock {zone} {:02}%",
+                    self.pane_preview_state.dock_strength_bps / 100
+                );
+                Block::new()
+                    .borders(Borders::ALL)
+                    .border_type(BorderType::Double)
+                    .title(title.as_str())
+                    .title_alignment(Alignment::Center)
+                    .style(Style::new().fg(theme::accent::WARNING))
+                    .render(ghost, frame);
+            }
+        }
+
+        if let Some(rect) = self.pane_preview_state.alt_one_ghost_rect {
+            let alt = rect.intersection(&viewport);
+            if !alt.is_empty() {
+                let label = self
+                    .pane_preview_state
+                    .alt_one_zone
+                    .map(pane_zone_label)
+                    .unwrap_or("alt");
+                let title = format!(
+                    "Alt1 {label} {:02}%",
+                    self.pane_preview_state.alt_one_strength_bps / 100
+                );
+                Block::new()
+                    .borders(Borders::ALL)
+                    .border_type(BorderType::Square)
+                    .title(title.as_str())
+                    .title_alignment(Alignment::Center)
+                    .style(
+                        Style::new()
+                            .fg(theme::accent::ACCENT_10)
+                            .attrs(StyleFlags::DIM),
+                    )
+                    .render(alt, frame);
+            }
+        }
+
+        if let Some(rect) = self.pane_preview_state.alt_two_ghost_rect {
+            let alt = rect.intersection(&viewport);
+            if !alt.is_empty() {
+                let label = self
+                    .pane_preview_state
+                    .alt_two_zone
+                    .map(pane_zone_label)
+                    .unwrap_or("alt");
+                let title = format!(
+                    "Alt2 {label} {:02}%",
+                    self.pane_preview_state.alt_two_strength_bps / 100
+                );
+                Block::new()
+                    .borders(Borders::ALL)
+                    .border_type(BorderType::Square)
+                    .title(title.as_str())
+                    .title_alignment(Alignment::Center)
+                    .style(
+                        Style::new()
+                            .fg(theme::accent::ACCENT_5)
+                            .attrs(StyleFlags::DIM),
+                    )
+                    .render(alt, frame);
+            }
+        }
+    }
+
+    fn render_splitter_primitives(&self, frame: &mut Frame, splitters: &[PaneSplitterPrimitive]) {
+        for splitter in splitters {
+            let (rail_cell, handle_cell) = pane_splitter_cells(splitter.axis, splitter.state);
+            frame.draw_rect_filled(splitter.rail_rect, rail_cell);
+            frame.draw_rect_filled(splitter.handle_rect, handle_cell);
+        }
+    }
+
+    fn record_splitter_diagnostics(&self, splitters: &[PaneSplitterPrimitive]) {
+        let mut hovered = 0u16;
+        let mut active = 0u16;
+        let mut work_units = 0u32;
+        for splitter in splitters {
+            match splitter.state {
+                PaneSplitterVisualState::Hover => {
+                    hovered = hovered.saturating_add(1);
+                }
+                PaneSplitterVisualState::Active => {
+                    active = active.saturating_add(1);
+                }
+                PaneSplitterVisualState::Idle => {}
+            }
+            let rail_area = u32::from(splitter.rail_rect.width)
+                .saturating_mul(u32::from(splitter.rail_rect.height));
+            let handle_area = u32::from(splitter.handle_rect.width)
+                .saturating_mul(u32::from(splitter.handle_rect.height));
+            work_units = work_units.saturating_add(rail_area.saturating_add(handle_area));
+        }
+        self.pane_splitter_total
+            .set(splitters.len().min(u16::MAX as usize) as u16);
+        self.pane_splitter_hovered.set(hovered);
+        self.pane_splitter_active.set(active);
+        self.pane_splitter_work_units.set(work_units);
+    }
+
+    fn handle_pane_pointer_down(&mut self, pointer: PanePointerPosition, shift: bool) {
+        let viewport = self.pane_preview.get();
+        if viewport.is_empty() {
+            return;
+        }
+        let Some(context) = pointer_down_context_at(
+            &self.pane_tree,
+            viewport,
+            pointer,
+            PANE_EDGE_GRIP_INSET_CELLS,
+        ) else {
+            return;
+        };
+
+        update_selection_for_pointer_down(&mut self.pane_selection, context.leaf, shift);
+        let mut active_gesture = self.pane_active_gesture.get();
+        arm_active_gesture(
+            PaneGestureArmState {
+                active_gesture: &mut active_gesture,
+                gesture_timeline_cursor_start: &mut self.pane_gesture_timeline_cursor_start,
+                live_reflow_signature: &mut self.pane_live_reflow_signature,
+                preview_state: &mut self.pane_preview_state,
+            },
+            self.pane_timeline.cursor,
+            self.pane_next_operation_id.saturating_sub(1),
+            1,
+            context.leaf,
+            context.mode,
+        );
+        self.pane_active_gesture.set(active_gesture);
+
+        // Single-pane splitter resize is owned by the production terminal
+        // adapter + layout bridge instead of locally synthesized motion. The
+        // adapter arms its drag-resize state machine on this pointer-down and
+        // carries the resolved target through the rest of the gesture. Group
+        // resize (multi-selection) and pane move/dock keep the reflow path.
+        self.pane_resize_target = None;
+        if matches!(context.mode, PaneGestureMode::Resize(_))
+            && self.pane_selection.selected.len() <= 1
+        {
+            let (px, py) = Self::pane_pointer_cells(pointer);
+            let down = Event::Mouse(MouseEvent::new(
+                MouseEventKind::Down(MouseButton::Left),
+                px,
+                py,
+            ));
+            let _ = self
+                .pane_terminal_adapter
+                .translate(&down, Some(context.target));
+            self.pane_resize_target = Some(context.target);
+        }
+
+        self.pane_last_pointer = Some(pointer);
+        self.pane_last_motion = PaneMotionVector::from_delta(0, 0, 16, 0);
+        self.pane_drag_direction_changes = 0;
+        self.pane_last_delta_sign = None;
+    }
+
+    fn apply_pane_drag(&mut self, pointer: PanePointerPosition, committed: bool) {
+        let Some(active) = self.pane_active_gesture.get() else {
+            return;
+        };
+
+        // Adapter-driven single-pane resize: feed the raw pointer sample through
+        // PaneTerminalAdapter and realize the resulting transition against the
+        // live tree via the layout bridge. Move/dock and group-resize gestures
+        // fall through to the synthetic-motion reflow path below.
+        if self.pane_resize_target.is_some() && matches!(active.mode, PaneGestureMode::Resize(_)) {
+            self.apply_pane_resize_via_adapter(active, pointer, committed);
+            self.pane_last_pointer = Some(pointer);
+            return;
+        }
+
+        let previous = self.pane_last_pointer.unwrap_or(pointer);
+        let delta_x = pointer.x.saturating_sub(previous.x);
+        let delta_y = pointer.y.saturating_sub(previous.y);
+        let signs = (delta_x.signum() as i8, delta_y.signum() as i8);
+
+        if let Some((last_x, last_y)) = self.pane_last_delta_sign {
+            if signs.0 != 0 && last_x != 0 && signs.0 != last_x {
+                self.pane_drag_direction_changes =
+                    self.pane_drag_direction_changes.saturating_add(1);
+            }
+            if signs.1 != 0 && last_y != 0 && signs.1 != last_y {
+                self.pane_drag_direction_changes =
+                    self.pane_drag_direction_changes.saturating_add(1);
+            }
+        }
+        self.pane_last_delta_sign = Some(signs);
+
+        let mut motion =
+            PaneMotionVector::from_delta(delta_x, delta_y, 16, self.pane_drag_direction_changes);
+        if committed && delta_x == 0 && delta_y == 0 {
+            motion = self.pane_last_motion;
+        } else {
+            self.pane_last_motion = motion;
+        }
+
+        let pressure = PanePressureSnapProfile::from_motion(motion);
+        let inertial_throw = if committed {
+            Some(PaneInertialThrow::from_motion(motion))
+        } else {
+            None
+        };
+        let projected_position = inertial_throw.map(|throw| throw.projected_pointer(pointer));
+
+        self.pane_sequence = self.pane_sequence.saturating_add(1);
+        self.pane_last_applied_ops = apply_drag_semantics(
+            PaneDragSemanticsContext {
+                layout_tree: &mut self.pane_tree,
+                timeline: &mut self.pane_timeline,
+                next_operation_id: &mut self.pane_next_operation_id,
+                workspace_generation: &mut self.pane_workspace_generation,
+                selection: &self.pane_selection,
+                preview_state: &mut self.pane_preview_state,
+                live_reflow_signature: &mut self.pane_live_reflow_signature,
+                viewport: self.pane_preview.get(),
+                baseline_magnetic_field_cells: self.pane_magnetic_field_cells,
+            },
+            PaneDragSemanticsInput {
+                sequence: self.pane_sequence,
+                active,
+                pointer,
+                pressure,
+                motion,
+                projected_position,
+                inertial_throw,
+                committed,
+            },
+        );
+        self.pane_last_pointer = Some(pointer);
+    }
+
+    /// Translate one splitter drag/commit sample through the terminal adapter
+    /// and apply the resulting transition to the live pane tree via the layout
+    /// bridge. This is the production resize path: raw pointer motion →
+    /// [`PaneTerminalAdapter`] → `PaneDragResizeTransition` →
+    /// [`PaneTree::operations_for_transition`] → timeline-recorded
+    /// `apply_operation`, replacing the demo's previously hand-synthesized
+    /// motion vectors.
+    fn apply_pane_resize_via_adapter(
+        &mut self,
+        active: ActivePaneGesture,
+        pointer: PanePointerPosition,
+        committed: bool,
+    ) {
+        let viewport = self.pane_preview.get();
+        if viewport.is_empty() {
+            return;
+        }
+
+        let (px, py) = Self::pane_pointer_cells(pointer);
+        let kind = if committed {
+            MouseEventKind::Up(MouseButton::Left)
+        } else {
+            MouseEventKind::Drag(MouseButton::Left)
+        };
+        let event = Event::Mouse(MouseEvent::new(kind, px, py));
+        // The adapter already holds the target armed on pointer-down, so no
+        // target hint is needed for in-flight drag/commit samples.
+        let dispatch = self.pane_terminal_adapter.translate(&event, None);
+        // Read the derived snap pressure before moving the transition out of the
+        // dispatch (the accessor borrows the whole struct).
+        let pressure = dispatch
+            .pressure_snap_profile()
+            .unwrap_or(NEUTRAL_RESIZE_PRESSURE);
+        let Some(transition) = dispatch.primary_transition else {
+            return;
+        };
+        let Ok(layout) = self.pane_tree.solve_layout(viewport) else {
+            return;
+        };
+        let operations = self
+            .pane_tree
+            .operations_for_transition(&transition, &layout, pressure);
+        if operations.is_empty() {
+            return;
+        }
+
+        // Resize collapses any docking preview; keep parity with the reflow
+        // path's resize branch.
+        self.pane_preview_state = PanePreviewState::default();
+        self.pane_live_reflow_signature = None;
+        self.pane_sequence = self.pane_sequence.saturating_add(1);
+        self.pane_last_applied_ops = apply_resize_operations_with_timeline(
+            PaneTimelineApplyState {
+                layout_tree: &mut self.pane_tree,
+                timeline: &mut self.pane_timeline,
+                next_operation_id: &mut self.pane_next_operation_id,
+                workspace_generation: &mut self.pane_workspace_generation,
+            },
+            self.pane_sequence,
+            &operations,
+            active.coalesce_after_operation_id,
+            pressure,
+            !committed,
+        );
+    }
+
+    /// Clamp an `i32` pane pointer position into terminal cell coordinates.
+    fn pane_pointer_cells(pointer: PanePointerPosition) -> (u16, u16) {
+        (
+            u16::try_from(pointer.x.max(0)).unwrap_or(u16::MAX),
+            u16::try_from(pointer.y.max(0)).unwrap_or(u16::MAX),
+        )
+    }
+
+    /// Read-only access to the live pane workspace tree.
+    ///
+    /// Exposed so embedding hosts and integration tests can inspect pane
+    /// geometry (splitter hit-testing, current split ratios) without mutating
+    /// state — pairs with [`Self::embedded_pane_workspace_bounds`].
+    #[must_use]
+    pub fn pane_tree(&self) -> &PaneTree {
+        &self.pane_tree
+    }
+
+    fn finish_pane_gesture(&mut self) {
+        self.pane_active_gesture.set(None);
+        self.pane_gesture_timeline_cursor_start = None;
+        self.pane_live_reflow_signature = None;
+        self.pane_preview_state = PanePreviewState::default();
+        self.pane_last_pointer = None;
+        self.pane_last_delta_sign = None;
+        self.pane_drag_direction_changes = 0;
+        self.pane_hover_pointer.set(None);
+        // Clear any latched adapter state so the next gesture arms cleanly.
+        let _ = self.pane_terminal_adapter.force_cancel_all();
+        self.pane_resize_target = None;
+    }
+
+    fn cancel_pane_gesture(&mut self) {
+        let _ = rollback_timeline_to_cursor(
+            &mut self.pane_tree,
+            &mut self.pane_timeline,
+            self.pane_gesture_timeline_cursor_start,
+            &mut self.pane_workspace_generation,
+        );
+        self.finish_pane_gesture();
+    }
+
+    fn pane_undo(&mut self) {
+        if matches!(self.pane_timeline.undo(&mut self.pane_tree), Ok(true)) {
+            self.pane_workspace_generation = self.pane_workspace_generation.saturating_add(1);
+            self.sanitize_pane_selection();
+            self.finish_pane_gesture();
+        }
+    }
+
+    fn pane_redo(&mut self) {
+        if matches!(self.pane_timeline.redo(&mut self.pane_tree), Ok(true)) {
+            self.pane_workspace_generation = self.pane_workspace_generation.saturating_add(1);
+            self.sanitize_pane_selection();
+            self.finish_pane_gesture();
+        }
+    }
+
+    fn pane_replay(&mut self) {
+        if let Ok(tree) = self.pane_timeline.replay() {
+            self.pane_tree = tree;
+            self.pane_workspace_generation = self.pane_workspace_generation.saturating_add(1);
+            self.pane_next_operation_id = self.pane_timeline.next_operation_id();
+            self.sanitize_pane_selection();
+            self.finish_pane_gesture();
+        }
+    }
+
+    /// Current pane workspace generation for persistence adapters.
+    #[must_use]
+    pub const fn pane_workspace_generation(&self) -> u64 {
+        self.pane_workspace_generation
+    }
+
+    /// Last pane workspace generation acknowledged as durably saved.
+    #[must_use]
+    pub const fn pane_saved_workspace_generation(&self) -> u64 {
+        self.pane_last_saved_workspace_generation
+    }
+
+    /// Whether pane state has changed since the last save acknowledgement.
+    #[must_use]
+    pub const fn pane_workspace_dirty(&self) -> bool {
+        self.pane_workspace_generation != self.pane_last_saved_workspace_generation
+    }
+
+    /// Acknowledge that a previously exported generation was saved by the host.
+    pub fn pane_mark_workspace_saved(&mut self, generation: u64) -> bool {
+        if generation == self.pane_workspace_generation {
+            self.pane_last_saved_workspace_generation = generation;
+            self.pane_clear_workspace_recovery_notice();
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Publish a recovery notice for host persistence adapters to surface.
+    pub fn pane_set_workspace_recovery_notice(&mut self, notice: PaneWorkspaceRecoveryNotice) {
+        self.pane_workspace_recovery_notice = Some(notice);
+    }
+
+    /// Clear the current workspace recovery notice.
+    pub fn pane_clear_workspace_recovery_notice(&mut self) {
+        self.pane_workspace_recovery_notice = None;
+    }
+
+    /// Current user-visible pane workspace recovery notice, if any.
+    #[must_use]
+    pub fn pane_workspace_recovery_notice(&self) -> Option<&PaneWorkspaceRecoveryNotice> {
+        self.pane_workspace_recovery_notice.as_ref()
+    }
+
+    /// Export the current pane workspace as canonical JSON.
+    pub fn pane_export_workspace_snapshot_json(&self) -> Result<String, String> {
+        let mut metadata = WorkspaceMetadata::new("layout-lab");
+        metadata.saved_generation = self.pane_workspace_generation;
+        let mut snapshot = WorkspaceSnapshot::new(self.pane_tree.to_snapshot(), metadata);
+        snapshot.interaction_timeline = self.pane_timeline.clone();
+        snapshot.active_pane_id = self.pane_selection.anchor;
+        to_canonical_workspace_snapshot_json(&snapshot).map_err(|err| err.to_string())
+    }
+
+    /// Restore a pane workspace snapshot without mutating current state on failure.
+    pub fn pane_import_workspace_snapshot_json(&mut self, json: &str) -> Result<(), String> {
+        let migration = decode_workspace_snapshot_json(json).map_err(|err| err.to_string())?;
+        let state_checksum = format!("{:016x}", migration.state_checksum());
+        tracing::debug!(
+            target: "ftui_demo_showcase::layout_lab",
+            source = "layout_lab.pane_workspace_json",
+            from_version = migration.from_version,
+            to_version = migration.to_version,
+            decision = migration.decision(),
+            state_checksum = %state_checksum,
+            warning_count = migration.warnings.len(),
+            "pane workspace migration complete"
+        );
+        let snapshot = migration.snapshot;
+        let tree = PaneTree::from_snapshot(snapshot.pane_tree.clone())
+            .map_err(|err| format!("pane tree restore failed: {err}"))?;
+        let mut timeline = snapshot.interaction_timeline;
+        if let Some(baseline) = timeline.baseline.as_mut() {
+            baseline.canonicalize();
+        }
+        if timeline.baseline.is_none() {
+            timeline = PaneInteractionTimeline::with_baseline(&tree);
+        }
+        let mut selection = PaneSelectionState::default();
+        if let Some(anchor) = snapshot.active_pane_id {
+            selection.anchor = Some(anchor);
+            let _ = selection.selected.insert(anchor);
+        }
+
+        self.pane_tree = tree;
+        self.pane_timeline = timeline;
+        self.pane_selection = selection;
+        self.pane_workspace_generation = snapshot.metadata.saved_generation;
+        self.pane_last_saved_workspace_generation = self.pane_workspace_generation;
+        self.pane_clear_workspace_recovery_notice();
+        self.pane_next_operation_id = self.pane_timeline.next_operation_id();
+        self.sanitize_pane_selection();
+        self.finish_pane_gesture();
+        Ok(())
+    }
+
+    fn cycle_pane_intelligence_mode(&mut self) {
+        let next = match self.pane_intelligence_mode {
+            PaneLayoutIntelligenceMode::Focus => PaneLayoutIntelligenceMode::Compare,
+            PaneLayoutIntelligenceMode::Compare => PaneLayoutIntelligenceMode::Monitor,
+            PaneLayoutIntelligenceMode::Monitor => PaneLayoutIntelligenceMode::Compact,
+            PaneLayoutIntelligenceMode::Compact => PaneLayoutIntelligenceMode::Focus,
+        };
+        self.apply_pane_intelligence_mode(next);
+    }
+
+    fn apply_pane_intelligence_mode(&mut self, mode: PaneLayoutIntelligenceMode) {
+        let primary = self
+            .pane_selection
+            .anchor
+            .or_else(|| first_leaf_id(&self.pane_tree));
+        let Some(primary) = primary else {
+            return;
+        };
+        let Ok(operations) = self.pane_tree.plan_intelligence_mode(mode, primary) else {
+            return;
+        };
+        self.pane_sequence = self.pane_sequence.saturating_add(1);
+        let pressure = PanePressureSnapProfile {
+            strength_bps: 8_000,
+            hysteresis_bps: 320,
+        };
+        let applied = apply_operations_with_timeline(
+            PaneTimelineApplyState {
+                layout_tree: &mut self.pane_tree,
+                timeline: &mut self.pane_timeline,
+                next_operation_id: &mut self.pane_next_operation_id,
+                workspace_generation: &mut self.pane_workspace_generation,
+            },
+            self.pane_sequence,
+            &operations,
+            pressure,
+            true,
+        );
+        if applied > 0 {
+            self.pane_last_applied_ops = applied;
+            self.pane_intelligence_mode = mode;
+            self.sanitize_pane_selection();
+            self.finish_pane_gesture();
+        }
+    }
+
+    fn reset_pane_workspace(&mut self) {
+        self.pane_tree = default_pane_layout_tree();
+        self.pane_timeline = PaneInteractionTimeline::with_baseline(&self.pane_tree);
+        self.pane_next_operation_id = 1;
+        self.pane_workspace_generation = 0;
+        self.pane_last_saved_workspace_generation = 0;
+        self.pane_sequence = 0;
+        self.pane_last_applied_ops = 0;
+        self.pane_intelligence_mode = PaneLayoutIntelligenceMode::Focus;
+        self.pane_selection = PaneSelectionState::default();
+        self.sanitize_pane_selection();
+        self.finish_pane_gesture();
+    }
+
+    fn sanitize_pane_selection(&mut self) {
+        let mut leaf_ids = BTreeSet::new();
+        for node in self.pane_tree.nodes() {
+            if matches!(node.kind, PaneNodeKind::Leaf(_)) {
+                let _ = leaf_ids.insert(node.id);
+            }
+        }
+
+        self.pane_selection
+            .selected
+            .retain(|pane_id| leaf_ids.contains(pane_id));
+        if self.pane_selection.selected.is_empty()
+            && let Some(first) = leaf_ids.iter().next().copied()
+        {
+            let _ = self.pane_selection.selected.insert(first);
+        }
+
+        if !self
+            .pane_selection
+            .anchor
+            .is_some_and(|anchor| self.pane_selection.selected.contains(&anchor))
+        {
+            self.pane_selection.anchor = self.pane_selection.selected.iter().next().copied();
+        }
+    }
+
+    /// Render a flex preset (vertical or horizontal) with colored blocks.
+    fn render_flex_preset(&self, frame: &mut Frame, area: Rect) {
+        let constraints = self.preset_constraints();
+        let flex = match self.direction {
+            Direction::Vertical => Flex::vertical(),
+            Direction::Horizontal => Flex::horizontal(),
+        };
+        let rects = flex
+            .constraints(constraints.clone())
+            .gap(self.gap)
+            .margin(Sides::all(self.margin))
+            .alignment(self.current_alignment())
+            .split(area);
+
+        for (i, (rect, constraint)) in rects.iter().zip(constraints.iter()).enumerate() {
+            self.render_region(frame, *rect, i, constraint);
+        }
+    }
+
+    /// Render a grid 3x3 preset with header spanning 3 columns and sidebar spanning 2 rows.
+    fn render_grid_preset(&self, frame: &mut Frame, area: Rect) {
+        // 3 rows: header (3 high) + 2 content rows
+        let rows = Flex::vertical()
+            .gap(self.gap)
+            .margin(Sides::all(self.margin))
+            .constraints([Constraint::Fixed(3), Constraint::Min(2), Constraint::Min(2)])
+            .split(area);
+
+        // Header spans full width
+        let header_constraint = Constraint::Ratio(1, 1);
+        self.render_region(frame, rows[0], 0, &header_constraint);
+
+        // Row 1: sidebar (spans 2 rows conceptually) + 2 cells
+        let row1_cols = Flex::horizontal()
+            .gap(self.gap)
+            .constraints([
+                Constraint::Fixed(12),
+                Constraint::Min(5),
+                Constraint::Min(5),
+            ])
+            .split(rows[1]);
+
+        // Sidebar spans rows[1] and rows[2] vertically
+        let sidebar_area = Rect::new(
+            row1_cols[0].x,
+            row1_cols[0].y,
+            row1_cols[0].width,
+            rows[1]
+                .height
+                .saturating_add(rows[2].height)
+                .saturating_add(self.gap),
+        );
+        let sidebar_constraint = Constraint::Fixed(12);
+        self.render_region(frame, sidebar_area, 1, &sidebar_constraint);
+
+        self.render_region(frame, row1_cols[1], 2, &Constraint::Min(5));
+        self.render_region(frame, row1_cols[2], 3, &Constraint::Min(5));
+
+        // Row 2: skip sidebar col, render 2 cells
+        let row2_cols = Flex::horizontal()
+            .gap(self.gap)
+            .constraints([
+                Constraint::Fixed(12),
+                Constraint::Min(5),
+                Constraint::Min(5),
+            ])
+            .split(rows[2]);
+
+        // Don't re-render sidebar area; just render the two cells
+        self.render_region(frame, row2_cols[1], 4, &Constraint::Min(5));
+        self.render_region(frame, row2_cols[2], 5, &Constraint::Min(5));
+    }
+
+    /// Render nested flex preset: outer 60/40 horizontal, each with vertical subdivisions.
+    fn render_nested_preset(&self, frame: &mut Frame, area: Rect) {
+        let outer = Flex::horizontal()
+            .gap(self.gap)
+            .margin(Sides::all(self.margin))
+            .constraints([Constraint::Percentage(60.0), Constraint::Percentage(40.0)])
+            .split(area);
+
+        // Left side: 3 vertical regions
+        let left = Flex::vertical()
+            .gap(self.gap)
+            .constraints([
+                Constraint::Fixed(3),
+                Constraint::Min(4),
+                Constraint::Fixed(3),
+            ])
+            .split(outer[0]);
+        self.render_region(frame, left[0], 0, &Constraint::Fixed(3));
+        self.render_region(frame, left[1], 1, &Constraint::Min(4));
+        self.render_region(frame, left[2], 2, &Constraint::Fixed(3));
+
+        // Right side: 2 vertical regions
+        let right = Flex::vertical()
+            .gap(self.gap)
+            .constraints([Constraint::Percentage(50.0), Constraint::Percentage(50.0)])
+            .split(outer[1]);
+        self.render_region(frame, right[0], 3, &Constraint::Percentage(50.0));
+        self.render_region(frame, right[1], 4, &Constraint::Percentage(50.0));
+    }
+
+    /// Render real-world layout: header + (sidebar + main + aside) + footer.
+    fn render_realworld_preset(&self, frame: &mut Frame, area: Rect) {
+        let rows = Flex::vertical()
+            .margin(Sides::all(self.margin))
+            .constraints([
+                Constraint::Fixed(3),
+                Constraint::Min(4),
+                Constraint::Fixed(1),
+            ])
+            .split(area);
+
+        // Header
+        self.render_region(frame, rows[0], 0, &Constraint::Fixed(3));
+
+        // Middle: sidebar + main + aside
+        let cols = Flex::horizontal()
+            .gap(self.gap)
+            .constraints([
+                Constraint::Fixed(20),
+                Constraint::Min(20),
+                Constraint::Max(30),
+            ])
+            .split(rows[1]);
+        self.render_region(frame, cols[0], 1, &Constraint::Fixed(20));
+        self.render_region(frame, cols[1], 2, &Constraint::Min(20));
+        self.render_region(frame, cols[2], 3, &Constraint::Max(30));
+
+        // Footer
+        self.render_region(frame, rows[2], 4, &Constraint::Fixed(1));
+    }
+
+    /// Render a single colored region with its rect info and constraint label.
+    fn render_region(&self, frame: &mut Frame, rect: Rect, idx: usize, constraint: &Constraint) {
+        if rect.width == 0 || rect.height == 0 {
+            return;
+        }
+        let colors = region_colors();
+        let color = colors[idx % colors.len()];
+        let label = Self::constraint_label(constraint);
+
+        let style = Style::new().fg(theme::fg::PRIMARY).bg(color);
+        let block = Block::new()
+            .borders(Borders::ALL)
+            .border_type(BorderType::Square)
+            .title(&label)
+            .title_alignment(Alignment::Center)
+            .style(style);
+        let inner = block.inner(rect);
+        block.render(rect, frame);
+
+        if inner.height > 0 && inner.width > 4 {
+            let rect_text = format!("{}x{} @({},{})", rect.width, rect.height, rect.x, rect.y);
+            Paragraph::new(rect_text).style(style).render(inner, frame);
+        }
+    }
+
+    /// Render the bottom half: controls + widget demos.
+    fn render_bottom(&self, frame: &mut Frame, area: Rect) {
+        // Split horizontally: controls (left) + widget demos (right)
+        let cols = Flex::horizontal()
+            .constraints([Constraint::Percentage(40.0), Constraint::Percentage(60.0)])
+            .split(area);
+
+        self.layout_controls.set(cols[0]);
+        self.render_controls(frame, cols[0]);
+        self.render_widget_demos(frame, cols[1]);
+    }
+
+    /// Render the controls panel showing current settings.
+    fn render_controls(&self, frame: &mut Frame, area: Rect) {
+        let block = Block::new()
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .title(" Controls ")
+            .title_alignment(Alignment::Center)
+            .style(theme::content_border());
+        let inner = block.inner(area);
+        block.render(area, frame);
+
+        if inner.height < 3 || inner.width < 15 {
+            return;
+        }
+
+        let constraints = self.preset_constraints();
+        let constraint_list: String = constraints
+            .iter()
+            .enumerate()
+            .map(|(i, c)| {
+                let marker = if i == self.selected_constraint {
+                    ">"
+                } else {
+                    " "
+                };
+                format!("{marker} {}", Self::constraint_label(c))
+            })
+            .collect::<Vec<_>>()
+            .join("  ");
+        let selected = self
+            .pane_selection
+            .as_sorted_vec()
+            .into_iter()
+            .map(|pane_id| pane_id.get().to_string())
+            .collect::<Vec<_>>()
+            .join(",");
+        let gesture = self
+            .pane_active_gesture
+            .get()
+            .map_or("Idle".to_string(), |gesture| format!("{:?}", gesture.mode));
+        let preview = self
+            .pane_preview_state
+            .zone
+            .map(pane_zone_label)
+            .unwrap_or("none");
+        let timeline_status = self.pane_timeline_status();
+        let recovery = self
+            .pane_workspace_recovery_notice
+            .as_ref()
+            .map_or_else(String::new, PaneWorkspaceRecoveryNotice::summary);
+
+        let info = format!(
+            "Preset: [{}] {}\n\
+             Direction: {} (d)\n\
+             Alignment: {} (a)\n\
+             Gap: {} (+/-)\n\
+             Margin: {} (m/M)\n\
+             Padding: {} (p/P)\n\
+             Constraints: {}\n\
+             Pane Mode: {} (f/c/n/k)\n\
+             Selected: [{}] (Shift+Click)\n\
+             Gesture: {} (Esc cancel)\n\
+             Dock: {} {:02}%\n\
+             Timeline: {}/{} (u/y/R)\n\
+             Splitters: {} h:{} a:{} wu:{}\n\
+             Magnetic Field: {:.1} (wheel in pane)\n\
+             Workspace Gen: {}\n\
+             {}",
+            self.current_preset + 1,
+            PRESET_NAMES[self.current_preset],
+            self.direction.label(),
+            ALIGNMENT_NAMES[self.alignment_idx],
+            self.gap,
+            self.margin,
+            self.padding_amount,
+            constraint_list,
+            pane_mode_label(self.pane_intelligence_mode),
+            selected,
+            gesture,
+            preview,
+            self.pane_preview_state.dock_strength_bps / 100,
+            timeline_status.cursor,
+            timeline_status.len,
+            self.pane_splitter_total.get(),
+            self.pane_splitter_hovered.get(),
+            self.pane_splitter_active.get(),
+            self.pane_splitter_work_units.get(),
+            self.pane_magnetic_field_cells,
+            self.pane_workspace_generation,
+            recovery,
+        );
+
+        Paragraph::new(info)
+            .style(Style::new().fg(theme::fg::SECONDARY))
+            .render(inner, frame);
+    }
+
+    /// Render widget demos: Padding, Align, Columns, Group.
+    fn render_widget_demos(&self, frame: &mut Frame, area: Rect) {
+        let block = Block::new()
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .title(" Widget Demos ")
+            .title_alignment(Alignment::Center)
+            .style(theme::content_border());
+        let demo_inner = block.inner(area);
+        block.render(area, frame);
+
+        if demo_inner.height < 4 || demo_inner.width < 20 {
+            return;
+        }
+
+        // Split into 4 demo areas
+        let demo_rows = Flex::vertical()
+            .constraints([Constraint::Min(3), Constraint::Min(3)])
+            .split(demo_inner);
+
+        let top_demos = Flex::horizontal()
+            .gap(theme::spacing::XS)
+            .constraints([Constraint::Percentage(50.0), Constraint::Percentage(50.0)])
+            .split(demo_rows[0]);
+
+        let bottom_demos = Flex::horizontal()
+            .gap(theme::spacing::XS)
+            .constraints([Constraint::Percentage(50.0), Constraint::Percentage(50.0)])
+            .split(demo_rows[1]);
+
+        // Demo 1: Padding widget
+        self.render_padding_demo(frame, top_demos[0]);
+
+        // Demo 2: Align widget
+        self.render_align_demo(frame, top_demos[1]);
+
+        // Demo 3: Columns widget
+        self.render_columns_demo(frame, bottom_demos[0]);
+
+        // Demo 4: Group widget
+        self.render_group_demo(frame, bottom_demos[1]);
+    }
+
+    fn render_padding_demo(&self, frame: &mut Frame, area: Rect) {
+        let label = Paragraph::new(format!("Padding({})", self.padding_amount)).style(
+            Style::new()
+                .fg(theme::accent::PRIMARY)
+                .attrs(StyleFlags::BOLD),
+        );
+        let padded = Padding::new(label, Sides::all(self.padding_amount));
+        let demo_block = Block::new()
+            .borders(Borders::ALL)
+            .title("Padding")
+            .style(Style::new().fg(theme::fg::MUTED));
+        let inner = demo_block.inner(area);
+        demo_block.render(area, frame);
+        Widget::render(&padded, inner, frame);
+    }
+
+    fn render_align_demo(&self, frame: &mut Frame, area: Rect) {
+        let (h_align, v_align, pos_name) = align_position(self.align_pos);
+
+        let content = Paragraph::new(pos_name)
+            .style(Style::new().fg(theme::accent::INFO).attrs(StyleFlags::BOLD));
+        let aligned = Align::new(content)
+            .horizontal(h_align)
+            .vertical(v_align)
+            .child_width(display_width(pos_name) as u16)
+            .child_height(1);
+
+        let demo_block = Block::new()
+            .borders(Borders::ALL)
+            .title("Align (l)")
+            .style(Style::new().fg(theme::fg::MUTED));
+        let inner = demo_block.inner(area);
+        demo_block.render(area, frame);
+        Widget::render(&aligned, inner, frame);
+    }
+
+    fn render_columns_demo(&self, frame: &mut Frame, area: Rect) {
+        let colors = region_colors();
+        let col_a = Paragraph::new("A").style(Style::new().fg(colors[0]).attrs(StyleFlags::BOLD));
+        let col_b = Paragraph::new("B").style(Style::new().fg(colors[1]).attrs(StyleFlags::BOLD));
+        let col_c = Paragraph::new("C").style(Style::new().fg(colors[2]).attrs(StyleFlags::BOLD));
+
+        let columns = Columns::new()
+            .gap(theme::spacing::XS)
+            .column(col_a, Constraint::Ratio(1, 3))
+            .column(col_b, Constraint::Ratio(1, 3))
+            .column(col_c, Constraint::Ratio(1, 3));
+
+        let demo_block = Block::new()
+            .borders(Borders::ALL)
+            .title("Columns")
+            .style(Style::new().fg(theme::fg::MUTED));
+        let inner = demo_block.inner(area);
+        demo_block.render(area, frame);
+        columns.render(inner, frame);
+    }
+
+    fn render_group_demo(&self, frame: &mut Frame, area: Rect) {
+        let bg = Paragraph::new("Group layer").style(Style::new().fg(theme::fg::MUTED));
+        let fg = Paragraph::new("Overlay").style(
+            Style::new()
+                .fg(theme::accent::SUCCESS)
+                .attrs(StyleFlags::BOLD),
+        );
+
+        let group = Group::new().push(bg).push(fg);
+
+        let demo_block = Block::new()
+            .borders(Borders::ALL)
+            .title("Group")
+            .style(Style::new().fg(theme::fg::MUTED));
+        let inner = demo_block.inner(area);
+        demo_block.render(area, frame);
+        group.render(inner, frame);
+    }
+}
+
+/// Map an align position index (0-8) to horizontal + vertical alignment and a label.
+fn align_position(idx: usize) -> (Alignment, VerticalAlignment, &'static str) {
+    match idx % 9 {
+        0 => (Alignment::Left, VerticalAlignment::Top, "TopLeft"),
+        1 => (Alignment::Center, VerticalAlignment::Top, "TopCenter"),
+        2 => (Alignment::Right, VerticalAlignment::Top, "TopRight"),
+        3 => (Alignment::Left, VerticalAlignment::Middle, "MidLeft"),
+        4 => (Alignment::Center, VerticalAlignment::Middle, "Center"),
+        5 => (Alignment::Right, VerticalAlignment::Middle, "MidRight"),
+        6 => (Alignment::Left, VerticalAlignment::Bottom, "BotLeft"),
+        7 => (Alignment::Center, VerticalAlignment::Bottom, "BotCenter"),
+        _ => (Alignment::Right, VerticalAlignment::Bottom, "BotRight"),
+    }
+}
+
+fn pane_splitter_cells(
+    axis: ftui_layout::SplitAxis,
+    state: PaneSplitterVisualState,
+) -> (RenderCell, RenderCell) {
+    let (rail_fg, rail_bg, handle_fg, handle_bg) = match state {
+        PaneSplitterVisualState::Idle => (
+            theme::fg::MUTED,
+            theme::alpha::SURFACE,
+            theme::fg::SECONDARY,
+            theme::alpha::SURFACE,
+        ),
+        PaneSplitterVisualState::Hover => (
+            theme::accent::ACCENT_10,
+            theme::alpha::SURFACE,
+            theme::accent::ACCENT_6,
+            theme::alpha::SURFACE,
+        ),
+        PaneSplitterVisualState::Active => (
+            theme::accent::WARNING,
+            theme::alpha::SURFACE,
+            theme::accent::WARNING,
+            theme::alpha::SURFACE,
+        ),
+    };
+    let rail_glyph = match axis {
+        ftui_layout::SplitAxis::Horizontal => '│',
+        ftui_layout::SplitAxis::Vertical => '─',
+    };
+    let rail_cell = RenderCell::from_char(rail_glyph)
+        .with_fg(rail_fg.into())
+        .with_bg(rail_bg.into());
+    let handle_cell = RenderCell::from_char('■')
+        .with_fg(handle_fg.into())
+        .with_bg(handle_bg.into());
+    (rail_cell, handle_cell)
+}
+
+fn pane_mode_label(mode: PaneLayoutIntelligenceMode) -> &'static str {
+    match mode {
+        PaneLayoutIntelligenceMode::Focus => "Focus",
+        PaneLayoutIntelligenceMode::Compare => "Compare",
+        PaneLayoutIntelligenceMode::Monitor => "Monitor",
+        PaneLayoutIntelligenceMode::Compact => "Compact",
+    }
+}
+
+fn pane_zone_label(zone: ftui_layout::PaneDockZone) -> &'static str {
+    match zone {
+        ftui_layout::PaneDockZone::Left => "Left",
+        ftui_layout::PaneDockZone::Right => "Right",
+        ftui_layout::PaneDockZone::Top => "Top",
+        ftui_layout::PaneDockZone::Bottom => "Bottom",
+        ftui_layout::PaneDockZone::Center => "Center",
+    }
+}
+
+fn first_leaf_id(tree: &PaneTree) -> Option<PaneId> {
+    tree.nodes().find_map(|node| match node.kind {
+        PaneNodeKind::Leaf(_) => Some(node.id),
+        _ => None,
+    })
+}
+
+/// Solve a flex layout and return the resulting rects (for testing).
+pub fn solve_flex_vertical(area: Rect, constraints: &[Constraint]) -> ftui_layout::Rects {
+    Flex::vertical()
+        .constraints(constraints.iter().copied())
+        .split(area)
+}
+
+pub fn solve_flex_horizontal(area: Rect, constraints: &[Constraint]) -> ftui_layout::Rects {
+    Flex::horizontal()
+        .constraints(constraints.iter().copied())
+        .split(area)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ftui_layout::{PaneOperation, PaneSplitRatio};
+
+    // ==========================================================================
+    // Basic Layout Tests
+    // ==========================================================================
+
+    #[test]
+    fn layout_flex_vertical() {
+        let area = Rect::new(0, 0, 80, 40);
+        let constraints = [
+            Constraint::Fixed(5),
+            Constraint::Percentage(30.0),
+            Constraint::Min(3),
+            Constraint::Max(10),
+            Constraint::Ratio(1, 3),
+        ];
+        let rects = solve_flex_vertical(area, &constraints);
+        assert_eq!(rects.len(), 5);
+        // First rect should be exactly 5 rows tall
+        assert_eq!(rects[0].height, 5);
+        assert_eq!(rects[0].width, 80);
+        // All rects should be within the area
+        for r in &rects {
+            assert!(r.x >= area.x);
+            assert!(r.y >= area.y);
+            assert!(r.x + r.width <= area.x + area.width);
+            assert!(r.y + r.height <= area.y + area.height);
+        }
+    }
+
+    #[test]
+    fn layout_flex_horizontal() {
+        let area = Rect::new(0, 0, 100, 30);
+        let constraints = [
+            Constraint::Fixed(10),
+            Constraint::Percentage(30.0),
+            Constraint::Min(5),
+        ];
+        let rects = solve_flex_horizontal(area, &constraints);
+        assert_eq!(rects.len(), 3);
+        // First rect should be exactly 10 cols wide
+        assert_eq!(rects[0].width, 10);
+        assert_eq!(rects[0].height, 30);
+        // All rects should be within the area
+        for r in &rects {
+            assert!(r.x >= area.x);
+            assert!(r.y >= area.y);
+            assert!(r.x + r.width <= area.x + area.width);
+        }
+    }
+
+    #[test]
+    fn layout_grid_spanning() {
+        let area = Rect::new(0, 0, 60, 20);
+        // Header row
+        let rows = Flex::vertical()
+            .constraints([Constraint::Fixed(3), Constraint::Min(2), Constraint::Min(2)])
+            .split(area);
+        // Header spans full width
+        assert_eq!(rows[0].width, 60);
+        assert_eq!(rows[0].height, 3);
+        // Each row has 3 cols
+        let cols = Flex::horizontal()
+            .constraints([
+                Constraint::Ratio(1, 3),
+                Constraint::Ratio(1, 3),
+                Constraint::Ratio(1, 3),
+            ])
+            .split(rows[1]);
+        assert_eq!(cols.len(), 3);
+        // Columns should roughly be 20 each
+        for c in &cols {
+            assert!(c.width >= 19 && c.width <= 21, "col width: {}", c.width);
+        }
+    }
+
+    #[test]
+    fn layout_alignment_modes() {
+        let area = Rect::new(0, 0, 100, 50);
+        // Test all 5 alignments with a small fixed constraint
+        for alignment in &ALIGNMENTS {
+            let rects = Flex::vertical()
+                .alignment(*alignment)
+                .constraints([Constraint::Fixed(10)])
+                .split(area);
+            assert_eq!(rects.len(), 1);
+            assert_eq!(rects[0].height, 10);
+            assert_eq!(rects[0].width, 100);
+        }
+    }
+
+    #[test]
+    fn layout_nested() {
+        let area = Rect::new(0, 0, 100, 40);
+        // Outer: 60/40 horizontal split
+        let outer = Flex::horizontal()
+            .constraints([Constraint::Percentage(60.0), Constraint::Percentage(40.0)])
+            .split(area);
+        assert_eq!(outer.len(), 2);
+        assert_eq!(outer[0].width, 60);
+        assert_eq!(outer[1].width, 40);
+
+        // Inner left: 3 vertical parts
+        let inner_left = Flex::vertical()
+            .constraints([
+                Constraint::Fixed(5),
+                Constraint::Min(4),
+                Constraint::Fixed(5),
+            ])
+            .split(outer[0]);
+        assert_eq!(inner_left.len(), 3);
+        assert_eq!(inner_left[0].height, 5);
+        assert_eq!(inner_left[2].height, 5);
+        // Middle gets the rest: 40 - 5 - 5 = 30
+        assert_eq!(inner_left[1].height, 30);
+    }
+
+    // ==========================================================================
+    // Unit Tests: LayoutLab State and Logic (bd-32my.3)
+    // ==========================================================================
+
+    #[test]
+    fn layout_lab_default_state() {
+        let lab = LayoutLab::new();
+        assert_eq!(lab.current_preset, 0);
+        assert_eq!(lab.selected_constraint, 0);
+        assert_eq!(lab.direction, Direction::Vertical);
+        assert_eq!(lab.alignment_idx, 0);
+        assert_eq!(lab.gap, 0);
+        assert_eq!(lab.margin, 0);
+        assert_eq!(lab.align_pos, 4); // Center
+        assert!(!lab.show_debug);
+    }
+
+    #[test]
+    fn direction_toggle() {
+        assert_eq!(Direction::Vertical.toggle(), Direction::Horizontal);
+        assert_eq!(Direction::Horizontal.toggle(), Direction::Vertical);
+        // Toggle is involutive
+        assert_eq!(Direction::Vertical.toggle().toggle(), Direction::Vertical);
+    }
+
+    #[test]
+    fn direction_labels() {
+        assert_eq!(Direction::Vertical.label(), "Vertical");
+        assert_eq!(Direction::Horizontal.label(), "Horizontal");
+    }
+
+    #[test]
+    fn constraint_label_formatting() {
+        assert_eq!(
+            LayoutLab::constraint_label(&Constraint::Fixed(10)),
+            "Fixed(10)"
+        );
+        assert_eq!(
+            LayoutLab::constraint_label(&Constraint::Percentage(50.0)),
+            "Pct(50%)"
+        );
+        assert_eq!(LayoutLab::constraint_label(&Constraint::Min(5)), "Min(5)");
+        assert_eq!(LayoutLab::constraint_label(&Constraint::Max(20)), "Max(20)");
+        assert_eq!(
+            LayoutLab::constraint_label(&Constraint::Ratio(1, 3)),
+            "Ratio(1/3)"
+        );
+        assert_eq!(LayoutLab::constraint_label(&Constraint::Fill), "Fill");
+        assert_eq!(
+            LayoutLab::constraint_label(&Constraint::FitContent),
+            "FitContent"
+        );
+        assert_eq!(
+            LayoutLab::constraint_label(&Constraint::FitContentBounded { min: 5, max: 20 }),
+            "FitContent(5..20)"
+        );
+        assert_eq!(LayoutLab::constraint_label(&Constraint::FitMin), "FitMin");
+    }
+
+    #[test]
+    fn preset_constraints_count() {
+        let lab = LayoutLab::new();
+
+        // Preset 0: 5 constraints
+        let mut lab0 = lab;
+        lab0.current_preset = 0;
+        assert_eq!(lab0.preset_constraints().len(), 5);
+
+        // Preset 1: 5 constraints (same as 0)
+        let mut lab1 = LayoutLab::new();
+        lab1.current_preset = 1;
+        assert_eq!(lab1.preset_constraints().len(), 5);
+
+        // Preset 2: 3 constraints (grid)
+        let mut lab2 = LayoutLab::new();
+        lab2.current_preset = 2;
+        assert_eq!(lab2.preset_constraints().len(), 3);
+
+        // Preset 3: 2 constraints (nested)
+        let mut lab3 = LayoutLab::new();
+        lab3.current_preset = 3;
+        assert_eq!(lab3.preset_constraints().len(), 2);
+
+        // Preset 4: 3 constraints (real-world)
+        let mut lab4 = LayoutLab::new();
+        lab4.current_preset = 4;
+        assert_eq!(lab4.preset_constraints().len(), 3);
+    }
+
+    #[test]
+    fn alignment_cycling() {
+        let lab = LayoutLab::new();
+        assert_eq!(lab.alignment_idx, 0);
+        assert_eq!(lab.current_alignment(), FlexAlignment::Start);
+
+        let mut lab = lab;
+        lab.alignment_idx = 1;
+        assert_eq!(lab.current_alignment(), FlexAlignment::Center);
+
+        lab.alignment_idx = 2;
+        assert_eq!(lab.current_alignment(), FlexAlignment::End);
+
+        lab.alignment_idx = 3;
+        assert_eq!(lab.current_alignment(), FlexAlignment::SpaceBetween);
+
+        lab.alignment_idx = 4;
+        assert_eq!(lab.current_alignment(), FlexAlignment::SpaceAround);
+
+        // Wrap around
+        lab.alignment_idx = 5 % ALIGNMENTS.len();
+        assert_eq!(lab.current_alignment(), FlexAlignment::Start);
+    }
+
+    #[test]
+    fn align_position_mapping() {
+        // Test all 9 positions
+        assert_eq!(
+            align_position(0),
+            (Alignment::Left, VerticalAlignment::Top, "TopLeft")
+        );
+        assert_eq!(
+            align_position(1),
+            (Alignment::Center, VerticalAlignment::Top, "TopCenter")
+        );
+        assert_eq!(
+            align_position(2),
+            (Alignment::Right, VerticalAlignment::Top, "TopRight")
+        );
+        assert_eq!(
+            align_position(3),
+            (Alignment::Left, VerticalAlignment::Middle, "MidLeft")
+        );
+        assert_eq!(
+            align_position(4),
+            (Alignment::Center, VerticalAlignment::Middle, "Center")
+        );
+        assert_eq!(
+            align_position(5),
+            (Alignment::Right, VerticalAlignment::Middle, "MidRight")
+        );
+        assert_eq!(
+            align_position(6),
+            (Alignment::Left, VerticalAlignment::Bottom, "BotLeft")
+        );
+        assert_eq!(
+            align_position(7),
+            (Alignment::Center, VerticalAlignment::Bottom, "BotCenter")
+        );
+        assert_eq!(
+            align_position(8),
+            (Alignment::Right, VerticalAlignment::Bottom, "BotRight")
+        );
+        // Wrap around
+        assert_eq!(
+            align_position(9),
+            (Alignment::Left, VerticalAlignment::Top, "TopLeft")
+        );
+    }
+
+    #[test]
+    fn keybindings_non_empty() {
+        let lab = LayoutLab::new();
+        let bindings = lab.keybindings();
+        assert!(!bindings.is_empty());
+        // Should have at least 10 keybindings
+        assert!(
+            bindings.len() >= 10,
+            "Expected at least 10 keybindings, got {}",
+            bindings.len()
+        );
+    }
+
+    #[test]
+    fn title_and_tab_label() {
+        let lab = LayoutLab::new();
+        assert_eq!(lab.title(), "Layout Laboratory");
+        assert_eq!(lab.tab_label(), "Layout");
+    }
+
+    // ==========================================================================
+    // Edge Cases
+    // ==========================================================================
+
+    #[test]
+    fn layout_zero_size_area() {
+        let area = Rect::new(0, 0, 0, 0);
+        let constraints = [Constraint::Fixed(10)];
+        let rects = solve_flex_vertical(area, &constraints);
+        // Should return 1 rect with zero dimensions
+        assert_eq!(rects.len(), 1);
+        assert_eq!(rects[0].width, 0);
+        assert_eq!(rects[0].height, 0);
+    }
+
+    #[test]
+    fn layout_tiny_area() {
+        let area = Rect::new(0, 0, 2, 2);
+        let constraints = [Constraint::Fixed(5), Constraint::Fixed(5)];
+        let rects = solve_flex_vertical(area, &constraints);
+        assert_eq!(rects.len(), 2);
+        // Rects should still be within area even if constraints can't be satisfied
+        for r in &rects {
+            assert!(r.x + r.width <= area.x + area.width);
+            assert!(r.y + r.height <= area.y + area.height);
+        }
+    }
+
+    #[test]
+    fn layout_single_constraint() {
+        let area = Rect::new(10, 20, 80, 40);
+        let constraints = [Constraint::Min(0)];
+        let rects = solve_flex_vertical(area, &constraints);
+        assert_eq!(rects.len(), 1);
+        // Single Min(0) should fill the entire area
+        assert_eq!(rects[0], area);
+    }
+
+    #[test]
+    fn layout_empty_constraints() {
+        let area = Rect::new(0, 0, 80, 40);
+        let constraints: [Constraint; 0] = [];
+        let rects = solve_flex_vertical(area, &constraints);
+        assert!(rects.is_empty());
+    }
+
+    #[test]
+    fn layout_offset_area() {
+        // Test with non-zero origin
+        let area = Rect::new(50, 100, 80, 40);
+        let constraints = [Constraint::Fixed(10), Constraint::Min(5)];
+        let rects = solve_flex_vertical(area, &constraints);
+        assert_eq!(rects.len(), 2);
+        // First rect should start at area origin
+        assert_eq!(rects[0].x, 50);
+        assert_eq!(rects[0].y, 100);
+        // All within area
+        for r in &rects {
+            assert!(r.x >= area.x);
+            assert!(r.y >= area.y);
+            assert!(r.x + r.width <= area.x + area.width);
+            assert!(r.y + r.height <= area.y + area.height);
+        }
+    }
+
+    #[test]
+    fn layout_with_gap() {
+        let area = Rect::new(0, 0, 100, 50);
+        let rects = Flex::vertical()
+            .gap(5)
+            .constraints([
+                Constraint::Fixed(10),
+                Constraint::Fixed(10),
+                Constraint::Fixed(10),
+            ])
+            .split(area);
+        assert_eq!(rects.len(), 3);
+        // Check that there's a gap between rects
+        // First rect ends at y=10, second should start at y=15 (gap=5)
+        assert_eq!(rects[0].y + rects[0].height + 5, rects[1].y);
+        assert_eq!(rects[1].y + rects[1].height + 5, rects[2].y);
+    }
+
+    #[test]
+    fn layout_with_margin() {
+        let area = Rect::new(0, 0, 100, 50);
+        let rects = Flex::vertical()
+            .margin(Sides::all(5))
+            .constraints([Constraint::Min(0)])
+            .split(area);
+        assert_eq!(rects.len(), 1);
+        // Rect should be inset by margin
+        assert_eq!(rects[0].x, 5);
+        assert_eq!(rects[0].y, 5);
+        assert_eq!(rects[0].width, 90); // 100 - 5 - 5
+        assert_eq!(rects[0].height, 40); // 50 - 5 - 5
+    }
+
+    // ==========================================================================
+    // Invariant Tests
+    // ==========================================================================
+
+    #[test]
+    fn layout_rects_no_overlap_vertical() {
+        let area = Rect::new(0, 0, 80, 40);
+        let constraints = [
+            Constraint::Fixed(10),
+            Constraint::Percentage(30.0),
+            Constraint::Min(5),
+        ];
+        let rects = solve_flex_vertical(area, &constraints);
+
+        // Check no vertical overlap
+        for i in 0..rects.len() {
+            for j in (i + 1)..rects.len() {
+                let r1 = &rects[i];
+                let r2 = &rects[j];
+                // In vertical layout, r2 should start at or after r1 ends
+                assert!(
+                    r2.y >= r1.y + r1.height,
+                    "Overlap detected: rect {} ends at y={}, rect {} starts at y={}",
+                    i,
+                    r1.y + r1.height,
+                    j,
+                    r2.y
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn layout_rects_no_overlap_horizontal() {
+        let area = Rect::new(0, 0, 100, 30);
+        let constraints = [
+            Constraint::Fixed(20),
+            Constraint::Percentage(40.0),
+            Constraint::Min(10),
+        ];
+        let rects = solve_flex_horizontal(area, &constraints);
+
+        // Check no horizontal overlap
+        for i in 0..rects.len() {
+            for j in (i + 1)..rects.len() {
+                let r1 = &rects[i];
+                let r2 = &rects[j];
+                // In horizontal layout, r2 should start at or after r1 ends
+                assert!(
+                    r2.x >= r1.x + r1.width,
+                    "Overlap detected: rect {} ends at x={}, rect {} starts at x={}",
+                    i,
+                    r1.x + r1.width,
+                    j,
+                    r2.x
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn layout_fixed_constraint_exact() {
+        // Fixed constraints should produce exact sizes
+        let area = Rect::new(0, 0, 100, 100);
+        let rects = solve_flex_vertical(
+            area,
+            &[
+                Constraint::Fixed(10),
+                Constraint::Fixed(20),
+                Constraint::Min(0),
+            ],
+        );
+        assert_eq!(rects[0].height, 10, "Fixed(10) should be exactly 10");
+        assert_eq!(rects[1].height, 20, "Fixed(20) should be exactly 20");
+    }
+
+    #[test]
+    fn layout_ratio_proportional() {
+        let area = Rect::new(0, 0, 90, 30);
+        let rects = solve_flex_horizontal(
+            area,
+            &[
+                Constraint::Ratio(1, 3),
+                Constraint::Ratio(1, 3),
+                Constraint::Ratio(1, 3),
+            ],
+        );
+        // Each should be 30 wide (90 / 3)
+        for r in &rects {
+            assert_eq!(r.width, 30, "Each ratio(1,3) of 90 should be 30");
+        }
+    }
+
+    #[test]
+    fn layout_percentage_proportional() {
+        let area = Rect::new(0, 0, 100, 100);
+        let rects = solve_flex_vertical(
+            area,
+            &[Constraint::Percentage(25.0), Constraint::Percentage(75.0)],
+        );
+        assert_eq!(rects[0].height, 25, "25% of 100 should be 25");
+        assert_eq!(rects[1].height, 75, "75% of 100 should be 75");
+    }
+
+    // ==========================================================================
+    // Render Determinism + Event-Driven Tests (bd-32my.3 completion)
+    // ==========================================================================
+
+    use ftui_render::grapheme_pool::GraphemePool;
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+
+    fn checksum_frame(frame: &Frame) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        let width = frame.buffer.width();
+        let height = frame.buffer.height();
+        for y in 0..height {
+            for x in 0..width {
+                if let Some(cell) = frame.buffer.get(x, y) {
+                    cell.content.hash(&mut hasher);
+                    cell.fg.hash(&mut hasher);
+                    cell.bg.hash(&mut hasher);
+                    cell.attrs.hash(&mut hasher);
+                }
+            }
+        }
+        hasher.finish()
+    }
+
+    fn frame_text(frame: &Frame) -> String {
+        let mut text = String::new();
+        for y in 0..frame.buffer.height() {
+            for x in 0..frame.buffer.width() {
+                let ch = frame
+                    .buffer
+                    .get(x, y)
+                    .and_then(|cell| cell.content.as_char())
+                    .unwrap_or(' ');
+                text.push(ch);
+            }
+            text.push('\n');
+        }
+        text
+    }
+
+    fn log_jsonl(test: &str, fields: &[(&str, String)]) {
+        let mut parts = Vec::with_capacity(fields.len() + 1);
+        parts.push(format!("\"test\":\"{}\"", test));
+        parts.extend(fields.iter().map(|(k, v)| format!("\"{}\":\"{}\"", k, v)));
+        eprintln!("{{{}}}", parts.join(","));
+    }
+
+    fn press(code: KeyCode) -> Event {
+        Event::Key(ftui_core::event::KeyEvent {
+            code,
+            modifiers: Modifiers::NONE,
+            kind: KeyEventKind::Press,
+        })
+    }
+
+    fn shift_press(code: KeyCode) -> Event {
+        Event::Key(ftui_core::event::KeyEvent {
+            code,
+            modifiers: Modifiers::SHIFT,
+            kind: KeyEventKind::Press,
+        })
+    }
+
+    #[test]
+    fn render_deterministic_all_presets() {
+        for preset in 0..PRESET_COUNT {
+            let mut lab = LayoutLab::new();
+            lab.current_preset = preset;
+
+            // Pin theme and accessibility globals so parallel tests cannot
+            // change render output between checksum passes.
+            let _render_guard =
+                theme::ScopedRenderLock::new(theme::ThemeId::CyberpunkAurora, false, 1.0);
+
+            let checksum_a = {
+                let mut pool = GraphemePool::new();
+                let mut frame = Frame::new(120, 40, &mut pool);
+                lab.view(&mut frame, Rect::new(0, 0, 120, 40));
+                checksum_frame(&frame)
+            };
+
+            let checksum_b = {
+                let mut pool = GraphemePool::new();
+                let mut frame = Frame::new(120, 40, &mut pool);
+                lab.view(&mut frame, Rect::new(0, 0, 120, 40));
+                checksum_frame(&frame)
+            };
+
+            log_jsonl(
+                "render_deterministic_all_presets",
+                &[
+                    ("preset", preset.to_string()),
+                    ("checksum", format!("{checksum_a:016x}")),
+                ],
+            );
+
+            assert_eq!(
+                checksum_a, checksum_b,
+                "Render should be deterministic for preset {}",
+                preset
+            );
+            assert_ne!(
+                checksum_a, 0,
+                "Checksum should be non-zero for preset {}",
+                preset
+            );
+        }
+    }
+
+    #[test]
+    fn render_deterministic_with_state_variations() {
+        let mut lab = LayoutLab::new();
+        lab.current_preset = 1;
+        lab.direction = Direction::Horizontal;
+        lab.alignment_idx = 3;
+        lab.gap = 3;
+        lab.margin = 2;
+        lab.padding_amount = 2;
+        lab.align_pos = 7;
+        lab.show_debug = true;
+
+        // Pin theme and accessibility globals so parallel tests cannot change
+        // render output between checksum passes.
+        let _render_guard =
+            theme::ScopedRenderLock::new(theme::ThemeId::CyberpunkAurora, false, 1.0);
+
+        let checksum_a = {
+            let mut pool = GraphemePool::new();
+            let mut frame = Frame::new(120, 40, &mut pool);
+            lab.view(&mut frame, Rect::new(0, 0, 120, 40));
+            checksum_frame(&frame)
+        };
+
+        let checksum_b = {
+            let mut pool = GraphemePool::new();
+            let mut frame = Frame::new(120, 40, &mut pool);
+            lab.view(&mut frame, Rect::new(0, 0, 120, 40));
+            checksum_frame(&frame)
+        };
+
+        log_jsonl(
+            "render_deterministic_with_state_variations",
+            &[("checksum", format!("{checksum_a:016x}"))],
+        );
+
+        assert_eq!(
+            checksum_a, checksum_b,
+            "Render should be deterministic with complex state"
+        );
+    }
+
+    #[test]
+    fn all_presets_render_at_standard_sizes() {
+        let sizes: [(u16, u16); 3] = [(80, 24), (120, 40), (200, 60)];
+
+        for preset in 0..PRESET_COUNT {
+            for (w, h) in &sizes {
+                let mut lab = LayoutLab::new();
+                lab.current_preset = preset;
+
+                let mut pool = GraphemePool::new();
+                let mut frame = Frame::new(*w, *h, &mut pool);
+                lab.view(&mut frame, Rect::new(0, 0, *w, *h));
+
+                let checksum = checksum_frame(&frame);
+                log_jsonl(
+                    "all_presets_render",
+                    &[
+                        ("preset", preset.to_string()),
+                        ("size", format!("{w}x{h}")),
+                        ("checksum", format!("{checksum:016x}")),
+                    ],
+                );
+                assert_ne!(
+                    checksum, 0,
+                    "Preset {} at {}x{} should produce non-empty output",
+                    preset, w, h
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn tiny_terminal_shows_message() {
+        let lab = LayoutLab::new();
+        let mut pool = GraphemePool::new();
+        let mut frame = Frame::new(30, 5, &mut pool);
+        lab.view(&mut frame, Rect::new(0, 0, 30, 5));
+
+        // Should not panic and should produce some output
+        let checksum = checksum_frame(&frame);
+        assert_ne!(checksum, 0, "Tiny terminal should still produce output");
+    }
+
+    #[test]
+    fn update_preset_via_events() {
+        let mut lab = LayoutLab::new();
+        assert_eq!(lab.current_preset, 0);
+
+        lab.update(&press(KeyCode::Char('3')));
+        assert_eq!(lab.current_preset, 2, "Pressing '3' should select preset 2");
+
+        lab.update(&press(KeyCode::Char('5')));
+        assert_eq!(lab.current_preset, 4, "Pressing '5' should select preset 4");
+
+        lab.update(&press(KeyCode::Char('1')));
+        assert_eq!(lab.current_preset, 0, "Pressing '1' should select preset 0");
+
+        log_jsonl(
+            "update_preset_via_events",
+            &[("passed", "true".to_string())],
+        );
+    }
+
+    #[test]
+    fn update_direction_via_event() {
+        let mut lab = LayoutLab::new();
+        assert_eq!(lab.direction, Direction::Vertical);
+
+        lab.update(&press(KeyCode::Char('d')));
+        assert_eq!(lab.direction, Direction::Horizontal);
+
+        lab.update(&press(KeyCode::Char('d')));
+        assert_eq!(lab.direction, Direction::Vertical);
+
+        log_jsonl(
+            "update_direction_via_event",
+            &[("passed", "true".to_string())],
+        );
+    }
+
+    #[test]
+    fn update_alignment_via_event() {
+        let mut lab = LayoutLab::new();
+        assert_eq!(lab.alignment_idx, 0);
+
+        for expected in 1..=5 {
+            lab.update(&press(KeyCode::Char('a')));
+            assert_eq!(
+                lab.alignment_idx,
+                expected % ALIGNMENTS.len(),
+                "After {} presses",
+                expected
+            );
+        }
+    }
+
+    #[test]
+    fn update_gap_via_events() {
+        let mut lab = LayoutLab::new();
+        assert_eq!(lab.gap, 0);
+
+        // Increase gap to max (5)
+        for _ in 0..10 {
+            lab.update(&press(KeyCode::Char('+')));
+        }
+        assert_eq!(lab.gap, 5, "Gap should saturate at 5");
+
+        // Decrease gap to 0
+        for _ in 0..10 {
+            lab.update(&press(KeyCode::Char('-')));
+        }
+        assert_eq!(lab.gap, 0, "Gap should saturate at 0");
+
+        log_jsonl("update_gap_via_events", &[("passed", "true".to_string())]);
+    }
+
+    #[test]
+    fn update_margin_via_events() {
+        let mut lab = LayoutLab::new();
+        assert_eq!(lab.margin, 0);
+
+        // Increase margin to max (4)
+        for _ in 0..10 {
+            lab.update(&press(KeyCode::Char('m')));
+        }
+        assert_eq!(lab.margin, 4, "Margin should saturate at 4");
+
+        // Decrease margin to 0 (Char('M') with NONE modifier)
+        for _ in 0..10 {
+            lab.update(&press(KeyCode::Char('M')));
+        }
+        assert_eq!(lab.margin, 0, "Margin should saturate at 0");
+
+        log_jsonl(
+            "update_margin_via_events",
+            &[("passed", "true".to_string())],
+        );
+    }
+
+    #[test]
+    fn update_padding_via_events() {
+        let mut lab = LayoutLab::new();
+        assert_eq!(
+            lab.padding_amount,
+            theme::spacing::XS,
+            "Default padding is theme::spacing::XS"
+        );
+
+        // Increase padding to max (4)
+        for _ in 0..10 {
+            lab.update(&press(KeyCode::Char('p')));
+        }
+        assert_eq!(lab.padding_amount, 4, "Padding should saturate at 4");
+
+        // Decrease padding to 0 (Char('P') with NONE modifier)
+        for _ in 0..10 {
+            lab.update(&press(KeyCode::Char('P')));
+        }
+        assert_eq!(lab.padding_amount, 0, "Padding should saturate at 0");
+
+        log_jsonl(
+            "update_padding_via_events",
+            &[("passed", "true".to_string())],
+        );
+    }
+
+    #[test]
+    fn update_debug_toggle_via_event() {
+        let mut lab = LayoutLab::new();
+        assert!(!lab.show_debug);
+
+        // Char('D') with NONE modifier (how terminals typically send uppercase)
+        lab.update(&press(KeyCode::Char('D')));
+        assert!(lab.show_debug, "D should enable debug");
+
+        lab.update(&press(KeyCode::Char('D')));
+        assert!(!lab.show_debug, "D again should disable debug");
+
+        log_jsonl("update_debug_toggle", &[("passed", "true".to_string())]);
+    }
+
+    #[test]
+    fn update_align_position_via_event() {
+        let mut lab = LayoutLab::new();
+        assert_eq!(lab.align_pos, 4); // Center
+
+        lab.update(&press(KeyCode::Char('l')));
+        assert_eq!(lab.align_pos, 5); // MidRight
+
+        // Cycle all 9 positions
+        for _ in 0..8 {
+            lab.update(&press(KeyCode::Char('l')));
+        }
+        assert_eq!(
+            lab.align_pos, 4,
+            "Full 9-position cycle should return to start+1"
+        );
+
+        log_jsonl("update_align_position", &[("passed", "true".to_string())]);
+    }
+
+    #[test]
+    fn update_tab_cycles_constraints() {
+        let mut lab = LayoutLab::new();
+        lab.current_preset = 0; // 5 constraints
+        assert_eq!(lab.selected_constraint, 0);
+
+        let count = lab.preset_constraints().len();
+        for expected in 1..=count {
+            lab.update(&press(KeyCode::Tab));
+            assert_eq!(lab.selected_constraint, expected % count);
+        }
+    }
+
+    #[test]
+    fn non_press_events_ignored() {
+        let mut lab = LayoutLab::new();
+        let initial_preset = lab.current_preset;
+        let initial_direction = lab.direction;
+
+        // Release and Repeat events should be ignored
+        let release = Event::Key(ftui_core::event::KeyEvent {
+            code: KeyCode::Char('d'),
+            modifiers: Modifiers::NONE,
+            kind: KeyEventKind::Release,
+        });
+        lab.update(&release);
+        assert_eq!(
+            lab.direction, initial_direction,
+            "Release events should be ignored"
+        );
+
+        let repeat = Event::Key(ftui_core::event::KeyEvent {
+            code: KeyCode::Char('3'),
+            modifiers: Modifiers::NONE,
+            kind: KeyEventKind::Repeat,
+        });
+        lab.update(&repeat);
+        assert_eq!(
+            lab.current_preset, initial_preset,
+            "Repeat events should be ignored"
+        );
+    }
+
+    #[test]
+    fn debug_overlay_renders_without_panic() {
+        let mut lab = LayoutLab::new();
+        lab.show_debug = true;
+
+        for preset in 0..PRESET_COUNT {
+            lab.current_preset = preset;
+            let mut pool = GraphemePool::new();
+            let mut frame = Frame::new(120, 40, &mut pool);
+            lab.view(&mut frame, Rect::new(0, 0, 120, 40));
+
+            let checksum = checksum_frame(&frame);
+            assert_ne!(
+                checksum, 0,
+                "Debug overlay on preset {} should render",
+                preset
+            );
+        }
+    }
+
+    #[test]
+    fn presets_produce_distinct_renders() {
+        let mut checksums = Vec::with_capacity(PRESET_COUNT);
+
+        for preset in 0..PRESET_COUNT {
+            let mut lab = LayoutLab::new();
+            lab.current_preset = preset;
+            let mut pool = GraphemePool::new();
+            let mut frame = Frame::new(120, 40, &mut pool);
+            lab.view(&mut frame, Rect::new(0, 0, 120, 40));
+            checksums.push(checksum_frame(&frame));
+        }
+
+        // Each preset should produce a distinct render
+        for i in 0..checksums.len() {
+            for j in (i + 1)..checksums.len() {
+                assert_ne!(
+                    checksums[i], checksums[j],
+                    "Presets {} and {} should produce distinct renders",
+                    i, j
+                );
+            }
+        }
+
+        log_jsonl(
+            "presets_produce_distinct_renders",
+            &[("count", checksums.len().to_string())],
+        );
+    }
+
+    #[test]
+    fn direction_produces_distinct_render() {
+        let mut lab = LayoutLab::new();
+        lab.current_preset = 0;
+
+        let checksum_vertical = {
+            lab.direction = Direction::Vertical;
+            let mut pool = GraphemePool::new();
+            let mut frame = Frame::new(120, 40, &mut pool);
+            lab.view(&mut frame, Rect::new(0, 0, 120, 40));
+            checksum_frame(&frame)
+        };
+
+        let checksum_horizontal = {
+            lab.direction = Direction::Horizontal;
+            let mut pool = GraphemePool::new();
+            let mut frame = Frame::new(120, 40, &mut pool);
+            lab.view(&mut frame, Rect::new(0, 0, 120, 40));
+            checksum_frame(&frame)
+        };
+
+        assert_ne!(
+            checksum_vertical, checksum_horizontal,
+            "Vertical and horizontal should produce distinct renders"
+        );
+    }
+
+    #[test]
+    fn pane_preview_area_populates_on_wide_layout() {
+        let lab = LayoutLab::new();
+        let mut pool = GraphemePool::new();
+        let mut frame = Frame::new(140, 40, &mut pool);
+        lab.view(&mut frame, Rect::new(0, 0, 140, 40));
+        assert!(
+            !lab.pane_preview.get().is_empty(),
+            "pane preview area should be available at wide sizes"
+        );
+    }
+
+    #[test]
+    fn pane_preview_area_remains_available_on_narrow_layout() {
+        let lab = LayoutLab::new();
+        let mut pool = GraphemePool::new();
+        let mut frame = Frame::new(72, 24, &mut pool);
+        lab.view(&mut frame, Rect::new(0, 0, 72, 24));
+        assert!(
+            !lab.pane_preview.get().is_empty(),
+            "pane preview should remain available on narrower layouts"
+        );
+    }
+
+    #[test]
+    fn compact_height_mode_keeps_pane_preview_connected() {
+        let lab = LayoutLab::new();
+        let mut pool = GraphemePool::new();
+        let mut frame = Frame::new(72, 10, &mut pool);
+        lab.view(&mut frame, Rect::new(0, 0, 72, 10));
+        assert!(
+            !lab.pane_preview.get().is_empty(),
+            "compact-height mode should still expose pane preview"
+        );
+        assert!(
+            lab.layout_controls.get().is_empty(),
+            "compact-height mode should skip controls instead of hard-gating the screen"
+        );
+    }
+
+    #[test]
+    fn pane_drag_records_timeline_entries() {
+        let mut lab = LayoutLab::new();
+        let mut pool = GraphemePool::new();
+        let mut frame = Frame::new(140, 40, &mut pool);
+        lab.view(&mut frame, Rect::new(0, 0, 140, 40));
+        let pane_area = lab.pane_preview.get();
+        assert!(!pane_area.is_empty(), "pane area should be initialized");
+
+        let layout = lab
+            .pane_tree
+            .solve_layout(pane_area)
+            .expect("pane layout should solve");
+        let mut leaves = lab
+            .pane_tree
+            .nodes()
+            .filter_map(|node| matches!(node.kind, PaneNodeKind::Leaf(_)).then_some(node.id))
+            .collect::<Vec<_>>();
+        leaves.sort_unstable();
+        assert!(
+            leaves.len() >= 2,
+            "default pane tree should have multiple leaves"
+        );
+
+        let from = layout.rect(leaves[0]).expect("first leaf rect");
+        let to = layout.rect(leaves[1]).expect("second leaf rect");
+        let from_x = from.x.saturating_add(from.width / 2);
+        let from_y = from.y.saturating_add(from.height / 2);
+        let to_x = to.x.saturating_add(to.width / 2);
+        let to_y = to.y.saturating_add(to.height / 2);
+
+        lab.handle_mouse(
+            MouseEventKind::Down(MouseButton::Left),
+            from_x,
+            from_y,
+            Modifiers::NONE,
+        );
+        lab.handle_mouse(
+            MouseEventKind::Drag(MouseButton::Left),
+            to_x,
+            to_y,
+            Modifiers::NONE,
+        );
+        lab.handle_mouse(
+            MouseEventKind::Up(MouseButton::Left),
+            to_x,
+            to_y,
+            Modifiers::NONE,
+        );
+
+        assert!(
+            !lab.pane_timeline.entries.is_empty(),
+            "drag interaction should record timeline operations"
+        );
+    }
+
+    #[test]
+    fn pane_shift_click_selects_cluster() {
+        let mut lab = LayoutLab::new();
+        let mut pool = GraphemePool::new();
+        let mut frame = Frame::new(140, 40, &mut pool);
+        lab.view(&mut frame, Rect::new(0, 0, 140, 40));
+        let pane_area = lab.pane_preview.get();
+        let layout = lab
+            .pane_tree
+            .solve_layout(pane_area)
+            .expect("pane layout should solve");
+        let mut leaves = lab
+            .pane_tree
+            .nodes()
+            .filter_map(|node| matches!(node.kind, PaneNodeKind::Leaf(_)).then_some(node.id))
+            .collect::<Vec<_>>();
+        leaves.sort_unstable();
+        assert!(
+            leaves.len() >= 2,
+            "default pane tree should have multiple leaves"
+        );
+
+        let first = layout.rect(leaves[0]).expect("first leaf rect");
+        let second = layout.rect(leaves[1]).expect("second leaf rect");
+        let p1x = first.x.saturating_add(first.width / 2);
+        let p1y = first.y.saturating_add(first.height / 2);
+        let p2x = second.x.saturating_add(second.width / 2);
+        let p2y = second.y.saturating_add(second.height / 2);
+
+        lab.handle_mouse(
+            MouseEventKind::Down(MouseButton::Left),
+            p1x,
+            p1y,
+            Modifiers::NONE,
+        );
+        lab.handle_mouse(
+            MouseEventKind::Up(MouseButton::Left),
+            p1x,
+            p1y,
+            Modifiers::NONE,
+        );
+        lab.handle_mouse(
+            MouseEventKind::Down(MouseButton::Left),
+            p2x,
+            p2y,
+            Modifiers::SHIFT,
+        );
+        lab.handle_mouse(
+            MouseEventKind::Up(MouseButton::Left),
+            p2x,
+            p2y,
+            Modifiers::SHIFT,
+        );
+
+        assert!(
+            lab.pane_selection.selected.len() >= 2,
+            "shift-click should keep both panes selected"
+        );
+    }
+
+    #[test]
+    fn pane_right_click_cycles_intelligence_modes() {
+        let mut lab = LayoutLab::new();
+        let mut pool = GraphemePool::new();
+        let mut frame = Frame::new(140, 40, &mut pool);
+        lab.view(&mut frame, Rect::new(0, 0, 140, 40));
+
+        let pane_area = lab.pane_preview.get();
+        assert!(!pane_area.is_empty(), "pane area should be initialized");
+        let click_x = pane_area.x.saturating_add(pane_area.width / 2);
+        let click_y = pane_area.y.saturating_add(pane_area.height / 2);
+
+        assert_eq!(
+            lab.pane_intelligence_mode,
+            PaneLayoutIntelligenceMode::Focus
+        );
+
+        lab.handle_mouse(
+            MouseEventKind::Down(MouseButton::Right),
+            click_x,
+            click_y,
+            Modifiers::NONE,
+        );
+        assert_eq!(
+            lab.pane_intelligence_mode,
+            PaneLayoutIntelligenceMode::Compare
+        );
+
+        lab.handle_mouse(
+            MouseEventKind::Down(MouseButton::Right),
+            click_x,
+            click_y,
+            Modifiers::NONE,
+        );
+        assert_eq!(
+            lab.pane_intelligence_mode,
+            PaneLayoutIntelligenceMode::Monitor
+        );
+
+        lab.handle_mouse(
+            MouseEventKind::Down(MouseButton::Right),
+            click_x,
+            click_y,
+            Modifiers::NONE,
+        );
+        assert_eq!(
+            lab.pane_intelligence_mode,
+            PaneLayoutIntelligenceMode::Compact
+        );
+
+        lab.handle_mouse(
+            MouseEventKind::Down(MouseButton::Right),
+            click_x,
+            click_y,
+            Modifiers::NONE,
+        );
+        assert_eq!(
+            lab.pane_intelligence_mode,
+            PaneLayoutIntelligenceMode::Compact,
+            "focus requests are best-effort and should preserve the prior mode when no new ops apply"
+        );
+        assert!(
+            lab.pane_timeline.entries.len() >= 3,
+            "successful mode transitions should record timeline entries"
+        );
+    }
+
+    #[test]
+    fn pane_scroll_adjusts_magnetic_field_without_touching_gap() {
+        let mut lab = LayoutLab::new();
+        let mut pool = GraphemePool::new();
+        let mut frame = Frame::new(140, 40, &mut pool);
+        lab.view(&mut frame, Rect::new(0, 0, 140, 40));
+
+        let pane_area = lab.pane_preview.get();
+        assert!(!pane_area.is_empty(), "pane area should be initialized");
+        let hover_x = pane_area.x.saturating_add(pane_area.width / 2);
+        let hover_y = pane_area.y.saturating_add(pane_area.height / 2);
+
+        let starting_gap = lab.gap;
+        let starting_field = lab.pane_magnetic_field_cells;
+
+        lab.handle_mouse(
+            MouseEventKind::ScrollDown,
+            hover_x,
+            hover_y,
+            Modifiers::NONE,
+        );
+        assert!(
+            (lab.pane_magnetic_field_cells - (starting_field + 0.4)).abs() < f64::EPSILON,
+            "scroll down in pane should widen the docking field"
+        );
+        assert_eq!(
+            lab.gap, starting_gap,
+            "pane scroll should not alter layout gap"
+        );
+
+        lab.handle_mouse(MouseEventKind::ScrollUp, hover_x, hover_y, Modifiers::NONE);
+        assert!(
+            (lab.pane_magnetic_field_cells - starting_field).abs() < f64::EPSILON,
+            "scroll up in pane should restore the prior docking field"
+        );
+        assert_eq!(
+            lab.gap, starting_gap,
+            "pane scroll should leave gap untouched"
+        );
+    }
+
+    #[test]
+    fn pane_keyboard_undo_redo_and_replay_restore_expected_state() {
+        let mut lab = LayoutLab::new();
+        let mut pool = GraphemePool::new();
+        let mut frame = Frame::new(140, 40, &mut pool);
+        lab.view(&mut frame, Rect::new(0, 0, 140, 40));
+
+        let initial_hash = lab.pane_tree.state_hash();
+        assert_eq!(
+            lab.pane_timeline.cursor, 0,
+            "timeline should start at baseline"
+        );
+
+        lab.update(&press(KeyCode::Char('c')));
+        let compare_hash = lab.pane_tree.state_hash();
+        assert_ne!(
+            compare_hash, initial_hash,
+            "compare mode should materially change the pane workspace"
+        );
+        let entry_count = lab.pane_timeline.entries.len();
+        assert!(
+            entry_count > 0,
+            "mode application should record timeline entries"
+        );
+        assert_eq!(lab.pane_timeline.cursor, entry_count);
+
+        lab.update(&press(KeyCode::Char('u')));
+        assert_eq!(
+            lab.pane_tree.state_hash(),
+            initial_hash,
+            "undo should restore the baseline workspace state"
+        );
+        assert_eq!(
+            lab.pane_timeline.cursor, 0,
+            "undo should rewind the timeline cursor"
+        );
+
+        lab.update(&press(KeyCode::Char('y')));
+        assert_eq!(
+            lab.pane_tree.state_hash(),
+            compare_hash,
+            "redo should restore the compare-mode workspace state"
+        );
+        assert_eq!(
+            lab.pane_timeline.cursor, entry_count,
+            "redo should move the cursor back to the applied head"
+        );
+
+        lab.update(&press(KeyCode::Char('R')));
+        assert_eq!(
+            lab.pane_tree.state_hash(),
+            compare_hash,
+            "replay should deterministically rebuild the current workspace state"
+        );
+        assert_eq!(
+            lab.pane_next_operation_id,
+            (lab.pane_timeline.entries.len() as u64).saturating_add(1),
+            "replay should realign the next operation id with the journal"
+        );
+    }
+
+    #[test]
+    fn pane_replay_keeps_next_operation_id_above_coalesced_resize_history() {
+        let mut lab = LayoutLab::new();
+        let split = lab
+            .pane_tree
+            .nodes()
+            .find_map(|node| match node.kind {
+                PaneNodeKind::Split(_) => Some(node.id),
+                _ => None,
+            })
+            .expect("default pane tree should include a split");
+
+        lab.pane_timeline
+            .apply_and_record_coalesced_resize_delta(
+                &mut lab.pane_tree,
+                1,
+                41,
+                PaneOperation::SetSplitRatio {
+                    split,
+                    ratio: PaneSplitRatio::new(6, 4).expect("valid ratio"),
+                },
+                40,
+            )
+            .expect("first resize delta should apply");
+        lab.pane_timeline
+            .apply_and_record_coalesced_resize_delta(
+                &mut lab.pane_tree,
+                2,
+                42,
+                PaneOperation::SetSplitRatio {
+                    split,
+                    ratio: PaneSplitRatio::new(7, 3).expect("valid ratio"),
+                },
+                40,
+            )
+            .expect("second resize delta should apply");
+        assert_eq!(lab.pane_timeline.entries.len(), 1);
+
+        lab.pane_next_operation_id = 1;
+        lab.pane_replay();
+
+        assert_eq!(lab.pane_next_operation_id, 43);
+    }
+
+    #[test]
+    fn pane_workspace_save_ack_requires_current_generation() {
+        let mut lab = LayoutLab::new();
+        assert!(!lab.pane_workspace_dirty());
+        assert_eq!(lab.pane_workspace_generation(), 0);
+        assert_eq!(lab.pane_saved_workspace_generation(), 0);
+
+        lab.apply_pane_intelligence_mode(PaneLayoutIntelligenceMode::Compare);
+        assert!(lab.pane_workspace_dirty());
+        let generation = lab.pane_workspace_generation();
+        assert!(generation > 0);
+
+        let snapshot = lab
+            .pane_export_workspace_snapshot_json()
+            .expect("snapshot export should succeed");
+        assert!(
+            lab.pane_workspace_dirty(),
+            "export alone must not mark host storage durable"
+        );
+        assert!(!lab.pane_mark_workspace_saved(generation.saturating_sub(1)));
+        assert!(lab.pane_workspace_dirty());
+        assert!(lab.pane_mark_workspace_saved(generation));
+        assert!(!lab.pane_workspace_dirty());
+
+        let mut restored = LayoutLab::new();
+        restored
+            .pane_import_workspace_snapshot_json(&snapshot)
+            .expect("snapshot import should succeed");
+        assert_eq!(restored.pane_workspace_generation(), generation);
+        assert_eq!(restored.pane_saved_workspace_generation(), generation);
+        assert!(!restored.pane_workspace_dirty());
+    }
+
+    #[test]
+    fn pane_workspace_import_failure_preserves_active_state() {
+        let mut lab = LayoutLab::new();
+        lab.apply_pane_intelligence_mode(PaneLayoutIntelligenceMode::Compare);
+        let before_hash = lab.pane_tree.state_hash();
+        let before_generation = lab.pane_workspace_generation();
+        let before_saved_generation = lab.pane_saved_workspace_generation();
+        let before_dirty = lab.pane_workspace_dirty();
+
+        let err = lab
+            .pane_import_workspace_snapshot_json("{not json")
+            .expect_err("invalid JSON should fail to import");
+        assert!(err.contains("parse failed"));
+        assert_eq!(lab.pane_tree.state_hash(), before_hash);
+        assert_eq!(lab.pane_workspace_generation(), before_generation);
+        assert_eq!(
+            lab.pane_saved_workspace_generation(),
+            before_saved_generation
+        );
+        assert_eq!(lab.pane_workspace_dirty(), before_dirty);
+    }
+
+    #[test]
+    fn pane_workspace_import_future_schema_preserves_active_state() {
+        let mut lab = LayoutLab::new();
+        lab.apply_pane_intelligence_mode(PaneLayoutIntelligenceMode::Compare);
+        let before_hash = lab.pane_tree.state_hash();
+        let before_generation = lab.pane_workspace_generation();
+        let before_saved_generation = lab.pane_saved_workspace_generation();
+        let before_dirty = lab.pane_workspace_dirty();
+        let snapshot = lab
+            .pane_export_workspace_snapshot_json()
+            .expect("snapshot export should succeed");
+        let mut payload: serde_json::Value =
+            serde_json::from_str(&snapshot).expect("exported snapshot should be JSON");
+        payload["schema_version"] =
+            serde_json::json!(ftui_layout::WORKSPACE_SCHEMA_VERSION.saturating_add(1));
+        let future_snapshot =
+            serde_json::to_string(&payload).expect("future snapshot should encode");
+
+        let err = lab
+            .pane_import_workspace_snapshot_json(&future_snapshot)
+            .expect_err("future schema should fail to import");
+
+        assert!(err.contains("migration failed"));
+        assert_eq!(lab.pane_tree.state_hash(), before_hash);
+        assert_eq!(lab.pane_workspace_generation(), before_generation);
+        assert_eq!(
+            lab.pane_saved_workspace_generation(),
+            before_saved_generation
+        );
+        assert_eq!(lab.pane_workspace_dirty(), before_dirty);
+    }
+
+    #[test]
+    fn pane_workspace_recovery_notice_renders_in_status_surfaces() {
+        let mut lab = LayoutLab::new();
+        lab.pane_set_workspace_recovery_notice(PaneWorkspaceRecoveryNotice::fallback_default(
+            "unparseable".to_string(),
+            "0x1234".to_string(),
+            Some("/tmp/workspace.recovery.1234.json".to_string()),
+            "workspace snapshot parse failed".to_string(),
+        ));
+
+        let mut pool = GraphemePool::new();
+        let mut frame = Frame::new(140, 40, &mut pool);
+        lab.view(&mut frame, Rect::new(0, 0, 140, 40));
+        let rendered = frame_text(&frame);
+
+        assert!(
+            rendered.contains("Recovery: fallback_default"),
+            "pane workspace should surface the recovery decision"
+        );
+        assert!(
+            rendered.contains("0x1234"),
+            "pane workspace should surface the source checksum"
+        );
+        assert!(
+            rendered.contains("saved"),
+            "pane workspace should tell users recovery evidence was preserved"
+        );
+    }
+
+    fn pane_workspace_corpus_cases() -> Vec<(&'static str, LayoutLab)> {
+        let default = LayoutLab::new();
+
+        let mut compare = LayoutLab::new();
+        compare.apply_pane_intelligence_mode(PaneLayoutIntelligenceMode::Compare);
+
+        let mut undo_compare = LayoutLab::new();
+        undo_compare.apply_pane_intelligence_mode(PaneLayoutIntelligenceMode::Compare);
+        undo_compare.pane_undo();
+
+        let mut redo_compare = LayoutLab::new();
+        redo_compare.apply_pane_intelligence_mode(PaneLayoutIntelligenceMode::Compare);
+        redo_compare.pane_undo();
+        redo_compare.pane_redo();
+
+        let mut monitor_replay = LayoutLab::new();
+        monitor_replay.apply_pane_intelligence_mode(PaneLayoutIntelligenceMode::Monitor);
+        monitor_replay.pane_replay();
+
+        vec![
+            ("default", default),
+            ("compare", compare),
+            ("undo_compare", undo_compare),
+            ("redo_compare", redo_compare),
+            ("monitor_replay", monitor_replay),
+        ]
+    }
+
+    #[test]
+    fn pane_workspace_canonical_corpus_round_trips_byte_stably() {
+        for (name, lab) in pane_workspace_corpus_cases() {
+            let first_export = lab
+                .pane_export_workspace_snapshot_json()
+                .expect("corpus case should export");
+            let second_export = lab
+                .pane_export_workspace_snapshot_json()
+                .expect("corpus case should export twice");
+            assert_eq!(
+                first_export, second_export,
+                "{name} export should be deterministic before import"
+            );
+
+            let source_hash = lab.pane_tree.state_hash();
+            let source_generation = lab.pane_workspace_generation();
+            let mut restored = LayoutLab::new();
+            restored.pane_set_workspace_recovery_notice(
+                PaneWorkspaceRecoveryNotice::fallback_default(
+                    "unparseable".to_string(),
+                    "0xdeadbeef".to_string(),
+                    None,
+                    "stale recovery notice should clear after successful import".to_string(),
+                ),
+            );
+
+            restored
+                .pane_import_workspace_snapshot_json(&first_export)
+                .expect("corpus case should import");
+            assert_eq!(
+                restored.pane_tree.state_hash(),
+                source_hash,
+                "{name} import should preserve pane tree state"
+            );
+            assert_eq!(
+                restored.pane_workspace_generation(),
+                source_generation,
+                "{name} import should preserve saved generation"
+            );
+            assert!(
+                !restored.pane_workspace_dirty(),
+                "{name} import should acknowledge the restored generation as clean"
+            );
+            assert!(
+                restored.pane_workspace_recovery_notice().is_none(),
+                "{name} successful import should clear stale recovery notice"
+            );
+
+            let reexport = restored
+                .pane_export_workspace_snapshot_json()
+                .expect("imported corpus case should re-export");
+            assert_eq!(
+                first_export, reexport,
+                "{name} import/export should be byte-stable"
+            );
+        }
+    }
+
+    #[test]
+    fn pane_keyboard_mode_shortcuts_apply_requested_mode() {
+        let mut lab = LayoutLab::new();
+        let mut pool = GraphemePool::new();
+        let mut frame = Frame::new(140, 40, &mut pool);
+        lab.view(&mut frame, Rect::new(0, 0, 140, 40));
+
+        lab.update(&press(KeyCode::Char('c')));
+        assert_eq!(
+            lab.pane_intelligence_mode,
+            PaneLayoutIntelligenceMode::Compare
+        );
+
+        lab.update(&press(KeyCode::Char('n')));
+        assert_eq!(
+            lab.pane_intelligence_mode,
+            PaneLayoutIntelligenceMode::Monitor
+        );
+
+        lab.update(&press(KeyCode::Char('k')));
+        assert_eq!(
+            lab.pane_intelligence_mode,
+            PaneLayoutIntelligenceMode::Compact
+        );
+
+        lab.update(&press(KeyCode::Char('f')));
+        assert_eq!(
+            lab.pane_intelligence_mode,
+            PaneLayoutIntelligenceMode::Compact,
+            "focus is only committed when it emits new operations"
+        );
+        assert!(
+            lab.pane_workspace_generation > 0,
+            "mode shortcuts should advance workspace generation via applied operations"
+        );
+    }
+
+    #[test]
+    fn pane_splitter_hover_diagnostics_track_mouse_move() {
+        let mut lab = LayoutLab::new();
+        let mut pool = GraphemePool::new();
+        let mut frame = Frame::new(140, 40, &mut pool);
+        lab.view(&mut frame, Rect::new(0, 0, 140, 40));
+
+        let pane_area = lab.pane_preview.get();
+        let layout = lab
+            .pane_tree
+            .solve_layout(pane_area)
+            .expect("pane layout should solve");
+        let splitter = collect_splitter_primitives(&lab.pane_tree, &layout, pane_area, None, None)
+            .first()
+            .copied()
+            .expect("splitter primitive");
+        let hover_x = splitter
+            .rail_rect
+            .x
+            .saturating_add(splitter.rail_rect.width / 2);
+        let hover_y = splitter
+            .rail_rect
+            .y
+            .saturating_add(splitter.rail_rect.height / 2);
+
+        lab.handle_mouse(MouseEventKind::Moved, hover_x, hover_y, Modifiers::NONE);
+
+        let mut pool = GraphemePool::new();
+        let mut frame = Frame::new(140, 40, &mut pool);
+        lab.view(&mut frame, Rect::new(0, 0, 140, 40));
+
+        assert!(lab.pane_splitter_total.get() >= 1);
+        assert!(
+            lab.pane_splitter_hovered.get() >= 1,
+            "hover diagnostics should report at least one hovered splitter"
+        );
+    }
+
+    #[test]
+    fn pane_splitter_active_diagnostics_track_resize_drag() {
+        let mut lab = LayoutLab::new();
+        let mut pool = GraphemePool::new();
+        let mut frame = Frame::new(140, 40, &mut pool);
+        lab.view(&mut frame, Rect::new(0, 0, 140, 40));
+
+        let pane_area = lab.pane_preview.get();
+        let layout = lab
+            .pane_tree
+            .solve_layout(pane_area)
+            .expect("pane layout should solve");
+        let splitters = collect_splitter_primitives(&lab.pane_tree, &layout, pane_area, None, None);
+        let (drag_x, drag_y) = splitters
+            .iter()
+            .find_map(|splitter| {
+                let x = splitter
+                    .rail_rect
+                    .x
+                    .saturating_add(splitter.rail_rect.width / 2);
+                let y = splitter
+                    .rail_rect
+                    .y
+                    .saturating_add(splitter.rail_rect.height / 2);
+                let pointer = PanePointerPosition::new(i32::from(x), i32::from(y));
+                pointer_down_context_at(
+                    &lab.pane_tree,
+                    pane_area,
+                    pointer,
+                    PANE_EDGE_GRIP_INSET_CELLS,
+                )
+                .filter(|context| {
+                    matches!(
+                        context.mode,
+                        crate::pane_interaction::PaneGestureMode::Resize(_)
+                    )
+                })
+                .map(|_| (x, y))
+            })
+            .expect("expected splitter point that maps to a resize gesture");
+
+        lab.handle_mouse(
+            MouseEventKind::Down(MouseButton::Left),
+            drag_x,
+            drag_y,
+            Modifiers::NONE,
+        );
+
+        let mut pool = GraphemePool::new();
+        let mut frame = Frame::new(140, 40, &mut pool);
+        lab.view(&mut frame, Rect::new(0, 0, 140, 40));
+        assert!(
+            lab.pane_splitter_active.get() >= 1,
+            "active diagnostics should report a splitter while gesture is armed"
+        );
+
+        lab.handle_mouse(
+            MouseEventKind::Up(MouseButton::Left),
+            drag_x,
+            drag_y,
+            Modifiers::NONE,
+        );
+
+        let mut pool = GraphemePool::new();
+        let mut frame = Frame::new(140, 40, &mut pool);
+        lab.view(&mut frame, Rect::new(0, 0, 140, 40));
+        assert_eq!(
+            lab.pane_splitter_active.get(),
+            0,
+            "active diagnostics should clear after gesture completion"
+        );
+    }
+
+    #[test]
+    fn pane_splitter_drag_uses_terminal_adapter_and_mutates_tree() {
+        use ftui_layout::SplitAxis;
+
+        let mut lab = LayoutLab::new();
+        let mut pool = GraphemePool::new();
+        let mut frame = Frame::new(140, 40, &mut pool);
+        lab.view(&mut frame, Rect::new(0, 0, 140, 40));
+
+        let pane_area = lab.pane_preview.get();
+        let layout = lab
+            .pane_tree
+            .solve_layout(pane_area)
+            .expect("pane layout should solve");
+        let splitters = collect_splitter_primitives(&lab.pane_tree, &layout, pane_area, None, None);
+        let (drag_x, drag_y, target) = splitters
+            .iter()
+            .find_map(|splitter| {
+                let x = splitter
+                    .rail_rect
+                    .x
+                    .saturating_add(splitter.rail_rect.width / 2);
+                let y = splitter
+                    .rail_rect
+                    .y
+                    .saturating_add(splitter.rail_rect.height / 2);
+                let pointer = PanePointerPosition::new(i32::from(x), i32::from(y));
+                pointer_down_context_at(
+                    &lab.pane_tree,
+                    pane_area,
+                    pointer,
+                    PANE_EDGE_GRIP_INSET_CELLS,
+                )
+                .filter(|context| matches!(context.mode, PaneGestureMode::Resize(_)))
+                .map(|context| (x, y, context.target))
+            })
+            .expect("expected a splitter rail point that maps to a resize gesture");
+
+        let ratio_bps = |lab: &LayoutLab| -> u32 {
+            match &lab
+                .pane_tree
+                .node(target.split_id)
+                .expect("split node present")
+                .kind
+            {
+                PaneNodeKind::Split(node) => {
+                    node.ratio.numerator() * 10_000
+                        / (node.ratio.numerator() + node.ratio.denominator())
+                }
+                PaneNodeKind::Leaf(_) => panic!("resize target must address a split node"),
+            }
+        };
+        let before = ratio_bps(&lab);
+
+        // Pointer-down on the splitter arms the production terminal adapter path
+        // (distinct from the synthetic-motion move path).
+        lab.handle_mouse(
+            MouseEventKind::Down(MouseButton::Left),
+            drag_x,
+            drag_y,
+            Modifiers::NONE,
+        );
+        assert!(
+            lab.pane_resize_target.is_some(),
+            "single-pane splitter resize must arm the terminal adapter"
+        );
+
+        // Drag toward the panel interior along the split axis, well past the
+        // adapter's 2-cell drag threshold.
+        let (origin, extent, start) = match target.axis {
+            SplitAxis::Horizontal => (
+                i32::from(pane_area.x),
+                i32::from(pane_area.width),
+                i32::from(drag_x),
+            ),
+            SplitAxis::Vertical => (
+                i32::from(pane_area.y),
+                i32::from(pane_area.height),
+                i32::from(drag_y),
+            ),
+        };
+        let dir = if start <= origin + extent / 2 { 1 } else { -1 };
+        let along = |axis_value: i32| -> (u16, u16) {
+            let clamped = u16::try_from(axis_value.max(0)).unwrap_or(u16::MAX);
+            match target.axis {
+                SplitAxis::Horizontal => (clamped, drag_y),
+                SplitAxis::Vertical => (drag_x, clamped),
+            }
+        };
+        let mut last = (drag_x, drag_y);
+        for step in [6, 12, 18, 24] {
+            last = along(start + dir * step);
+            lab.handle_mouse(
+                MouseEventKind::Drag(MouseButton::Left),
+                last.0,
+                last.1,
+                Modifiers::NONE,
+            );
+        }
+        lab.handle_mouse(
+            MouseEventKind::Up(MouseButton::Left),
+            last.0,
+            last.1,
+            Modifiers::NONE,
+        );
+
+        assert!(
+            lab.pane_resize_target.is_none(),
+            "gesture completion must clear the adapter target"
+        );
+        assert!(
+            lab.pane_active_gesture.get().is_none(),
+            "gesture completion must clear the active gesture"
+        );
+        assert!(
+            lab.pane_last_applied_ops > 0,
+            "adapter-driven resize must apply at least one operation"
+        );
+        assert_ne!(
+            before,
+            ratio_bps(&lab),
+            "splitter drag must mutate the live split ratio"
+        );
+        assert!(
+            !lab.pane_timeline.entries.is_empty(),
+            "adapter resize must record timeline entries for undo"
+        );
+    }
+
+    #[test]
+    fn pane_splitter_diagnostics_reset_when_preview_too_small() {
+        let lab = LayoutLab::new();
+
+        let mut pool = GraphemePool::new();
+        let mut frame = Frame::new(80, 30, &mut pool);
+        lab.render_pane_preview_panel(&mut frame, Rect::new(0, 0, 50, 18));
+        assert!(
+            lab.pane_splitter_total.get() > 0,
+            "large preview should produce splitter diagnostics"
+        );
+
+        let mut pool = GraphemePool::new();
+        let mut frame = Frame::new(80, 30, &mut pool);
+        lab.render_pane_preview_panel(&mut frame, Rect::new(0, 0, 7, 3));
+        assert_eq!(lab.pane_splitter_total.get(), 0);
+        assert_eq!(lab.pane_splitter_hovered.get(), 0);
+        assert_eq!(lab.pane_splitter_active.get(), 0);
+        assert_eq!(lab.pane_splitter_work_units.get(), 0);
+    }
+
+    #[test]
+    fn embedded_mouse_routing_clears_latched_hover_state() {
+        let mut lab = LayoutLab::new();
+        let mut pool = GraphemePool::new();
+        let mut frame = Frame::new(140, 40, &mut pool);
+        lab.view(&mut frame, Rect::new(0, 0, 140, 40));
+
+        let pane_area = lab.pane_preview.get();
+        let hover_x = pane_area.x.saturating_add(1);
+        let hover_y = pane_area.y.saturating_add(1);
+        lab.update_embedded_pane_workspace_mouse(
+            MouseEventKind::Moved,
+            hover_x,
+            hover_y,
+            Modifiers::NONE,
+        );
+        assert!(
+            lab.pane_hover_pointer.get().is_some(),
+            "hover should latch in pane"
+        );
+        assert!(
+            lab.pane_workspace_wants_mouse(0, 0),
+            "latched hover should keep routing active for out-of-bounds move"
+        );
+
+        lab.update_embedded_pane_workspace_mouse(MouseEventKind::Moved, 0, 0, Modifiers::NONE);
+        assert!(
+            lab.pane_hover_pointer.get().is_none(),
+            "out-of-bounds move should clear hover when no drag is active"
+        );
+        assert!(
+            !lab.pane_workspace_wants_mouse(0, 0),
+            "routing should stop once hover/drag is cleared"
+        );
+    }
+
+    #[test]
+    fn clear_embedded_bounds_resets_hover_routing() {
+        let lab = LayoutLab::new();
+        lab.pane_preview.set(Rect::new(10, 10, 12, 6));
+        lab.pane_hover_pointer
+            .set(Some(PanePointerPosition::new(12, 12)));
+
+        assert!(lab.pane_workspace_wants_mouse(0, 0));
+        lab.clear_embedded_pane_workspace_bounds();
+        assert!(!lab.pane_workspace_wants_mouse(0, 0));
+    }
+}
+
+#[test]
+fn click_preview_toggles_debug() {
+    let mut lab = LayoutLab::new();
+    lab.layout_preview.set(Rect::new(0, 0, 80, 20));
+    assert!(!lab.show_debug);
+    lab.handle_mouse(
+        MouseEventKind::Down(MouseButton::Left),
+        10,
+        10,
+        Modifiers::NONE,
+    );
+    assert!(lab.show_debug);
+    lab.handle_mouse(
+        MouseEventKind::Down(MouseButton::Left),
+        10,
+        10,
+        Modifiers::NONE,
+    );
+    assert!(!lab.show_debug);
+}
+
+#[test]
+fn click_controls_toggles_direction() {
+    let mut lab = LayoutLab::new();
+    lab.layout_controls.set(Rect::new(0, 20, 40, 10));
+    assert_eq!(lab.direction, Direction::Vertical);
+    lab.handle_mouse(
+        MouseEventKind::Down(MouseButton::Left),
+        10,
+        25,
+        Modifiers::NONE,
+    );
+    assert_eq!(lab.direction, Direction::Horizontal);
+}
+
+#[test]
+fn right_click_preview_cycles_preset() {
+    let mut lab = LayoutLab::new();
+    lab.layout_preview.set(Rect::new(0, 0, 80, 20));
+    assert_eq!(lab.current_preset, 0);
+    lab.handle_mouse(
+        MouseEventKind::Down(MouseButton::Right),
+        10,
+        10,
+        Modifiers::NONE,
+    );
+    assert_eq!(lab.current_preset, 1);
+}
+
+#[test]
+fn scroll_preview_adjusts_gap() {
+    let mut lab = LayoutLab::new();
+    lab.layout_preview.set(Rect::new(0, 0, 80, 20));
+    assert_eq!(lab.gap, 0);
+    lab.handle_mouse(MouseEventKind::ScrollDown, 10, 10, Modifiers::NONE);
+    assert_eq!(lab.gap, 1);
+    lab.handle_mouse(MouseEventKind::ScrollUp, 10, 10, Modifiers::NONE);
+    assert_eq!(lab.gap, 0);
+}
+
+#[test]
+fn scroll_controls_adjusts_alignment() {
+    let mut lab = LayoutLab::new();
+    lab.layout_controls.set(Rect::new(0, 20, 40, 10));
+    assert_eq!(lab.alignment_idx, 0);
+    lab.handle_mouse(MouseEventKind::ScrollDown, 10, 25, Modifiers::NONE);
+    assert_eq!(lab.alignment_idx, 1);
+    lab.handle_mouse(MouseEventKind::ScrollUp, 10, 25, Modifiers::NONE);
+    assert_eq!(lab.alignment_idx, 0);
+}
+
+// ==========================================================================
+// Property Tests for Layout Invariants (bd-32my.3)
+// ==========================================================================
+
+#[cfg(test)]
+mod proptests {
+    use super::*;
+    use proptest::prelude::*;
+
+    /// Generate a reasonable Rect for testing
+    fn arb_rect() -> impl Strategy<Value = Rect> {
+        (0u16..100, 0u16..100, 10u16..200, 10u16..100)
+            .prop_map(|(x, y, w, h)| Rect::new(x, y, w, h))
+    }
+
+    /// Generate a simple constraint
+    fn arb_simple_constraint() -> impl Strategy<Value = Constraint> {
+        prop_oneof![
+            (1u16..50).prop_map(Constraint::Fixed),
+            (1.0f64..100.0).prop_map(|p| Constraint::Percentage(p as f32)),
+            (0u16..30).prop_map(Constraint::Min),
+            (5u16..50).prop_map(Constraint::Max),
+            (1u16..5, 2u16..6)
+                .prop_filter("denominator > numerator", |(n, d)| n < d)
+                .prop_map(|(n, d)| Constraint::Ratio(u32::from(n), u32::from(d))),
+        ]
+    }
+
+    proptest! {
+        /// Property: All resulting rects are within the input area bounds.
+        #[test]
+        fn prop_rects_within_area(area in arb_rect(), constraints in prop::collection::vec(arb_simple_constraint(), 1..5)) {
+            let rects = solve_flex_vertical(area, &constraints);
+
+            for (i, r) in rects.iter().enumerate() {
+                prop_assert!(
+                    r.x >= area.x,
+                    "Rect {} x={} < area.x={}",
+                    i, r.x, area.x
+                );
+                prop_assert!(
+                    r.y >= area.y,
+                    "Rect {} y={} < area.y={}",
+                    i, r.y, area.y
+                );
+                prop_assert!(
+                    r.x + r.width <= area.x + area.width,
+                    "Rect {} right={} > area right={}",
+                    i, r.x + r.width, area.x + area.width
+                );
+                prop_assert!(
+                    r.y + r.height <= area.y + area.height,
+                    "Rect {} bottom={} > area bottom={}",
+                    i, r.y + r.height, area.y + area.height
+                );
+            }
+        }
+
+        /// Property: Number of resulting rects equals number of constraints.
+        #[test]
+        fn prop_rect_count_matches_constraints(
+            area in arb_rect(),
+            constraints in prop::collection::vec(arb_simple_constraint(), 1..5)
+        ) {
+            let rects = solve_flex_vertical(area, &constraints);
+            prop_assert_eq!(rects.len(), constraints.len());
+        }
+
+        /// Property: All resulting rects have full width (in vertical layout).
+        #[test]
+        fn prop_vertical_rects_full_width(
+            area in arb_rect(),
+            constraints in prop::collection::vec(arb_simple_constraint(), 1..4)
+        ) {
+            let rects = solve_flex_vertical(area, &constraints);
+            for (i, r) in rects.iter().enumerate() {
+                prop_assert_eq!(
+                    r.width, area.width,
+                    "Rect {} width={} != area.width={}",
+                    i, r.width, area.width
+                );
+            }
+        }
+
+        /// Property: All resulting rects have full height (in horizontal layout).
+        #[test]
+        fn prop_horizontal_rects_full_height(
+            area in arb_rect(),
+            constraints in prop::collection::vec(arb_simple_constraint(), 1..4)
+        ) {
+            let rects = solve_flex_horizontal(area, &constraints);
+            for (i, r) in rects.iter().enumerate() {
+                prop_assert_eq!(
+                    r.height, area.height,
+                    "Rect {} height={} != area.height={}",
+                    i, r.height, area.height
+                );
+            }
+        }
+
+        /// Property: Vertical layout rects are contiguous (no gaps without explicit gap setting).
+        #[test]
+        fn prop_vertical_contiguous(
+            area in arb_rect(),
+            constraints in prop::collection::vec(arb_simple_constraint(), 2..4)
+        ) {
+            let rects = solve_flex_vertical(area, &constraints);
+            for i in 1..rects.len() {
+                let prev = &rects[i - 1];
+                let curr = &rects[i];
+                prop_assert!(
+                    curr.y >= prev.y + prev.height,
+                    "Rect {} overlaps rect {}: curr.y={} < prev_end={}",
+                    i, i - 1, curr.y, prev.y + prev.height
+                );
+            }
+        }
+
+        /// Property: Horizontal layout rects are contiguous (no gaps without explicit gap setting).
+        #[test]
+        fn prop_horizontal_contiguous(
+            area in arb_rect(),
+            constraints in prop::collection::vec(arb_simple_constraint(), 2..4)
+        ) {
+            let rects = solve_flex_horizontal(area, &constraints);
+            for i in 1..rects.len() {
+                let prev = &rects[i - 1];
+                let curr = &rects[i];
+                prop_assert!(
+                    curr.x >= prev.x + prev.width,
+                    "Rect {} overlaps rect {}: curr.x={} < prev_end={}",
+                    i, i - 1, curr.x, prev.x + prev.width
+                );
+            }
+        }
+
+        /// Property: Direction toggle is involutive (toggle twice = identity).
+        #[test]
+        fn prop_direction_toggle_involutive(dir in prop_oneof![Just(Direction::Vertical), Just(Direction::Horizontal)]) {
+            prop_assert_eq!(dir.toggle().toggle(), dir);
+        }
+
+        /// Property: Alignment index wraps correctly.
+        #[test]
+        fn prop_alignment_wrap(idx in 0usize..100) {
+            let wrapped = idx % ALIGNMENTS.len();
+            prop_assert!(wrapped < ALIGNMENTS.len());
+            // Accessing should not panic
+            let _ = ALIGNMENTS[wrapped];
+        }
+
+        /// Property: Align position wraps correctly (9 positions).
+        #[test]
+        fn prop_align_position_wrap(idx in 0usize..100) {
+            let (h, v, label) = align_position(idx);
+            // Should not panic and label should be non-empty
+            prop_assert!(!label.is_empty());
+            // Horizontal and vertical alignment should be valid enums
+            let _ = h;
+            let _ = v;
+        }
+
+        /// Property: Gap adjustment is bounded.
+        #[test]
+        fn prop_gap_bounded(initial in 0u16..10, delta in 0u16..10) {
+            let mut lab = LayoutLab::new();
+            lab.gap = initial;
+            lab.gap = lab.gap.saturating_add(delta).min(5);
+            prop_assert!(lab.gap <= 5);
+        }
+
+        /// Property: Margin adjustment is bounded.
+        #[test]
+        fn prop_margin_bounded(initial in 0u16..10, delta in 0u16..10) {
+            let mut lab = LayoutLab::new();
+            lab.margin = initial;
+            lab.margin = lab.margin.saturating_add(delta).min(4);
+            prop_assert!(lab.margin <= 4);
+        }
+
+        /// Property: Padding adjustment is bounded at max=4.
+        #[test]
+        fn prop_padding_bounded(initial in 0u16..10, delta in 0u16..10) {
+            let mut lab = LayoutLab::new();
+            lab.padding_amount = initial;
+            lab.padding_amount = lab.padding_amount.saturating_add(delta).min(4);
+            prop_assert!(lab.padding_amount <= 4);
+        }
+
+        /// Property: Render is deterministic for any valid state.
+        #[test]
+        fn prop_render_deterministic(
+            preset in 0usize..5,
+            dir in prop_oneof![Just(Direction::Vertical), Just(Direction::Horizontal)],
+            align in 0usize..5,
+            gap in 0u16..6,
+            margin in 0u16..5,
+            padding in 0u16..5,
+            debug in proptest::bool::ANY,
+        ) {
+            use ftui_render::grapheme_pool::GraphemePool;
+            use std::collections::hash_map::DefaultHasher;
+            use std::hash::{Hash, Hasher};
+
+            let mut lab = LayoutLab::new();
+            lab.current_preset = preset;
+            lab.direction = dir;
+            lab.alignment_idx = align;
+            lab.gap = gap;
+            lab.margin = margin;
+            lab.padding_amount = padding;
+            lab.show_debug = debug;
+
+            // Acquire combined render lock to prevent race with parallel tests
+            // that mutate global theme or accessibility state.
+            let _render_guard = theme::ScopedRenderLock::new(
+                theme::ThemeId::CyberpunkAurora,
+                false,
+                1.0,
+            );
+
+            let checksum_a = {
+                let mut pool = GraphemePool::new();
+                let mut frame = Frame::new(120, 40, &mut pool);
+                lab.view(&mut frame, Rect::new(0, 0, 120, 40));
+                let mut hasher = DefaultHasher::new();
+                for y in 0..40u16 {
+                    for x in 0..120u16 {
+                        if let Some(cell) = frame.buffer.get(x, y) {
+                            cell.content.hash(&mut hasher);
+                            cell.fg.hash(&mut hasher);
+                            cell.bg.hash(&mut hasher);
+                            cell.attrs.hash(&mut hasher);
+                        }
+                    }
+                }
+                hasher.finish()
+            };
+
+            let checksum_b = {
+                let mut pool = GraphemePool::new();
+                let mut frame = Frame::new(120, 40, &mut pool);
+                lab.view(&mut frame, Rect::new(0, 0, 120, 40));
+                let mut hasher = DefaultHasher::new();
+                for y in 0..40u16 {
+                    for x in 0..120u16 {
+                        if let Some(cell) = frame.buffer.get(x, y) {
+                            cell.content.hash(&mut hasher);
+                            cell.fg.hash(&mut hasher);
+                            cell.bg.hash(&mut hasher);
+                            cell.attrs.hash(&mut hasher);
+                        }
+                    }
+                }
+                hasher.finish()
+            };
+
+            prop_assert_eq!(checksum_a, checksum_b, "Render should be deterministic");
+        }
+    }
+}

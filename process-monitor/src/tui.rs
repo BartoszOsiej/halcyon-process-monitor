@@ -1,97 +1,110 @@
+//! Halcyon Process Monitor — FrankenTUI-based TUI layer
+//!
+//! Uses the Elm/Bubbletea architecture: Model → update → view → BufferDiff → ANSI.
+//! FrankenTUI provides diff-based rendering (zero flicker), RAII cleanup,
+//! and 80+ widgets including sparklines, trees, tables, and log viewers.
+
 use std::collections::VecDeque;
-use std::io;
-use std::sync::atomic::Ordering;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
-use crossterm::event::{self, Event as TermEvent, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
-use ratatui::{
-    layout::{Constraint, Layout, Rect},
-    style::{Color, Modifier, Style},
-    text::{Line, Span},
-    widgets::{Block, Borders, Cell, Clear, Paragraph, Row, Sparkline, Table},
-    Frame,
-};
+use ftui_core::event::{Event, KeyCode, KeyEvent, KeyEventKind, Modifiers};
+use ftui_core::geometry::Rect;
+use ftui_layout::{Constraint, Flex};
+use ftui_render::cell::PackedRgba;
+use ftui_render::frame::Frame;
+use ftui_runtime::{App, Cmd, Every, Model, ScreenMode, Subscription};
+use ftui_style::{Style, StyleFlags};
+use ftui_text::Line;
+use ftui_text::Span;
+use ftui_widgets::block::Block;
+use ftui_widgets::borders::{BorderType, Borders};
+use ftui_widgets::log_viewer::{LogViewer, LogViewerState};
+use ftui_widgets::paragraph::Paragraph;
+use ftui_widgets::status_line::{StatusItem, StatusLine};
+use ftui_widgets::{StatefulWidget, Widget};
 
-use crate::monitor::{Kind, Monitor, Output};
-
-// ── Constants ─────────────────────────────────────────────────────────────
-
-const LOG_CAP: usize = 5000;
-const ALERT_CAP: usize = 200;
-const NETWORK_CAP: usize = 500;
-const MAX_FILES: usize = 12;
-const TICK_MS: u64 = 50; // 20 FPS
+use crate::monitor::Monitor;
 
 // ── Modern dark palette (2026) ────────────────────────────────────────────
-// Subtle, high-contrast, professional — inspired by GitHub Dark + Catppuccin
 
-const CYAN: Color = Color::Rgb(88, 166, 255); // primary accent
-const MAGENTA: Color = Color::Rgb(188, 140, 255); // purple accent
-const NEON_GREEN: Color = Color::Rgb(63, 185, 80); // muted green
-const NEON_RED: Color = Color::Rgb(248, 81, 73); // soft red
-const NEON_YELLOW: Color = Color::Rgb(210, 153, 34); // amber
-const NEON_ORANGE: Color = Color::Rgb(219, 109, 40); // warm orange
-const DIM: Color = Color::Rgb(76, 82, 99); // muted gray
-const DIM_BRIGHT: Color = Color::Rgb(139, 148, 168); // bright gray
-const PANEL_BORDER: Color = Color::Rgb(48, 55, 73); // subtle border
-const PANEL_BORDER_ACTIVE: Color = Color::Rgb(88, 166, 255); // focused border
-const BG_DARK: Color = Color::Rgb(13, 17, 23); // GitHub dark bg
-const BG_PANEL: Color = Color::Rgb(22, 27, 34); // panel bg
+const ACCENT_BLUE: PackedRgba = ftui_render::cell::PackedRgba::rgb(88, 166, 255);
+const ACCENT_GREEN: PackedRgba = ftui_render::cell::PackedRgba::rgb(63, 185, 80);
+const ACCENT_RED: PackedRgba = ftui_render::cell::PackedRgba::rgb(248, 81, 73);
+const ACCENT_AMBER: PackedRgba = ftui_render::cell::PackedRgba::rgb(210, 153, 34);
+const ACCENT_PURPLE: PackedRgba = ftui_render::cell::PackedRgba::rgb(188, 140, 255);
+const TEXT_DIM: PackedRgba = ftui_render::cell::PackedRgba::rgb(76, 82, 99);
+const TEXT_BRIGHT: PackedRgba = ftui_render::cell::PackedRgba::rgb(139, 148, 168);
+const BORDER_SUBTLE: PackedRgba = ftui_render::cell::PackedRgba::rgb(48, 55, 73);
+const BORDER_ACTIVE: PackedRgba = ftui_render::cell::PackedRgba::rgb(88, 166, 255);
 
 // ── Panel IDs ─────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Panel {
     Events = 0,
-    ProcessTree = 1,
+    Processes = 1,
     Network = 2,
     TopFiles = 3,
     Extensions = 4,
     Alerts = 5,
-    Heatmap = 6,
 }
 
 impl Panel {
     fn all() -> &'static [Panel] {
         &[
             Panel::Events,
-            Panel::ProcessTree,
+            Panel::Processes,
             Panel::Network,
             Panel::TopFiles,
             Panel::Extensions,
             Panel::Alerts,
-            Panel::Heatmap,
         ]
     }
 
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         match self {
             Panel::Events => "EVENTS",
-            Panel::ProcessTree => "PROCESSES",
+            Panel::Processes => "PROCESSES",
             Panel::Network => "NETWORK",
             Panel::TopFiles => "TOP FILES",
             Panel::Extensions => "FILE TYPES",
             Panel::Alerts => "ALERTS",
-            Panel::Heatmap => "HEATMAP",
         }
     }
 }
 
-// ── App state ─────────────────────────────────────────────────────────────
+// ── Elm-style Message type ────────────────────────────────────────────────
 
-#[derive(Clone)]
-struct LogLine {
-    style: Style,
-    text: String,
+#[derive(Debug)]
+enum Msg {
+    Key(KeyEvent),
+    Tick,
+    Noop,
 }
 
-#[derive(Clone, Copy, PartialEq)]
-#[allow(dead_code)]
-enum LogKind {
-    Exec,
-    Open,
-    Network,
-    Alert,
+impl From<Event> for Msg {
+    fn from(e: Event) -> Self {
+        match e {
+            Event::Key(k) => Msg::Key(k),
+            _ => Msg::Noop,
+        }
+    }
+}
+
+// ── Application state ─────────────────────────────────────────────────────
+
+struct HalcyonApp {
+    log: LogViewer,
+    log_state: LogViewerState,
+    alerts: LogViewer,
+    alerts_state: LogViewerState,
+    network: VecDeque<NetworkEntry>,
+    focused: usize,
+    paused: bool,
+    help_visible: bool,
+    events_per_sec: f64,
+    opens_per_sec: f64,
+    tick_count: u64,
 }
 
 #[derive(Clone)]
@@ -101,1453 +114,416 @@ struct NetworkEntry {
     comm: String,
     kind: String,
     addr: String,
-    bytes: Option<String>,
 }
 
-#[derive(Clone)]
-struct HeatmapBucket {
-    exec_count: u64,
-    open_count: u64,
-    network_count: u64,
-    alert_count: u64,
-}
-
-struct App {
-    log: VecDeque<LogLine>,
-    alerts: VecDeque<LogLine>,
-    network: VecDeque<NetworkEntry>,
-    heatmap: VecDeque<HeatmapBucket>,
-    scroll: usize,
-    paused: bool,
-    focused: usize,
-    help_visible: bool,
-    search_mode: bool,
-    search_query: String,
-    cursor_pos: usize,
-    detail_pid: Option<u32>,
-    show_detail: bool,
-    tick_count: u64,
-    last_tick: Instant,
-    // Stats for status bar
-    events_per_sec: f64,
-    opens_per_sec: f64,
-    alerts_per_sec: f64,
-    network_per_sec: f64,
-    // Pane split ratios (0.0 - 1.0)
-    left_ratio: f64,
-    middle_ratio: f64,
-}
-
-impl App {
+impl HalcyonApp {
     fn new() -> Self {
-        let mut heatmap = VecDeque::with_capacity(120);
-        for _ in 0..120 {
-            heatmap.push_back(HeatmapBucket {
-                exec_count: 0,
-                open_count: 0,
-                network_count: 0,
-                alert_count: 0,
-            });
-        }
+        let mut log = LogViewer::new(5000);
+        log.push("⚡ Halcyon eBPF Monitor started");
+        log.push("  FrankenTUI diff-based renderer · zero flicker");
+        log.push("  Press ? for help");
+
+        let alerts = LogViewer::new(200);
+
         Self {
-            log: VecDeque::new(),
-            alerts: VecDeque::new(),
+            log,
+            log_state: LogViewerState::default(),
+            alerts,
+            alerts_state: LogViewerState::default(),
             network: VecDeque::new(),
-            heatmap,
-            scroll: 0,
-            paused: false,
             focused: 0,
+            paused: false,
             help_visible: false,
-            search_mode: false,
-            search_query: String::new(),
-            cursor_pos: 0,
-            detail_pid: None,
-            show_detail: false,
-            tick_count: 0,
-            last_tick: Instant::now(),
             events_per_sec: 0.0,
             opens_per_sec: 0.0,
-            alerts_per_sec: 0.0,
-            network_per_sec: 0.0,
-            left_ratio: 0.35,
-            middle_ratio: 0.35,
+            tick_count: 0,
         }
     }
+}
 
-    fn on_key(&mut self, key: KeyEvent) -> bool {
-        // Help overlay — any key closes
+impl Model for HalcyonApp {
+    type Message = Msg;
+
+    fn init(&mut self) -> Cmd<Self::Message> {
+        Cmd::None
+    }
+
+    fn update(&mut self, msg: Msg) -> Cmd<Self::Message> {
+        match msg {
+            Msg::Key(k) if k.kind == KeyEventKind::Press => {
+                if self.help_visible {
+                    self.help_visible = false;
+                    return Cmd::None;
+                }
+
+                if k.modifiers.contains(Modifiers::CTRL) && k.code == KeyCode::Char('c') {
+                    return Cmd::Quit;
+                }
+
+                match k.code {
+                    KeyCode::Char('q') | KeyCode::Escape => {
+                        if self.focused == 0 {
+                            return Cmd::Quit;
+                        }
+                    }
+                    KeyCode::Char('?') => self.help_visible = true,
+                    KeyCode::Char('p') => self.paused = !self.paused,
+                    KeyCode::Tab => {
+                        self.focused = (self.focused + 1) % Panel::all().len();
+                    }
+                    KeyCode::BackTab => {
+                        self.focused = if self.focused == 0 {
+                            Panel::all().len() - 1
+                        } else {
+                            self.focused - 1
+                        };
+                    }
+                    KeyCode::Char('1') => self.focused = 0,
+                    KeyCode::Char('2') => self.focused = 1,
+                    KeyCode::Char('3') => self.focused = 2,
+                    KeyCode::Char('4') => self.focused = 3,
+                    KeyCode::Char('5') => self.focused = 4,
+                    KeyCode::Char('6') => self.focused = 5,
+                    KeyCode::Up | KeyCode::Char('k') => {
+                        self.log.scroll_up(1);
+                    }
+                    KeyCode::Down | KeyCode::Char('j') => {
+                        self.log.scroll_down(1);
+                    }
+                    KeyCode::PageUp => self.log.page_up(&self.log_state),
+                    KeyCode::PageDown => self.log.page_down(&self.log_state),
+                    KeyCode::Home => self.log.scroll_to_top(),
+                    KeyCode::End => self.log.scroll_to_bottom(),
+                    _ => {}
+                }
+            }
+            Msg::Tick if !self.paused => {
+                self.tick_count += 1;
+            }
+            _ => {}
+        }
+        Cmd::None
+    }
+
+    fn view(&self, frame: &mut Frame) {
+        let area = Rect::from_size(frame.buffer.width(), frame.buffer.height());
+
         if self.help_visible {
-            self.help_visible = false;
-            return false;
+            self.render_help(frame, area);
+            return;
         }
 
-        // Detail view — Esc or 'd' closes
-        if self.show_detail {
-            match key.code {
-                KeyCode::Esc | KeyCode::Char('d') | KeyCode::Char('q') => {
-                    self.show_detail = false;
-                    self.detail_pid = None;
-                }
-                KeyCode::Up | KeyCode::Char('k') => {
-                    // scroll detail up
-                }
-                KeyCode::Down | KeyCode::Char('j') => {
-                    // scroll detail down
-                }
-                _ => {}
-            }
-            return false;
-        }
+        let chunks = Flex::vertical()
+            .constraints([
+                Constraint::Fixed(2),
+                Constraint::Fixed(1),
+                Constraint::Min(0),
+                Constraint::Fixed(1),
+            ])
+            .split(area);
 
-        // Search mode
-        if self.search_mode {
-            match key.code {
-                KeyCode::Esc => {
-                    self.search_mode = false;
-                    self.search_query.clear();
-                    self.cursor_pos = 0;
-                }
-                KeyCode::Enter => {
-                    self.search_mode = false;
-                    self.scroll = 0; // jump to first match
-                }
-                KeyCode::Backspace => {
-                    self.search_query.pop();
-                    self.cursor_pos = self.cursor_pos.saturating_sub(1);
-                }
-                KeyCode::Char(c) => {
-                    self.search_query.push(c);
-                    self.cursor_pos += 1;
-                }
-                _ => {}
-            }
-            return false;
-        }
-
-        // Normal mode
-        match key.code {
-            // Quit
-            KeyCode::Char('q') | KeyCode::Esc => {
-                if self.focused == 0 && self.scroll == 0 {
-                    return true; // quit only when at top of events
-                }
-                self.scroll = 0;
-                false
-            }
-            KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => true,
-
-            // Pause
-            KeyCode::Char('p') => {
-                self.paused = !self.paused;
-                false
-            }
-
-            // Clear
-            KeyCode::Char('c') => {
-                self.log.clear();
-                self.alerts.clear();
-                self.network.clear();
-                self.scroll = 0;
-                false
-            }
-
-            // Navigation
-            KeyCode::Up | KeyCode::Char('k') => {
-                self.scroll = self.scroll.saturating_add(1);
-                false
-            }
-            KeyCode::Down | KeyCode::Char('j') => {
-                self.scroll = self.scroll.saturating_sub(1);
-                false
-            }
-            KeyCode::PageUp => {
-                self.scroll = self.scroll.saturating_add(20);
-                false
-            }
-            KeyCode::PageDown => {
-                self.scroll = self.scroll.saturating_sub(20);
-                false
-            }
-            KeyCode::Home | KeyCode::Char('g') => {
-                self.scroll = usize::MAX;
-                false
-            }
-            KeyCode::End | KeyCode::Char('G') => {
-                self.scroll = 0;
-                false
-            }
-
-            // Panel navigation
-            KeyCode::Tab => {
-                self.focused = (self.focused + 1) % Panel::all().len();
-                self.scroll = 0;
-                false
-            }
-            KeyCode::BackTab => {
-                self.focused = if self.focused == 0 {
-                    Panel::all().len() - 1
-                } else {
-                    self.focused - 1
-                };
-                self.scroll = 0;
-                false
-            }
-
-            // Direct panel focus with number keys
-            KeyCode::Char('1') => {
-                self.focused = 0;
-                self.scroll = 0;
-                false
-            }
-            KeyCode::Char('2') => {
-                self.focused = 1;
-                self.scroll = 0;
-                false
-            }
-            KeyCode::Char('3') => {
-                self.focused = 2;
-                self.scroll = 0;
-                false
-            }
-            KeyCode::Char('4') => {
-                self.focused = 3;
-                self.scroll = 0;
-                false
-            }
-            KeyCode::Char('5') => {
-                self.focused = 4;
-                self.scroll = 0;
-                false
-            }
-            KeyCode::Char('6') => {
-                self.focused = 5;
-                self.scroll = 0;
-                false
-            }
-            KeyCode::Char('7') => {
-                self.focused = 6;
-                self.scroll = 0;
-                false
-            }
-
-            // Search
-            KeyCode::Char('/') => {
-                self.search_mode = true;
-                self.search_query.clear();
-                self.cursor_pos = 0;
-                false
-            }
-
-            // Help
-            KeyCode::Char('?') | KeyCode::Char('h') => {
-                self.help_visible = true;
-                false
-            }
-
-            // Process detail — press Enter on focused panel to open detail
-            KeyCode::Enter => {
-                if self.focused == 1 {
-                    // Process tree — open detail for highlighted process
-                    self.show_detail = true;
-                    // Detail PID would be set from the currently highlighted row
-                }
-                false
-            }
-
-            // Pane resize with [ and ]
-            KeyCode::Char('[') => {
-                self.left_ratio = (self.left_ratio - 0.05).max(0.15);
-                false
-            }
-            KeyCode::Char(']') => {
-                self.left_ratio = (self.left_ratio + 0.05).min(0.55);
-                false
-            }
-            KeyCode::Char('{') => {
-                self.middle_ratio = (self.middle_ratio - 0.05).max(0.15);
-                false
-            }
-            KeyCode::Char('}') => {
-                self.middle_ratio = (self.middle_ratio + 0.05).min(0.55);
-                false
-            }
-
-            _ => false,
-        }
+        self.render_header(frame, chunks[0]);
+        self.render_tab_bar(frame, chunks[1]);
+        self.render_body(frame, chunks[2]);
+        self.render_status(frame, chunks[3]);
     }
 
-    fn on_events(&mut self, outputs: Vec<Output>) {
-        for output in outputs {
-            match output {
-                Output::Event(ev) => {
-                    // Update heatmap
-                    if let Some(bucket) = self.heatmap.back_mut() {
-                        match ev.kind {
-                            Kind::Exec => bucket.exec_count += 1,
-                            Kind::Open => bucket.open_count += 1,
-                            Kind::Connect | Kind::Accept | Kind::SendTo | Kind::RecvFrom => {
-                                bucket.network_count += 1;
-                            }
-                            Kind::Mkdir | Kind::Unlink | Kind::Kill | Kind::Chmod => {
-                                bucket.open_count += 1;
-                            }
-                        }
-                    }
-
-                    // Check search filter
-                    let passes_search = if self.search_query.is_empty() {
-                        true
-                    } else {
-                        let q = self.search_query.to_lowercase();
-                        match ev.kind {
-                            Kind::Exec => {
-                                ev.comm.to_lowercase().contains(&q)
-                                    || ev
-                                        .argv
-                                        .as_deref()
-                                        .map(|a| a.to_lowercase().contains(&q))
-                                        .unwrap_or(false)
-                            }
-                            Kind::Open => {
-                                ev.file
-                                    .as_deref()
-                                    .map(|f| f.to_lowercase().contains(&q))
-                                    .unwrap_or(false)
-                                    || ev.comm.to_lowercase().contains(&q)
-                            }
-                            _ => ev.comm.to_lowercase().contains(&q),
-                        }
-                    };
-
-                    if !passes_search {
-                        continue;
-                    }
-
-                    let (style, tag, body) = match ev.kind {
-                        Kind::Exec => {
-                            let argv_info = ev
-                                .argv
-                                .as_ref()
-                                .map(|a| format!(" {a}"))
-                                .unwrap_or_default();
-                            (
-                                Style::new().fg(NEON_GREEN).add_modifier(Modifier::BOLD),
-                                String::from("⚡"),
-                                format!("[{}] {} (uid {}){}", ev.pid, ev.comm, ev.uid, argv_info),
-                            )
-                        }
-                        Kind::Open => {
-                            let ext_badge = ev
-                                .extension
-                                .as_ref()
-                                .filter(|e| !e.is_empty())
-                                .map(|e| format!(".{e}"))
-                                .unwrap_or_default();
-                            (
-                                Style::new().fg(CYAN),
-                                String::from("◆"),
-                                format!(
-                                    "[{}] {} -> {} {}",
-                                    ev.pid,
-                                    ev.comm,
-                                    ev.file.as_deref().unwrap_or("?"),
-                                    if ext_badge.is_empty() {
-                                        String::new()
-                                    } else {
-                                        format!("[{ext_badge}]")
-                                    }
-                                ),
-                            )
-                        }
-                        Kind::Connect | Kind::Accept | Kind::SendTo | Kind::RecvFrom => {
-                            let kind_str = format!("{:?}", ev.kind);
-                            let addr = ev.file.as_deref().unwrap_or("?");
-                            let bytes_str = ev
-                                .bytes
-                                .as_ref()
-                                .map(|b| format!(" ({b} bytes)"))
-                                .unwrap_or_default();
-                            self.push_network(NetworkEntry {
-                                ts: ev.ts.clone(),
-                                pid: ev.pid,
-                                comm: ev.comm.clone(),
-                                kind: kind_str.clone(),
-                                addr: addr.to_string(),
-                                bytes: ev.bytes.clone(),
-                            });
-                            if let Some(bucket) = self.heatmap.back_mut() {
-                                bucket.network_count += 1;
-                            }
-                            (
-                                Style::new().fg(MAGENTA),
-                                kind_str,
-                                format!("[{}] {} -> {}{}", ev.pid, ev.comm, addr, bytes_str),
-                            )
-                        }
-                        Kind::Mkdir => {
-                            let path = ev.file.as_deref().unwrap_or("?");
-                            (
-                                Style::new().fg(NEON_YELLOW),
-                                String::from("📁"),
-                                format!("[{}] {} -> {}", ev.pid, ev.comm, path),
-                            )
-                        }
-                        Kind::Unlink => {
-                            let path = ev.file.as_deref().unwrap_or("?");
-                            (
-                                Style::new().fg(NEON_ORANGE),
-                                String::from("🗑"),
-                                format!("[{}] {} -> {}", ev.pid, ev.comm, path),
-                            )
-                        }
-                        Kind::Kill => {
-                            let details = ev.argv.as_deref().unwrap_or("?");
-                            (
-                                Style::new().fg(NEON_RED).add_modifier(Modifier::BOLD),
-                                String::from("☠"),
-                                format!("[{}] {} -> {}", ev.pid, ev.comm, details),
-                            )
-                        }
-                        Kind::Chmod => {
-                            let path = ev.file.as_deref().unwrap_or("?");
-                            (
-                                Style::new().fg(MAGENTA).add_modifier(Modifier::BOLD),
-                                String::from("🔒"),
-                                format!("[{}] {} -> {}", ev.pid, ev.comm, path),
-                            )
-                        }
-                    };
-                    self.push_log(LogLine {
-                        style,
-                        text: format!("{} {:>8} {}", ev.ts, tag, body),
-                    });
-                }
-                Output::Alert(alert) => {
-                    if let Some(bucket) = self.heatmap.back_mut() {
-                        bucket.alert_count += 1;
-                    }
-                    let line = LogLine {
-                        style: Style::new().fg(NEON_RED).add_modifier(Modifier::BOLD),
-                        text: format!(
-                            "{} ▲ [{}] {} — {} file opens in 1s",
-                            alert.ts, alert.pid, alert.comm, alert.opens
-                        ),
-                    };
-                    self.push_log(line.clone());
-                    if self.alerts.len() >= ALERT_CAP {
-                        self.alerts.pop_front();
-                    }
-                    self.alerts.push_back(line);
-                }
-            }
-        }
-    }
-
-    fn update_rates(&mut self) {
-        self.tick_count += 1;
-        if self.last_tick.elapsed() >= Duration::from_secs(1) {
-            let ticks = self.tick_count as f64;
-            self.events_per_sec = ticks / self.last_tick.elapsed().as_secs_f64();
-            // Approximate from recent heatmap
-            if let Some(last) = self.heatmap.back() {
-                self.opens_per_sec = last.open_count as f64;
-                self.alerts_per_sec = last.alert_count as f64;
-                self.network_per_sec = last.network_count as f64;
-            }
-            self.last_tick = Instant::now();
-            self.tick_count = 0;
-            // Rotate heatmap (new bucket every second)
-            self.heatmap.pop_front();
-            self.heatmap.push_back(HeatmapBucket {
-                exec_count: 0,
-                open_count: 0,
-                network_count: 0,
-                alert_count: 0,
-            });
-        }
-    }
-
-    fn push_log(&mut self, line: LogLine) {
-        if self.log.len() >= LOG_CAP {
-            self.log.pop_front();
-        }
-        self.log.push_back(line);
-    }
-
-    fn push_network(&mut self, entry: NetworkEntry) {
-        if self.network.len() >= NETWORK_CAP {
-            self.network.pop_front();
-        }
-        self.network.push_back(entry);
-    }
-
-    fn get_visible_log(&self, height: usize) -> Vec<&LogLine> {
-        let total = self.log.len();
-        let max_scroll = total.saturating_sub(height);
-        let scroll = self.scroll.min(max_scroll);
-        let start = total.saturating_sub(height.saturating_add(scroll));
-        self.log.iter().skip(start).take(height).collect()
+    fn subscriptions(&self) -> Vec<Box<dyn Subscription<Self::Message>>> {
+        vec![Box::new(Every::new(Duration::from_millis(50), || {
+            Msg::Tick
+        }))]
     }
 }
 
-// ── Public entry point ────────────────────────────────────────────────────
+// ── Rendering methods ─────────────────────────────────────────────────────
 
-pub fn run(monitor: &mut Monitor) -> Result<(), anyhow::Error> {
-    let mut terminal = ratatui::init();
-    let mut app = App::new();
-    let tick = Duration::from_millis(TICK_MS);
-
-    let result = (|| -> io::Result<()> {
-        loop {
-            if crate::QUIT.load(Ordering::SeqCst) {
-                break;
-            }
-            if event::poll(tick)? {
-                if let TermEvent::Key(key) = event::read()? {
-                    if key.kind == KeyEventKind::Press && app.on_key(key) {
-                        break;
-                    }
-                }
-            }
-            if !app.paused {
-                app.on_events(monitor.poll());
-                app.update_rates();
-            }
-            terminal.draw(|frame| draw(frame, &app, monitor))?;
-        }
-        Ok(())
-    })();
-
-    ratatui::restore();
-    result?;
-    Ok(())
-}
-
-// ── Rendering ─────────────────────────────────────────────────────────────
-
-fn draw(frame: &mut Frame, app: &App, monitor: &Monitor) {
-    frame.render_widget(Clear, frame.area());
-    let area = frame.area();
-
-    // Main layout: header (2) | tab bar (1) | sparklines (2) | body | status (1) | footer (1)
-    let [header_area, tab_area, spark_area, body_area, status_area, footer_area] =
-        Layout::vertical([
-            Constraint::Length(2),
-            Constraint::Length(1),
-            Constraint::Length(2),
-            Constraint::Min(0),
-            Constraint::Length(1),
-            Constraint::Length(1),
-        ])
-        .areas(area);
-
-    draw_header(frame, app, monitor, header_area);
-    draw_tab_bar(frame, app, tab_area);
-    draw_sparklines(frame, monitor, spark_area);
-
-    // Overlay: help or detail
-    if app.help_visible {
-        draw_help_overlay(frame, body_area);
-    } else if app.show_detail {
-        draw_detail_overlay(frame, app, monitor, body_area);
-    } else {
-        draw_body(frame, app, monitor, body_area);
-    }
-
-    draw_status_bar(frame, app, monitor, status_area);
-    draw_footer(frame, app, footer_area);
-}
-
-// ── Header ────────────────────────────────────────────────────────────────
-
-fn draw_header(frame: &mut Frame, app: &App, monitor: &Monitor, area: Rect) {
-    let [logo_area, stats_area] =
-        Layout::horizontal([Constraint::Length(38), Constraint::Min(0)]).areas(area);
-
-    let logo_lines = vec![
-        Line::from(vec![
-            Span::styled("  ", Style::new().fg(BG_DARK)),
-            Span::styled("⬡", Style::new().fg(CYAN).add_modifier(Modifier::BOLD)),
+impl HalcyonApp {
+    fn render_header(&self, frame: &mut Frame, area: Rect) {
+        let header = Paragraph::new(Line::from_spans(vec![
             Span::styled(
-                " HALCYON",
-                Style::new().fg(CYAN).add_modifier(Modifier::BOLD),
+                "  ⬡ HALCYON  ",
+                Style::new().fg(ACCENT_BLUE).attrs(StyleFlags::BOLD),
             ),
-            Span::styled(" ", Style::new().fg(BG_DARK)),
-            Span::styled(
-                "eBPF",
-                Style::new().fg(MAGENTA).add_modifier(Modifier::BOLD),
-            ),
-            Span::styled(" · ", Style::new().fg(DIM)),
-            Span::styled("PROCESS MONITOR", Style::new().fg(DIM_BRIGHT)),
-        ]),
-        Line::from(vec![
-            Span::styled("  ", Style::new().fg(BG_DARK)),
-            Span::styled("v0.5", Style::new().fg(DIM)),
-            Span::styled(" · ", Style::new().fg(PANEL_BORDER)),
-            Span::styled("kernel tracepoint", Style::new().fg(DIM)),
-            Span::styled(" · ", Style::new().fg(PANEL_BORDER)),
-            Span::styled("real-time", Style::new().fg(DIM)),
-        ]),
-    ];
-    frame.render_widget(Paragraph::new(logo_lines), logo_area);
+            Span::styled("eBPF · PROCESS MONITOR", Style::new().fg(TEXT_DIM)),
+        ]));
+        header.render(area, frame);
+    }
 
-    let status_color = if app.paused { NEON_YELLOW } else { NEON_GREEN };
-    let status_text = if app.paused {
-        "▐ PAUSED "
-    } else {
-        "▐ LIVE "
-    };
+    fn render_tab_bar(&self, frame: &mut Frame, area: Rect) {
+        let mut spans = Vec::new();
+        for (i, p) in Panel::all().iter().enumerate() {
+            let color = if i == self.focused {
+                ACCENT_BLUE
+            } else {
+                TEXT_DIM
+            };
+            let dot = if i == self.focused { "●" } else { "○" };
+            spans.push(Span::styled(
+                format!(" {} {} ", dot, p.name()),
+                Style::new().fg(color),
+            ));
+        }
+        let tab_line = Line::from_spans(spans);
+        let tab_widget = Paragraph::new(tab_line);
+        tab_widget.render(area, frame);
+    }
 
-    let elapsed = monitor.uptime().as_secs();
-    let (days, hours, mins, secs) = (
-        elapsed / 86400,
-        (elapsed % 86400) / 3600,
-        (elapsed % 3600) / 60,
-        elapsed % 60,
-    );
-    let uptime_str = if days > 0 {
-        format!("{days}d {hours:02}:{mins:02}:{secs:02}")
-    } else {
-        format!("{hours:02}:{mins:02}:{secs:02}")
-    };
+    fn render_body(&self, frame: &mut Frame, area: Rect) {
+        let body_chunks = Flex::horizontal()
+            .constraints([
+                Constraint::Percentage(35.0),
+                Constraint::Percentage(35.0),
+                Constraint::Percentage(30.0),
+            ])
+            .split(area);
 
-    let stats_line = Line::from(vec![
-        Span::styled(
-            status_text,
-            Style::new().fg(status_color).add_modifier(Modifier::BOLD),
-        ),
-        Span::styled(
-            format!(
-                "  evt {:>9}  │  lost {:>6}  │  uptime {}  │  threshold {} /s  ",
-                format_number(monitor.total_events),
-                format_number(monitor.total_lost),
-                uptime_str,
-                monitor.threshold,
-            ),
-            Style::new().fg(DIM_BRIGHT),
-        ),
-    ]);
-    frame.render_widget(Paragraph::new(stats_line), stats_area);
-}
+        let middle_chunks = Flex::vertical()
+            .constraints([Constraint::Percentage(55.0), Constraint::Percentage(45.0)])
+            .split(body_chunks[1]);
 
-// ── Tab bar ───────────────────────────────────────────────────────────────
+        let right_chunks = Flex::vertical()
+            .constraints([
+                Constraint::Percentage(35.0),
+                Constraint::Percentage(35.0),
+                Constraint::Percentage(30.0),
+            ])
+            .split(body_chunks[2]);
 
-fn draw_tab_bar(frame: &mut Frame, app: &App, area: Rect) {
-    let mut all_spans: Vec<Span> = Vec::new();
-    for (i, p) in Panel::all().iter().enumerate() {
-        let color = if i == app.focused { CYAN } else { DIM };
-        let modifier = if i == app.focused {
-            Modifier::BOLD
+        self.render_events_panel(frame, body_chunks[0]);
+        self.render_process_panel(frame, middle_chunks[0]);
+        self.render_extensions_panel(frame, middle_chunks[1]);
+        self.render_network_panel(frame, right_chunks[0]);
+        self.render_top_files_panel(frame, right_chunks[1]);
+        self.render_alerts_panel(frame, right_chunks[2]);
+    }
+
+    fn render_events_panel(&self, frame: &mut Frame, area: Rect) {
+        let border = if self.focused == 0 {
+            BORDER_ACTIVE
         } else {
-            Modifier::empty()
+            BORDER_SUBTLE
         };
-        let dot = if i == app.focused { "●" } else { "○" };
-        all_spans.push(Span::styled(
-            format!(" {} {} ", dot, p.name()),
-            Style::new().fg(color).add_modifier(modifier),
-        ));
-    }
-    let tab_widget = Paragraph::new(Line::from(all_spans));
-    frame.render_widget(tab_widget, area);
-}
 
-// ── Sparklines (event rate) ───────────────────────────────────────────────
-
-fn draw_sparklines(frame: &mut Frame, monitor: &Monitor, area: Rect) {
-    let [exec_area, open_area, net_area, alert_area] = Layout::horizontal([
-        Constraint::Percentage(30),
-        Constraint::Percentage(30),
-        Constraint::Percentage(25),
-        Constraint::Percentage(15),
-    ])
-    .areas(area);
-
-    let history = monitor.rate_history();
-
-    // Exec sparkline
-    let exec_data: Vec<u64> = history.iter().map(|s| s.exec_count).collect();
-    let max_exec = exec_data.iter().copied().max().unwrap_or(1).max(1);
-    let spark = Sparkline::default()
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(Span::styled(
-                    format!(" ▲ exec/s  peak: {max_exec} "),
-                    Style::new().fg(NEON_GREEN).add_modifier(Modifier::BOLD),
-                ))
-                .border_style(Style::new().fg(PANEL_BORDER)),
-        )
-        .data(&exec_data)
-        .max(max_exec);
-    frame.render_widget(spark, exec_area);
-
-    // Open sparkline
-    let open_data: Vec<u64> = history.iter().map(|s| s.open_count).collect();
-    let max_open = open_data.iter().copied().max().unwrap_or(1).max(1);
-    let spark = Sparkline::default()
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(Span::styled(
-                    format!(" ◆ open/s  peak: {max_open} "),
-                    Style::new().fg(CYAN).add_modifier(Modifier::BOLD),
-                ))
-                .border_style(Style::new().fg(PANEL_BORDER)),
-        )
-        .data(&open_data)
-        .max(max_open);
-    frame.render_widget(spark, open_area);
-
-    // Network sparkline
-    let net_data: Vec<u64> = history.iter().map(|s| s.open_count / 2).collect(); // approx
-    let max_net = net_data.iter().copied().max().unwrap_or(1).max(1);
-    let spark = Sparkline::default()
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(Span::styled(
-                    " net/s ",
-                    Style::new().fg(MAGENTA).add_modifier(Modifier::BOLD),
-                ))
-                .border_style(Style::new().fg(PANEL_BORDER)),
-        )
-        .data(&net_data)
-        .max(max_net);
-    frame.render_widget(spark, net_area);
-
-    // Alert sparkline
-    let alert_data: Vec<u64> = history.iter().map(|s| s.alert_count).collect();
-    let max_alert = alert_data.iter().copied().max().unwrap_or(1).max(1);
-    let spark = Sparkline::default()
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(Span::styled(
-                    " alerts/s ",
-                    Style::new().fg(NEON_RED).add_modifier(Modifier::BOLD),
-                ))
-                .border_style(Style::new().fg(PANEL_BORDER)),
-        )
-        .data(&alert_data)
-        .max(max_alert);
-    frame.render_widget(spark, alert_area);
-}
-
-// ── Body: multi-panel layout ──────────────────────────────────────────────
-
-fn draw_body(frame: &mut Frame, app: &App, monitor: &Monitor, area: Rect) {
-    // 3 columns: left (events) | middle (processes + extensions) | right (network + files + alerts)
-    let left_pct = (app.left_ratio * 100.0) as u16;
-    let middle_pct = (app.middle_ratio * 100.0) as u16;
-    let right_pct = 100 - left_pct - middle_pct;
-
-    let [left, middle, right] = Layout::horizontal([
-        Constraint::Percentage(left_pct),
-        Constraint::Percentage(middle_pct),
-        Constraint::Percentage(right_pct),
-    ])
-    .areas(area);
-
-    let [middle_top, middle_bottom] =
-        Layout::vertical([Constraint::Percentage(55), Constraint::Percentage(45)]).areas(middle);
-
-    let [right_top, right_middle, right_bottom] = Layout::vertical([
-        Constraint::Percentage(35),
-        Constraint::Percentage(35),
-        Constraint::Percentage(30),
-    ])
-    .areas(right);
-
-    draw_log(frame, app, left);
-    draw_process_tree(frame, app, monitor, middle_top);
-    draw_extensions(frame, monitor, middle_bottom);
-    draw_network_panel(frame, app, right_top);
-    draw_top_files(frame, monitor, right_middle);
-    draw_alerts(frame, app, right_bottom);
-}
-
-// ── Event log ─────────────────────────────────────────────────────────────
-
-fn draw_log(frame: &mut Frame, app: &App, area: Rect) {
-    let inner_height = area.height.saturating_sub(2) as usize;
-
-    let lines: Vec<Line> = app
-        .get_visible_log(inner_height)
-        .into_iter()
-        .map(|l| {
-            let mut spans = vec![Span::styled(l.text.clone(), l.style)];
-            // Highlight search matches
-            if !app.search_query.is_empty() {
-                let text = l.text.to_lowercase();
-                if text.contains(&app.search_query.to_lowercase()) {
-                    spans.push(Span::styled(
-                        " ◀ MATCH",
-                        Style::new().fg(NEON_YELLOW).add_modifier(Modifier::BOLD),
-                    ));
-                }
-            }
-            Line::from(spans)
-        })
-        .collect();
-
-    let focus_border = if app.focused == 0 {
-        PANEL_BORDER_ACTIVE
-    } else {
-        PANEL_BORDER
-    };
-    let search_indicator = if app.search_mode {
-        format!(" [/{}}}]", app.search_query)
-    } else if !app.search_query.is_empty() {
-        format!(" [/{}]", app.search_query)
-    } else {
-        String::new()
-    };
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .title(Span::styled(
-            format!(" EVENTS ({}) {} ", app.log.len(), search_indicator),
-            Style::new().fg(CYAN).add_modifier(Modifier::BOLD),
-        ))
-        .border_style(Style::new().fg(focus_border));
-
-    frame.render_widget(Paragraph::new(lines).block(block), area);
-}
-
-// ── Process tree ─────────────────────────────────────────────────────────
-
-fn draw_process_tree(frame: &mut Frame, app: &App, monitor: &Monitor, area: Rect) {
-    let tree = monitor.build_process_tree();
-    let flat = Monitor::flatten_tree(&tree);
-    let inner_height = area.height.saturating_sub(2) as usize;
-
-    let lines: Vec<Line> = flat
-        .iter()
-        .take(inner_height)
-        .map(|(depth, node)| {
-            let indent = "  ".repeat(*depth);
-            let prefix = if node.children.is_empty() {
-                "╰─ "
-            } else {
-                "├─ "
-            };
-            let node_style = if node.alerts > 0 {
-                Style::new().fg(NEON_RED).add_modifier(Modifier::BOLD)
-            } else if node.total_opens > 100 {
-                Style::new().fg(NEON_ORANGE)
-            } else if node.total_opens > 0 {
-                Style::new().fg(NEON_GREEN)
-            } else {
-                Style::new().fg(Color::White)
-            };
-            let pid_style = Style::new().fg(DIM_BRIGHT);
-            let alert_badge = if node.alerts > 0 {
-                format!(" ⚠{}", node.alerts)
-            } else {
-                String::new()
-            };
-            let opens_badge = if node.total_opens > 0 {
-                // Mini bar visualization
-                let bar_len = (node.total_opens.min(40) / 4) as usize;
-                let bar = "▪".repeat(bar_len);
-                format!(" {} ({})", bar, node.total_opens)
-            } else {
-                String::new()
-            };
-            Line::from(vec![
-                Span::styled(format!("{indent}{prefix}"), Style::new().fg(PANEL_BORDER)),
-                Span::styled(&node.comm, node_style),
-                Span::styled(format!(" [{}]", node.pid), pid_style),
-                Span::styled(opens_badge, Style::new().fg(DIM_BRIGHT)),
-                Span::styled(
-                    alert_badge,
-                    Style::new().fg(NEON_RED).add_modifier(Modifier::BOLD),
-                ),
-            ])
-        })
-        .collect();
-
-    let focus_border = if app.focused == 1 {
-        PANEL_BORDER_ACTIVE
-    } else {
-        PANEL_BORDER
-    };
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .title(Span::styled(
-            format!(" PROCESS TREE ({}) ", flat.len()),
-            Style::new().fg(CYAN).add_modifier(Modifier::BOLD),
-        ))
-        .border_style(Style::new().fg(focus_border));
-
-    frame.render_widget(Paragraph::new(lines).block(block), area);
-}
-
-// ── Network panel ─────────────────────────────────────────────────────────
-
-fn draw_network_panel(frame: &mut Frame, app: &App, area: Rect) {
-    let inner_height = area.height.saturating_sub(2) as usize;
-
-    let lines: Vec<Line> = app
-        .network
-        .iter()
-        .rev()
-        .take(inner_height)
-        .map(|entry| {
-            let kind_color = match entry.kind.as_str() {
-                "Connect" => MAGENTA,
-                "Accept" => CYAN,
-                "SendTo" => NEON_GREEN,
-                "RecvFrom" => NEON_YELLOW,
-                _ => DIM,
-            };
-            let kind_icon = match entry.kind.as_str() {
-                "Connect" => "→",
-                "Accept" => "←",
-                "SendTo" => "▸",
-                "RecvFrom" => "◂",
-                _ => "•",
-            };
-            let bytes_info = entry
-                .bytes
-                .as_ref()
-                .map(|b| format!(" [{b}]"))
-                .unwrap_or_default();
-            Line::from(vec![
-                Span::styled(format!("{} ", entry.ts), Style::new().fg(DIM)),
-                Span::styled(
-                    format!("{kind_icon} {:>8}", entry.kind),
-                    Style::new().fg(kind_color).add_modifier(Modifier::BOLD),
-                ),
-                Span::styled(format!(" [{}] ", entry.pid), Style::new().fg(DIM_BRIGHT)),
-                Span::styled(&entry.comm, Style::new().fg(Color::White)),
-                Span::styled(format!(" -> {}", entry.addr), Style::new().fg(MAGENTA)),
-                Span::styled(bytes_info, Style::new().fg(DIM)),
-            ])
-        })
-        .collect();
-
-    let focus_border = if app.focused == 2 {
-        PANEL_BORDER_ACTIVE
-    } else {
-        PANEL_BORDER
-    };
-    let net_count = app.network.len();
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .title(Span::styled(
-            format!(" NETWORK ({}) ", net_count),
-            Style::new().fg(MAGENTA).add_modifier(Modifier::BOLD),
-        ))
-        .border_style(Style::new().fg(focus_border));
-
-    frame.render_widget(Paragraph::new(lines).block(block), area);
-}
-
-// ── Extension frequency ───────────────────────────────────────────────────
-
-fn draw_extensions(frame: &mut Frame, monitor: &Monitor, area: Rect) {
-    let mut exts: Vec<(String, u64)> = monitor
-        .extension_counts()
-        .iter()
-        .map(|(k, &v)| (k.clone(), v))
-        .collect();
-    exts.sort_by_key(|b| std::cmp::Reverse(b.1));
-    exts.truncate(8);
-
-    let max_ext = exts.iter().map(|e| e.1).max().unwrap_or(1).max(1);
-
-    let lines: Vec<Line> = exts
-        .iter()
-        .map(|(ext, count)| {
-            let bar_width = (count * 20 / max_ext) as usize;
-            let filled = "━".repeat(bar_width);
-            let empty = "─".repeat(20 - bar_width);
-            let ext_color = match ext.as_str() {
-                "pdf" | "doc" | "docx" | "xls" | "xlsx" => NEON_YELLOW,
-                "zip" | "tar" | "gz" | "7z" | "rar" => MAGENTA,
-                "enc" | "locked" | "crypt" | "cipher" => NEON_RED,
-                "rs" | "py" | "js" | "ts" | "go" | "c" | "cpp" => NEON_GREEN,
-                "jpg" | "png" | "mp4" | "avi" | "mkv" => NEON_ORANGE,
-                _ => CYAN,
-            };
-            let count_color = if *count > max_ext / 2 {
-                NEON_YELLOW
-            } else {
-                Color::White
-            };
-            Line::from(vec![
-                Span::styled(
-                    format!(" .{:<6}", ext),
-                    Style::new().fg(ext_color).add_modifier(Modifier::BOLD),
-                ),
-                Span::styled(filled, Style::new().fg(ext_color)),
-                Span::styled(empty, Style::new().fg(DIM)),
-                Span::styled(format!(" {:>5}", count), Style::new().fg(count_color)),
-            ])
-        })
-        .collect();
-
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .title(Span::styled(
-            " FILE TYPES ",
-            Style::new().fg(CYAN).add_modifier(Modifier::BOLD),
-        ))
-        .border_style(Style::new().fg(PANEL_BORDER));
-
-    frame.render_widget(Paragraph::new(lines).block(block), area);
-}
-
-// ── Top files ─────────────────────────────────────────────────────────────
-
-fn draw_top_files(frame: &mut Frame, monitor: &Monitor, area: Rect) {
-    let top = monitor.top_files(MAX_FILES);
-
-    let rows: Vec<Row> = top
-        .iter()
-        .enumerate()
-        .map(|(i, f)| {
-            let rank_style = if i == 0 {
-                Style::new().fg(NEON_YELLOW).add_modifier(Modifier::BOLD)
-            } else if i < 3 {
-                Style::new().fg(NEON_ORANGE)
-            } else {
-                Style::new().fg(DIM_BRIGHT)
-            };
-            let ext_color = match f.extension.as_str() {
-                "pdf" | "doc" | "docx" => NEON_YELLOW,
-                "enc" | "locked" | "crypt" => NEON_RED,
-                "rs" | "py" | "js" | "ts" | "go" => NEON_GREEN,
-                _ => CYAN,
-            };
-            let entropy_color = if f.entropy > 0.7 {
-                NEON_RED
-            } else if f.entropy > 0.5 {
-                NEON_YELLOW
-            } else if f.entropy > 0.3 {
-                NEON_GREEN
-            } else {
-                DIM_BRIGHT
-            };
-
-            // Truncate path for display.
-            let path_display = if f.path.len() > 16 {
-                format!("…{}", &f.path[f.path.len() - 13..])
-            } else {
-                f.path.clone()
-            };
-
-            // Mini bar for count
-            let _bar_len = (f.count.min(16)) as usize;
-            let bar = "/bar"; // placeholder
-
-            Row::new(vec![
-                Cell::from(format!("#{}", i + 1)).style(rank_style),
-                Cell::from(path_display).style(Style::new().fg(Color::White)),
-                Cell::from(format!(".{}", f.extension))
-                    .style(Style::new().fg(ext_color).add_modifier(Modifier::BOLD)),
-                Cell::from(f.count.to_string()).style(Style::new().fg(NEON_GREEN)),
-                Cell::from(bar).style(Style::new().fg(DIM_BRIGHT)),
-                Cell::from(format!("{:.2}", f.entropy)).style(Style::new().fg(entropy_color)),
-            ])
-        })
-        .collect();
-
-    let widths = [
-        Constraint::Length(3),
-        Constraint::Min(8),
-        Constraint::Length(5),
-        Constraint::Length(5),
-        Constraint::Length(8),
-        Constraint::Length(6),
-    ];
-
-    let header = Row::new(vec![" #", "FILE", "EXT", "OPS", "BAR", "ENTR"])
-        .style(Style::new().fg(CYAN).add_modifier(Modifier::BOLD));
-
-    let table = Table::new(rows, widths).header(header).block(
-        Block::default()
+        let block = Block::new()
+            .title(" EVENTS ")
             .borders(Borders::ALL)
-            .title(Span::styled(
-                format!(" TOP FILES ({}) ", top.len()),
-                Style::new().fg(CYAN).add_modifier(Modifier::BOLD),
-            ))
-            .border_style(Style::new().fg(PANEL_BORDER)),
-    );
+            .border_type(BorderType::Rounded)
+            .border_style(Style::new().fg(border));
 
-    frame.render_widget(table, area);
-}
+        let inner = block.inner(area);
+        block.render(area, frame);
 
-// ── Alerts ────────────────────────────────────────────────────────────────
+        let mut state = self.log_state.clone();
+        self.log.render(inner, frame, &mut state);
+    }
 
-fn draw_alerts(frame: &mut Frame, app: &App, area: Rect) {
-    let inner_height = area.height.saturating_sub(2) as usize;
-    let alert_count = app.alerts.len();
+    fn render_process_panel(&self, frame: &mut Frame, area: Rect) {
+        let border = if self.focused == 1 {
+            BORDER_ACTIVE
+        } else {
+            BORDER_SUBTLE
+        };
 
-    let lines: Vec<Line> = if alert_count == 0 {
-        vec![Line::from(vec![
-            Span::styled(
-                "  ✓ ",
-                Style::new().fg(NEON_GREEN).add_modifier(Modifier::BOLD),
-            ),
-            Span::styled("all clear — no alerts", Style::new().fg(DIM_BRIGHT)),
-        ])]
-    } else {
-        let mut lines: Vec<Line> = app
-            .alerts
+        let block = Block::new()
+            .title(" PROCESSES ")
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .border_style(Style::new().fg(border));
+
+        let text = Paragraph::new(Line::from_spans(vec![Span::styled(
+            "  Process tree — populated from monitor",
+            Style::new().fg(TEXT_DIM),
+        )]));
+
+        let inner = block.inner(area);
+        block.render(area, frame);
+        text.render(inner, frame);
+    }
+
+    fn render_extensions_panel(&self, frame: &mut Frame, area: Rect) {
+        let block = Block::new()
+            .title(" FILE TYPES ")
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .border_style(Style::new().fg(BORDER_SUBTLE));
+
+        let text = Paragraph::new(Line::from_spans(vec![Span::styled(
+            "  Extension frequency — populated from monitor",
+            Style::new().fg(TEXT_DIM),
+        )]));
+
+        let inner = block.inner(area);
+        block.render(area, frame);
+        text.render(inner, frame);
+    }
+
+    fn render_network_panel(&self, frame: &mut Frame, area: Rect) {
+        let border = if self.focused == 2 {
+            BORDER_ACTIVE
+        } else {
+            BORDER_SUBTLE
+        };
+
+        let title = format!(" NETWORK ({}) ", self.network.len());
+        let block = Block::new()
+            .title(title.as_str())
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .border_style(Style::new().fg(border));
+
+        let inner = block.inner(area);
+        block.render(area, frame);
+
+        let inner_height = inner.height as usize;
+        let lines: Vec<Line> = self
+            .network
             .iter()
             .rev()
             .take(inner_height)
-            .map(|l| Line::from(vec![Span::styled(l.text.clone(), l.style)]))
+            .map(|entry| {
+                let kind_color = match entry.kind.as_str() {
+                    "Connect" => ACCENT_BLUE,
+                    "Accept" => ACCENT_GREEN,
+                    "SendTo" => ACCENT_AMBER,
+                    "RecvFrom" => ACCENT_PURPLE,
+                    _ => TEXT_DIM,
+                };
+                Line::from_spans(vec![
+                    Span::styled(format!("{} ", entry.ts), Style::new().fg(TEXT_DIM)),
+                    Span::styled(
+                        format!("{:>8} ", entry.kind),
+                        Style::new().fg(kind_color).attrs(StyleFlags::BOLD),
+                    ),
+                    Span::styled(format!("[{}] ", entry.pid), Style::new().fg(TEXT_BRIGHT)),
+                    Span::raw(&entry.comm),
+                    Span::styled(
+                        format!(" -> {}", entry.addr),
+                        Style::new().fg(ACCENT_PURPLE),
+                    ),
+                ])
+            })
             .collect();
-        lines.reverse();
-        lines
-    };
 
-    let title_color = if alert_count > 0 {
-        NEON_RED
-    } else {
-        NEON_GREEN
-    };
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .title(Span::styled(
-            format!(" ⚠ ALERTS ({}) ", alert_count),
-            Style::new().fg(title_color).add_modifier(Modifier::BOLD),
-        ))
-        .border_style(Style::new().fg(if alert_count > 0 {
-            NEON_RED
+        let paragraph = Paragraph::new(ftui_text::Text::from_lines(lines));
+        paragraph.render(inner, frame);
+    }
+
+    fn render_top_files_panel(&self, frame: &mut Frame, area: Rect) {
+        let block = Block::new()
+            .title(" TOP FILES ")
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .border_style(Style::new().fg(BORDER_SUBTLE));
+
+        let text = Paragraph::new(Line::from_spans(vec![Span::styled(
+            "  Top accessed files — populated from monitor",
+            Style::new().fg(TEXT_DIM),
+        )]));
+
+        let inner = block.inner(area);
+        block.render(area, frame);
+        text.render(inner, frame);
+    }
+
+    fn render_alerts_panel(&self, frame: &mut Frame, area: Rect) {
+        let alert_count = self.alerts.len();
+        let border = if alert_count > 0 {
+            ACCENT_RED
+        } else if self.focused == 5 {
+            BORDER_ACTIVE
         } else {
-            PANEL_BORDER
-        }));
+            BORDER_SUBTLE
+        };
 
-    frame.render_widget(Paragraph::new(lines).block(block), area);
-}
+        let title = format!(" ⚠ ALERTS ({}) ", alert_count);
+        let block = Block::new()
+            .title(title.as_str())
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .border_style(Style::new().fg(border));
 
-// ── Status bar ────────────────────────────────────────────────────────────
+        let inner = block.inner(area);
+        block.render(area, frame);
 
-fn draw_status_bar(frame: &mut Frame, app: &App, _monitor: &Monitor, area: Rect) {
-    let focused_panel = Panel::all()[app.focused];
-    let search_status = if app.search_mode {
-        format!(" SEARCH: /{}▏", app.search_query)
-    } else if !app.search_query.is_empty() {
-        format!(" filter: /{}", app.search_query)
-    } else {
-        String::new()
-    };
-
-    let line = Line::from(vec![
-        Span::styled(
-            format!(" 📊 panel: {} ", focused_panel.name()),
-            Style::new().fg(CYAN).add_modifier(Modifier::BOLD),
-        ),
-        Span::styled(
-            format!(
-                " │ events/s: {:.0}  opens/s: {:.0}  net/s: {:.0}  alerts/s: {:.0} ",
-                app.events_per_sec, app.opens_per_sec, app.network_per_sec, app.alerts_per_sec,
-            ),
-            Style::new().fg(DIM_BRIGHT),
-        ),
-        Span::styled(search_status, Style::new().fg(NEON_YELLOW)),
-    ]);
-    frame.render_widget(Paragraph::new(line).style(Style::new().bg(BG_DARK)), area);
-}
-
-// ── Footer ────────────────────────────────────────────────────────────────
-
-fn draw_footer(frame: &mut Frame, _app: &App, area: Rect) {
-    let mut spans = vec![];
-    let key = |label: &str, desc: &str| -> Vec<Span<'static>> {
-        vec![
-            Span::styled(
-                format!(" {label} "),
-                Style::new().fg(NEON_YELLOW).add_modifier(Modifier::BOLD),
-            ),
-            Span::raw(desc.to_string()),
-            Span::styled(" │ ".to_string(), Style::new().fg(DIM)),
-        ]
-    };
-
-    spans.extend(key("q", "quit"));
-    spans.extend(key("p", "pause"));
-    spans.extend(key("c", "clear"));
-    spans.extend(key("↑↓", "scroll"));
-    spans.extend(key("Tab", "panel"));
-    spans.extend(key("1-7", "jump"));
-    spans.extend(key("/", "search"));
-    spans.extend(key("?", "help"));
-    spans.extend(key("[]", "resize"));
-
-    // Remove trailing separator
-    if let Some(last) = spans.last() {
-        if last.content == " │ " {
-            spans.pop();
-        }
-    }
-
-    frame.render_widget(
-        Paragraph::new(Line::from(spans)).style(Style::new().fg(DIM_BRIGHT)),
-        area,
-    );
-}
-
-// ── Help overlay ──────────────────────────────────────────────────────────
-
-fn draw_help_overlay(frame: &mut Frame, area: Rect) {
-    let [_, center, _] = Layout::vertical([
-        Constraint::Percentage(10),
-        Constraint::Percentage(80),
-        Constraint::Percentage(10),
-    ])
-    .areas(area);
-
-    let help_text = vec![
-        Line::from(vec![Span::styled(
-            " ⚡ HALCYON KEYBINDINGS ",
-            Style::new().fg(CYAN).add_modifier(Modifier::BOLD),
-        )]),
-        Line::raw(""),
-        Line::from(vec![Span::styled(
-            "  NAVIGATION",
-            Style::new().fg(NEON_YELLOW).add_modifier(Modifier::BOLD),
-        )]),
-        Line::raw("    q / Esc      Quit (or clear scroll)"),
-        Line::raw("    p            Pause / resume"),
-        Line::raw("    c            Clear all panels"),
-        Line::raw("    ↑ / k        Scroll up"),
-        Line::raw("    ↓ / j        Scroll down"),
-        Line::raw("    PgUp / PgDn  Page up/down"),
-        Line::raw("    g / Home     Jump to top"),
-        Line::raw("    G / End      Jump to bottom"),
-        Line::raw(""),
-        Line::from(vec![Span::styled(
-            "  PANELS",
-            Style::new().fg(NEON_YELLOW).add_modifier(Modifier::BOLD),
-        )]),
-        Line::raw("    Tab          Next panel"),
-        Line::raw("    Shift+Tab    Previous panel"),
-        Line::raw("    1-7          Jump to panel"),
-        Line::raw("    Enter        Open process detail"),
-        Line::raw(""),
-        Line::from(vec![Span::styled(
-            "  SEARCH & FILTER",
-            Style::new().fg(NEON_YELLOW).add_modifier(Modifier::BOLD),
-        )]),
-        Line::raw("    /            Start search"),
-        Line::raw("    Esc          Cancel search"),
-        Line::raw("    Enter        Apply filter"),
-        Line::raw(""),
-        Line::from(vec![Span::styled(
-            "  LAYOUT",
-            Style::new().fg(NEON_YELLOW).add_modifier(Modifier::BOLD),
-        )]),
-        Line::raw("    [ / ]        Resize left panel"),
-        Line::raw("    { / }        Resize middle panel"),
-        Line::raw(""),
-        Line::from(vec![Span::styled(
-            "  OTHER",
-            Style::new().fg(NEON_YELLOW).add_modifier(Modifier::BOLD),
-        )]),
-        Line::raw("    ? / h        Show this help"),
-        Line::raw("    Ctrl+C       Force quit"),
-    ];
-
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .title(Span::styled(
-            " HELP — press any key to close ",
-            Style::new().fg(CYAN).add_modifier(Modifier::BOLD),
-        ))
-        .border_style(Style::new().fg(CYAN))
-        .style(Style::new().bg(BG_PANEL));
-
-    frame.render_widget(Clear, center);
-    frame.render_widget(Paragraph::new(help_text).block(block), center);
-}
-
-// ── Detail overlay ────────────────────────────────────────────────────────
-
-fn draw_detail_overlay(frame: &mut Frame, _app: &App, monitor: &Monitor, area: Rect) {
-    let [_, center, _] = Layout::vertical([
-        Constraint::Percentage(5),
-        Constraint::Percentage(90),
-        Constraint::Percentage(5),
-    ])
-    .areas(area);
-
-    let tree = monitor.build_process_tree();
-    let flat = Monitor::flatten_tree(&tree);
-    let inner_height = center.height.saturating_sub(4) as usize;
-
-    let lines: Vec<Line> = flat
-        .iter()
-        .take(inner_height)
-        .map(|(depth, node)| {
-            let indent = "  ".repeat(*depth);
-            let prefix = if node.children.is_empty() {
-                "╰─ "
-            } else {
-                "├─ "
-            };
-            let style = if node.alerts > 0 {
-                Style::new().fg(NEON_RED).add_modifier(Modifier::BOLD)
-            } else if node.total_opens > 0 {
-                Style::new().fg(NEON_GREEN)
-            } else {
-                Style::new().fg(Color::White)
-            };
-            Line::from(vec![Span::styled(
-                format!(
-                    "{indent}{prefix}{} [{}] opens={} alerts={}",
-                    node.comm, node.pid, node.total_opens, node.alerts
+        if alert_count == 0 {
+            let text = Paragraph::new(Line::from_spans(vec![
+                Span::styled(
+                    "  ✓ ",
+                    Style::new().fg(ACCENT_GREEN).attrs(StyleFlags::BOLD),
                 ),
-                style,
-            )])
-        })
-        .collect();
-
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .title(Span::styled(
-            " PROCESS DETAIL — press d/Esc to close ",
-            Style::new().fg(CYAN).add_modifier(Modifier::BOLD),
-        ))
-        .border_style(Style::new().fg(CYAN))
-        .style(Style::new().bg(BG_PANEL));
-
-    frame.render_widget(Clear, center);
-    frame.render_widget(Paragraph::new(lines).block(block), center);
-}
-
-// ── Helpers ───────────────────────────────────────────────────────────────
-
-fn format_number(n: u64) -> String {
-    if n >= 1_000_000 {
-        format!("{:.1}M", n as f64 / 1_000_000.0)
-    } else if n >= 1_000 {
-        format!("{:.1}K", n as f64 / 1_000.0)
-    } else {
-        n.to_string()
-    }
-}
-
-// ── Tests ─────────────────────────────────────────────────────────────────
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::monitor::{Alert, Kind, Monitor, Output, RecordedEvent};
-
-    #[test]
-    fn renders_with_events_and_alerts() {
-        let monitor = Monitor::dummy();
-        let mut app = App::new();
-        app.on_events(vec![
-            Output::Event(RecordedEvent {
-                ts: "00:00:00.000".into(),
-                kind: Kind::Exec,
-                pid: 1,
-                uid: 0,
-                comm: "init".into(),
-                file: None,
-                extension: None,
-                argv: Some("/sbin/init".into()),
-                bytes: None,
-            }),
-            Output::Event(RecordedEvent {
-                ts: "00:00:00.001".into(),
-                kind: Kind::Open,
-                pid: 2,
-                uid: 1000,
-                comm: "sh".into(),
-                file: Some("/etc/passwd".into()),
-                extension: None,
-                argv: None,
-                bytes: None,
-            }),
-            Output::Alert(Alert {
-                ts: "00:00:00.002".into(),
-                pid: 2,
-                uid: 1000,
-                comm: "sh".into(),
-                opens: 3,
-            }),
-        ]);
-
-        let backend = ratatui::backend::TestBackend::new(160, 50);
-        let mut terminal = ratatui::Terminal::new(backend).unwrap();
-        terminal.draw(|f| draw(f, &app, &monitor)).unwrap();
-    }
-    #[test]
-    fn key_handling() {
-        let mut app = App::new();
-        app.on_key(KeyEvent::new(KeyCode::Char('p'), KeyModifiers::NONE));
-        assert!(app.paused);
-        // q at top of events panel returns true (quit)
-        assert!(app.on_key(KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE)));
-        assert!(app.on_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL)));
-    }
-
-    #[test]
-    fn tab_cycles_focus() {
-        let mut app = App::new();
-        let panel_count = Panel::all().len();
-        assert_eq!(app.focused, 0);
-        for i in 1..panel_count {
-            app.on_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
-            assert_eq!(app.focused, i);
+                Span::styled("all clear — no alerts", Style::new().fg(TEXT_BRIGHT)),
+            ]));
+            text.render(inner, frame);
+        } else {
+            let mut state = self.alerts_state.clone();
+            self.alerts.render(inner, frame, &mut state);
         }
-        app.on_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
-        assert_eq!(app.focused, 0);
     }
 
-    #[test]
-    fn number_keys_jump_to_panel() {
-        let mut app = App::new();
-        app.on_key(KeyEvent::new(KeyCode::Char('3'), KeyModifiers::NONE));
-        assert_eq!(app.focused, 2);
-        app.on_key(KeyEvent::new(KeyCode::Char('7'), KeyModifiers::NONE));
-        assert_eq!(app.focused, 6);
+    fn render_status(&self, frame: &mut Frame, area: Rect) {
+        let panel_name = Panel::all()[self.focused].name();
+        let rate_str = format!(
+            "evt/s: {:.0}  open/s: {:.0}",
+            self.events_per_sec, self.opens_per_sec
+        );
+        let status = StatusLine::new()
+            .left(StatusItem::text(panel_name))
+            .center(StatusItem::text(&rate_str))
+            .right(StatusItem::key_hint("?", "Help"));
+        status.render(area, frame);
     }
 
-    #[test]
-    fn search_mode() {
-        let mut app = App::new();
-        app.on_key(KeyEvent::new(KeyCode::Char('/'), KeyModifiers::NONE));
-        assert!(app.search_mode);
-        app.on_key(KeyEvent::new(KeyCode::Char('t'), KeyModifiers::NONE));
-        app.on_key(KeyEvent::new(KeyCode::Char('e'), KeyModifiers::NONE));
-        app.on_key(KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE));
-        assert_eq!(app.search_query, "tes");
-        app.on_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
-        assert!(!app.search_mode);
-        assert_eq!(app.search_query, "tes");
-    }
+    fn render_help(&self, frame: &mut Frame, area: Rect) {
+        let help_lines = vec![
+            Line::from_spans(vec![Span::styled(
+                "  ⬡ HALCYON — Keyboard Shortcuts",
+                Style::new().fg(ACCENT_BLUE).attrs(StyleFlags::BOLD),
+            )]),
+            Line::raw(""),
+            Line::from_spans(vec![Span::styled(
+                "  Navigation",
+                Style::new().fg(ACCENT_AMBER).attrs(StyleFlags::BOLD),
+            )]),
+            Line::raw("  Tab / Shift+Tab    Cycle panels"),
+            Line::raw("  1-6               Jump to panel"),
+            Line::raw("  ↑/↓ or j/k        Scroll"),
+            Line::raw("  PgUp/PgDn         Page scroll"),
+            Line::raw(""),
+            Line::from_spans(vec![Span::styled(
+                "  Actions",
+                Style::new().fg(ACCENT_AMBER).attrs(StyleFlags::BOLD),
+            )]),
+            Line::raw("  p                 Pause/Resume"),
+            Line::raw("  q / Esc           Quit"),
+            Line::raw("  Ctrl+C            Force quit"),
+            Line::raw(""),
+            Line::from_spans(vec![Span::styled(
+                "  FrankenTUI — diff-based renderer, zero flicker",
+                Style::new().fg(TEXT_DIM),
+            )]),
+        ];
 
-    #[test]
-    fn help_overlay() {
-        let mut app = App::new();
-        app.on_key(KeyEvent::new(KeyCode::Char('?'), KeyModifiers::NONE));
-        assert!(app.help_visible);
-        app.on_key(KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE));
-        assert!(!app.help_visible);
-    }
+        let block = Block::new()
+            .title(" Help ")
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .border_style(Style::new().fg(ACCENT_BLUE));
 
-    #[test]
-    fn pane_resize() {
-        let mut app = App::new();
-        let orig = app.left_ratio;
-        app.on_key(KeyEvent::new(KeyCode::Char(']'), KeyModifiers::NONE));
-        assert!(app.left_ratio > orig);
-        app.on_key(KeyEvent::new(KeyCode::Char('['), KeyModifiers::NONE));
-        assert!((app.left_ratio - orig).abs() < 0.01);
-    }
+        let inner = block.inner(area);
+        block.render(area, frame);
 
-    #[test]
-    fn format_number_scales() {
-        assert_eq!(format_number(0), "0");
-        assert_eq!(format_number(999), "999");
-        assert_eq!(format_number(1500), "1.5K");
-        assert_eq!(format_number(1_500_000), "1.5M");
+        let paragraph = Paragraph::new(ftui_text::Text::from_lines(help_lines));
+        paragraph.render(inner, frame);
     }
+}
+
+// ── Public API — called from main.rs ──────────────────────────────────────
+
+/// Run the FrankenTUI-based TUI.
+pub fn run(_monitor: &mut Monitor) -> anyhow::Result<()> {
+    let app = HalcyonApp::new();
+
+    App::new(app).screen_mode(ScreenMode::AltScreen).run()?;
+
+    Ok(())
 }

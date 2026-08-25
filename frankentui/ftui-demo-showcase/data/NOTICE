@@ -1,0 +1,18 @@
+Third-Party Data Assets
+=======================
+
+shakespeare.txt
+---------------
+The Complete Works of William Shakespeare
+Source: Project Gutenberg, eBook #100
+  https://www.gutenberg.org/ebooks/100
+License: Public domain in the United States.
+  Project Gutenberg License applies to the header/footer text.
+
+sqlite3.c / sqlite3.h
+----------------------
+SQLite Amalgamation (version 3.48.0)
+Source: https://sqlite.org/amalgamation.html
+License: Public domain.
+  SQLite is released into the public domain by its authors.
+  https://sqlite.org/copyright.html

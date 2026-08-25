@@ -1,0 +1,24 @@
+▸ A: Inputs │   B: Display │   C: Status │   D: Data Viz │   E: Navigation │   F
+╭TextInput────╮╭Masked Input─╮╭Command Palette─────────╮╭Log Viewer────────────╮
+│@example.com ││••••••       ││                        ││INFO  boot: FrankenTUI│
+│             ││             ││ ╭─ Command Palette ──╮ ││demo started          │
+╰─────────────╯╰─────────────╯│ │>Type to search...  │ ││DEBUG layout: resolved│
+╭TextArea────────────────────╮│ │> [App] Quit  Exit …│ ││6 constraints         │
+│1  FrankenTUI text area     ││ ╰────────────────────╯ ││WARN  io: slow disk   │
+│2  - Multi-line editing     ││                        ││detected, using cache │
+│3  - Soft wrap enabled      │╰────────────────────────╯│INFO  render: diff  0 │
+│4  - Line numbers           │╭File Picker─────────────╮╰──────────────────────╯
+│                            ││.                       │╭ProgressBar───────────╮
+│                            ││> ?? benches            ││          0%          │
+│                            ││  ?? data               ││         25%          │
+│                            ││  ?? src                ││         50%          │
+╰────────────────────────────╯│  ?? tests              ││         75%          │
+╭Checkbo╮╭Select╮╭Validation ╮╰────────────────────────╯╰──────────────────────╯
+│[ ] Ena││Select││! Invalid …│╭Notifications───────────╮╭Spinners──────────────╮
+│[x] Syn││Number││ETA  00:59 ││                        ││⠋ Loading (DOTS)      │
+│( ) Lig││Slider││[?]…       ││                        │╰──────────────────────╯
+│(*) Dar││      ││           ││                        │╭Toast─────────────────╮
+│       ││      ││           ││                        ││                      │
+│       ││      ││           ││                        ││                      │
+╰───────╯╰──────╯╰───────────╯╰────────────────────────╯╰──────────────────────╯
+*.......                                                                        

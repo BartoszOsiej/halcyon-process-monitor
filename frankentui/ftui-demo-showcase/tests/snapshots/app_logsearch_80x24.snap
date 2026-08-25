@@ -1,0 +1,24 @@
+ 1: Tour │ 2: Dash │ 3: Shakes │ 4: Code │ 5: Widgets │ 6: Layout │ 7: Forms    
+╭──────────────────────────────────Log Search──────────────────────────────────╮
+│╭ Log Viewer ────────────────────────────────────────────────────────────────╮│
+││[    33] DEBUG core::runtime      Request processed successfully            ││
+││[    34] DEBUG metrics::push      Connection pool health check passed       ││
+││[    35]  WARN config::reload     Token refresh completed for session       ││
+││[    36]  WARN server::http       Cache hit ratio: 0.94                     ││
+││[    37] ERROR db::pool           Worker picked up job from queue           ││
+││[    38] TRACE auth::jwt          Rate limit threshold approaching          ││
+││[    39]  INFO cache::redis       Garbage collection cycle completed        ││
+││[    40]  INFO queue::worker      Metric batch flushed to backend           ││
+││[    41]  INFO api::handler       Configuration hot-reload triggered        ││
+││[    42]  INFO core::runtime      Retry attempt 2/3 for downstream call     ││
+││[    43]  INFO metrics::push      Scheduled maintenance window check        ││
+││[    44]  INFO config::reload     Request processed successfully            ││
+││[    45] DEBUG server::http       Connection pool health check passed       ││
+││[    46] DEBUG db::pool           Token refresh completed for session       ││
+││[    47] DEBUG auth::jwt          Cache hit ratio: 0.94                     ││
+││[    48]  WARN cache::redis       Worker picked up job from queue           ││
+││[    49]  WARN queue::worker      Rate limit threshold approaching          ││
+│╰────────────────────────────────────────────────────────────────────────────╯│
+│ NORMAL | lines: 50 | gen: 50                                                 │
+╰──────────────────────────────────────────────────────────────────────────────╯
+ Log Search [20/45] [h] [cmd] [p] [d]    Tab/Shift+Tab: next/prev     0x0 00:00 

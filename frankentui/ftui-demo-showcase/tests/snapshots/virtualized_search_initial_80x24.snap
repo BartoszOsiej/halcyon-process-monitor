@@ -1,0 +1,24 @@
+╭Search (/ to focus, Esc to clear)─────────────────────────────────────────────╮
+│Type to search...                                                             │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭─────────────────Items (10000 total)──────────────────╮╭────────Stats─────────╮
+│[00000] Configuration :: CoreService initialized — pay││Total:    10000 items │
+│[00001] Authentication :: CoreService initialized — pa││Matches:  10000       │
+│[00002] Database :: CoreService initialized — payload_││Selected: 1           │
+│[00003] Network :: CoreService initialized — payload_3││Query:    ""          │
+│[00004] FileSystem :: CoreService initialized — payloa││Top score: 0          │
+│[00005] Logging :: CoreService initialized — payload_5││                      │
+│[00006] Security :: CoreService initialized — payload_││Keybindings:          │
+│[00007] Performance :: CoreService initialized — paylo││  /      Focus search │
+│[00008] Configuration :: CoreService updated — payload││  Esc    Clear search │
+│[00009] Authentication :: CoreService updated — payloa││  j/k    Navigate     │
+│[00010] Database :: CoreService updated — payload_10  ││  g/G    Top/Bottom   │
+│[00011] Network :: CoreService updated — payload_11   ││  PgUp/Dn  Page scroll│
+│[00012] FileSystem :: CoreService updated — payload_12││                      │
+│[00013] Logging :: CoreService updated — payload_13   ││                      │
+│[00014] Security :: CoreService updated — payload_14  ││                      │
+│[00015] Performance :: CoreService updated — payload_1││                      │
+│[00016] Configuration :: CoreService validated — paylo││                      │
+│[00017] Authentication :: CoreService validated — payl││                      │
+│[00018] Database :: CoreService validated — payload_18││                      │
+╰──────────────────────────────────────────────────────╯╰──────────────────────╯

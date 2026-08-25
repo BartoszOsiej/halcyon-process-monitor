@@ -1,0 +1,24 @@
+╔═══════════════════════sqlite3.c════════════════════════╗╭─────File Info──────╮
+║      1 /**********************************************█║│{                   │
+║      2 ** This file is an amalgamation of many separat│║│  "filename": "sqlit│
+║      3 ** version 3.48.0.  By combining all the indivi│║│  "lines": 261044,  │
+║      4 ** single large file, the entire code can be co│║│  "size": "9.2 MB", │
+║      5 ** unit.  This allows many compilers to do opti│║╰────────────────────╯
+║      6 ** possible if the files were compiled separate│║╭──────Context───────╮
+║      7 ** of 5% or more are commonly seen when SQLite │║│Line 1              │
+║      8 ** translation unit.                           │║│                    │
+║      9 **                                             │║│Nearest function:   │
+║     10 ** This file is all you need to compile SQLite.│║│Top of file         │
+║     11 ** programs, you need this file and the "sqlite│║╰────────────────────╯
+║     12 ** the programming interface to the SQLite libr│║╭──────Hotspots──────╮
+║     13 ** the "sqlite3.h" header file at hand, you wil│║│▶    583  sqlite3_op│
+║     14 ** the text of this file.  Search for "Begin fi│║│     587  sqlite3_pr│
+║     15 ** of the embedded sqlite3.h header file.) Addi│║│                    │
+╚════════════════════════════════════════════════════════╝╰────────────────────╯
+╭─────────────────────Telemetry Deck─────────────────────╮╭─Radar + Spotlight──╮
+│IO Lane            Cache Hit          Lock + TX         ││Type / for instant h│
+│                                      LCK██░░░░░░░░░░   ││Awaiting query...   │
+│                                      TX ██████████░░   ││One-writer rule · de│
+│▄▅▆▆▇▇█████▇▇▆▅▅▄▃ █████▇▇▆▆▅▄▃▃▂▁▁                     ││                    │
+╰────────────────────────────────────────────────────────╯╰────────────────────╯
+ Mode: Source · Line 1/261044 (0%) · Matches: 0 | 9.2 MB | C                    

@@ -1,0 +1,40 @@
+ 1: Tour │ 2: Dash │ 3: Shakes │ 4: Code │ 5: Widgets │ 6: Layout │ 7: Forms │ 8: DataViz │ 9: Files │ 0: Adv           
+╭──────────────────────────────────────────────────────Dashboard───────────────────────────────────────────────────────╮
+│FRANKENTUI DASHBOARD                                                                                                  │
+│╭────Plasma─────╮╭─────Charts · Pulse─────╮╭───Code · Rust (1/28)───╮╭─────Info──────╮  ┌─────── Pane Studio ────────┐│
+││⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿││g:cycle · sparklines + m││// runtime.rs           ││FrankenTUI Kern│  │mode:Focus sel:1 tl:0/0 ops:││
+││⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿││CPU ▃ ▃▃▂▂▁▁▄▃▄▂▅▅▅▆ 46%││use std::{collections::H││ INLINE        │  │┃            ││            │││
+││⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿││MEM ▅╔═════════════════════ ⌨ Keyboard Shortcuts (Esc) ═════════════════════╗3  @90 ││ 14x13  @10 │││
+││⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿││NET ▁║ Navigation                                                           ║       ││            │││
+││⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿││OUT ▁║ [Ctrl+K]                 Open command palette                        ║       ││            │││
+││⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿││EPS 7║                                                                      ║       ││            │││
+││⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿││     ║ View                                                                 ║       ││            │││
+││⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿││     ║ [?]                      Toggle this help overlay                    ║       ││            │││
+││⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿││     ║ [Esc]                    Dismiss top overlay                         ║       ││            │││
+││⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿││     ║ [m / F6]                 Toggle mouse capture                        ║       ││            │││
+││⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿││     ║ [Ctrl+P]                 Toggle performance HUD                      ║       ││            │││
+││⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿││     ║ [Ctrl+I]                 Toggle evidence inspector                   ║       ■│            │││
+││⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿││     ║ [Shift+A]                Toggle A11y panel                           ║■■───────────■■■──────││
+││⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿││     ║ [F12]                    Toggle debug overlay                        ║ane-3──■╭──7 pane-4──╮││
+││⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿││     ║                                                                      ║       ■│            │││
+││⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿││     ║ Editing                                                              ║4  @90 ■│ 14x14  @10 │││
+││Click → Visual ││Click║ [Ctrl+Z]                 Undo                                        ║       ││            │││
+│╰───────────────╯╰─────║ [Ctrl+Y / Ctrl+Shift+Z]  Redo                                        ║       ││            │││
+│╭Text FX · 3-Up (1/2│╭─║                                                                      ║       ││            │││
+││Sample 1 of 3 · 3-U││S║ Global                                                               ║       ││            │││
+││1 · None · S1      ││ ║ [Ctrl+T]                 Cycle color theme                           ║       ││            │││
+││# FX Lab · Determin││ ║ [H/M/L]                  A11y: high contrast, reduced motion, large  ║       ││            │││
+││> *"Render truth, n││ ║ [Ctrl+1..6]              Palette: filter by category                 ║       ││            │││
+││2 · FadeIn · S2    ││ ║ [Ctrl+0]                 Palette: clear category filter              ║       ││            │││
+││## GFM Stress · Led││ ║ [Ctrl+F]                 Palette: toggle favorite                    ║       ││            │││
+││1. **Bold** + _ital⋮│ ║ [Ctrl+Shift+F]           Palette: favorites only                     ║       ││            │││
+││3 · FadeOut · S3   ││ ║ [Ctrl+C]                 Quit application                            ║───────│╰────────────╯││
+││### Runtime Ledger ││ ║ Categories: Tour Core Visuals Interact Text Systems                  ║──────────────────────┘│
+││- [x] Tasks        ││ ║                                                                      ║                       │
+││                   ││ ╚═══════════════════════Press ? or Esc to close════════════════════════╝tudio─────────────────╮│
+││                   ││                                ││                           │    │Drag docks | Right click mod││
+││drag panes in dashb││Click → Action Timeline         ││Click → Markdown           │    │                            ││
+│╰───────────────────│╰────────────────────────────────│╰───────────────────────────╯    ╰────────────────────────────╯│
+│g:charts c:code e:fx m:md | drag bottom dividers: resize | 1-9:screens | t:theme | q:quit                             │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+ Dashboard [2/45]  Cyberpunk Aurora [H] [cmd] [p] [d]  Mouse: AUTO (alt:ON)    Tab/Shift+Tab: next/prev    120x40 00:00 

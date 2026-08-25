@@ -1,0 +1,40 @@
+╭───────────Markdown Renderer───────────╮ ╭LLM Streaming Simulation | Streaming...╮ ╭──────────Style Sampler───────────╮
+│GitHub-Flavored Markdown (Rich Demo)   │ │▌                                      │ │Bold  Dim  Italic  Underline      │
+│                                       │ │                                       │ │Strikethrough  Reverse  Blink     │
+│LaTeX + Symbols                        │ │                                       │ │Dbl-Underline  Curly-Underline  [H│
+│                                       │ │                                       │ │                                  │
+│Inline math: E = mc², α + β = γ, Δ x ≈ │ │                                       │ │Error  Success  Warning  Link  Cod│
+│0.001.                                 │ │                                       │ │                                  │
+│                                       │ │                                       │ ╰──────────────────────────────────╯
+│Block math:                            │ │                                       │                                     
+│                                       │ │                                       │ ╭─────────Unicode Showcase─────────╮
+│  ∑ᵢ₌₁ⁿ xᵢ = n(n+1)/2                  │ │                                       │ │Text         │Type         │Cells │
+│                                       │ │                                       │ │Hello        │ASCII        │5     │
+│  ∫_{−∞}^{∞} e^{−x²} dx = √{π}         │ │                                       │ │????????     │CJK          │8     │
+│                                       │ │                                       │ │??????????   │Hiragana     │10    │
+│Admonitions                            │ │                                       │ │??????       │Emoji        │6     │
+│                                       │ │                                       │ │café         │Latin+accent │4     │
+│ℹ  NOTE                                │ │                                       │ │α β γ δ      │Greek        │7     │
+│┃ Information note with rich emphasis. │ │                                       │ │→ ← ↑ ↓      │Arrows       │7     │
+│                                       │ │                                       │ ╰──────────────────────────────────╯
+│?? TIP                                 │ │                                       │                                     
+│┃ Use Tab and Shift+Tab to navigate.   │ │                                       │ ╭─────Wrap: Word | Align: Left─────╮
+│                                       │ │                                       │ │w: cycle wrap | a: cycle alignment│
+│⚠  WARNING                             │ │                                       │ │The quick brown fox jumps over the│
+│┃ Unsafe mode is forbidden in this     │ │                                       │ │lazy dog.                         │
+│┃ project.                             │ │                                       │ │Supercalifragilisticexpialidocious│
+│                                       │ │                                       │ │is quite a long word that tests   │
+│Task Lists + Links                     │ │                                       │ │character-level wrapping behavior.│
+│✓ Inline mode + scrollback             │ │                                       │ │???????? contains CJK characters  │
+│✓ Deterministic output                 │ │                                       │ │that are double-width. ?? Ferris  │
+│☐ Time-travel diff heatmap             │ │                                       │ │says hello!                       │
+│☐ Conformal frame-time predictor       │ │                                       │ │                                  │
+│                                       │ │                                       │ │                                  │
+│Link: https://example.com              │ │                                       │ │                                  │
+│                                       │ │                                       │ │                                  │
+│Code Blocks                            │ │                                       │ │                                  │
+│                                       │ │  [░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░]│ │                                  │
+│─── rust ───                           │ │  Detection: 0 indicators | Uncertain  │ │                                  │
+│  #[derive(Debug, Clone)]              │ │  Confidence: 0% | Chars: 0/2955       │ │                                  │
+│  pub enum Strategy { Full, DirtyRows, │ │  Space: play/pause | r: restart | f: t│ │                                  │
+╰───────────────────────────────────────╯ ╰───────────────────────────────────────╯ ╰──────────────────────────────────╯

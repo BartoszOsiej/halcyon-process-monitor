@@ -1,0 +1,24 @@
+╭───────────────────────────────Filters + Follow───────────────────────────────╮
+│Follow[F]: ON  Component[C]: all  Severity[S]: all  Type[T]: all  Clear[X]    │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭────────────────Event Timeline────────────────╮╭─────────Event Detail─────────╮
+│   0 TRACE core    input   Key event processed││ID: 12                        │
+│   1 DEBUG core    input   Key event processed││Tick: 11                      │
+│   2 INFO  runtime input   Key event processed││Severity: DEBUG               │
+│   3 WARN  runtime cmd     Command dispatched ││Component: runtime            │
+│   4 ERROR render  cmd     Command dispatched ││Type: render                  │
+│   5 TRACE render  cmd     Command dispatched ││                              │
+│   6 DEBUG widgets sub     Subscription tick d││Summary:                      │
+│   7 INFO  widgets sub     Subscription tick d││  Frame diff computed         │
+│   8 WARN  core    sub     Subscription tick d││                              │
+│   9 ERROR core    render  Frame diff computed││Fields:                       │
+│  10 TRACE runtime render  Frame diff computed││  latency_ms: 14              │
+│  11 DEBUG runtime render  Frame diff computed││  diff_cells: 23              │
+│                                              ││  ansi_bytes: 517             │
+│                                              ││                              │
+│                                              ││                              │
+│                                              ││                              │
+│                                              ││                              │
+│                                              ││                              │
+│                                              ││                              │
+╰──────────────────────────────────────────────╯╰──────────────────────────────╯

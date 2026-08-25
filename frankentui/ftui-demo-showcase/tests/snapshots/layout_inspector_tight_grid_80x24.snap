@@ -1,0 +1,24 @@
+╭────────Inspector─────────╮  ╭─────────────────────Layout─────────────────────╮
+│Scenario: Tight Grid      │  │.Cell A! 26x7→24x7 [0..2 .Cell B? 25x7→23x7 [25.│
+│Details: 2x2 grid with int│  ││                      │ │                     ││
+│Step: Constraints - Inspec│  ││                      │ │                     ││
+│                          │  ││                      │ │                     ││
+│Overlay: on   Tree: on    │  ││                      │ │                     ││
+│                          │  ││                      │ │                     ││
+│Keys: n/p scenario  [/ ] s│  │.──────────────────────╯ .─────────────────────.│
+│                          │  │                                                │
+│GridRoot  req 48x14  got 4│  │.Cell C! 26x6→24x6 [0..2 .Cell D! 25x6→23x6 [25.│
+│  Cell A  req 26x7  got 24│  ││                      │ │                     ││
+│  Cell B  req 25x7  got 23│  ││                      │ │                     ││
+│  Cell C  req 26x6  got 24│  ││                      │ │                     ││
+│  Cell D  req 25x6  got 23│  ││                      │ │                     ││
+│                          │  │.──────────────────────╯ .─────────────────────.│
+│                          │  ╰────────────────────────────────────────────────╯
+│                          │                                                    
+│                          │  ╭──────────────────────Tree──────────────────────╮
+│                          │  │GridRoot req=48x14 got=48x14 min=0x0 max=0x0    │
+│                          │  │  Cell A req=26x7 got=24x7 min=0x8 max=22x0     │
+│                          │  │  Cell B req=25x7 got=23x7 min=25x8 max=0x0     │
+│                          │  │  Cell C req=26x6 got=24x6 min=0x0 max=22x5     │
+│                          │  │  Cell D req=25x6 got=23x6 min=25x0 max=0x5     │
+╰──────────────────────────╯  ╰────────────────────────────────────────────────╯

@@ -1,0 +1,24 @@
+FRANKENTUI DASHBOARD                                                            
+╭──────Plasma──────╮╭────────Charts · Pulse────────╮╭────Code · Rust (1/28)────╮
+│⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿││g:cycle · sparklines + mini ba││// runtime.rs             │
+│⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿││CPU ▃ ▃▃▂▂▁▁▄▃▄▂▅▅▅▆▂▄▅▃▆▅ 46%││use std::{collections::Has│
+│⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿││MEM ▅▂ ▃▁▄▄▂▂▇▅▃▅▂▃▄▆▄▇█▂▆ 41%││                          │
+│⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿││NET ▁▁▁▁▁  ▁   ▇▁▁    ▁ █▁▁ 14││use ftui_core::event::Even│
+│⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿││OUT ▁▁▁▃▁█  ▁▁ ▁  ▁▁▇    ▁ 149││use ftui_render::cell::Cel│
+│⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿││EPS █  77% DSK   67% IO     7%││Click → Code Explorer     │
+│⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿││                              │╰──────────────────────────╯
+│⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿││                              │╭───────────Info───────────╮
+│⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿││                              ││Status:NOMINAL FPS:0      │
+│⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿││                              ││EPS:1150  80x24           │
+│Click → Visual Eff││Click → Data Viz              ││Click → Performance       │
+╰──────────────────╯╰──────────────────────────────╯╰──────────────────────────╯
+╭Text FX · 2-Up (1/│╭───────────Activity───────────│╭Markdown · Streaming… 0%─╮ 
+│Sample 1 of 3 · 2-││SEV TIME  COMP  MESSAGE       ││▌                        │ 
+│1 · None · S1     ││ INFO  00:02   CPU spike detec││                         │ 
+│# FX Lab · Determi││                              ││                         │ 
+│2 · FadeIn · S2   ⋮│                              ⋮│                         │ 
+│## GFM Stress · Le││                              ││                         │ 
+│                  ││                              ││                         │ 
+│drag panes in dash││Click → Action Timeline       ││Click → Markdown         │ 
+╰──────────────────│╰──────────────────────────────│╰─────────────────────────╯ 
+g:charts c:code e:fx m:md | drag bottom dividers: resize | 1-9:screens | t:theme

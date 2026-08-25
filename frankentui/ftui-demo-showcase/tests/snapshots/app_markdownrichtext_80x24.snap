@@ -1,0 +1,24 @@
+ 1: Tour │ 2: Dash │ 3: Shakes │ 4: Code │ 5: Widgets │ 6: Layout │ 7: Forms    
+╭───────────────────────────────────Markdown───────────────────────────────────╮
+│╭────Markdown Renderer────╮ ╭LLM Streaming Simulation ╮ ╭───Style Sampler────╮│
+││GitHub-Flavored Markdown │ │▌                        │ │Bold  Dim  Italic  U││
+││(Rich Demo)              │ │                         │ │Strikethrough  Rever││
+││                         │ │                         │ │Dbl-Underline  Curly││
+││LaTeX + Symbols          │ │                         │ │                    ││
+││                         │ │                         │ │Error  Success  Warn││
+││Inline math: E = mc², α  │ │                         │ │                    ││
+││+ β = γ, Δ x ≈ 0.001.    │ │                         │ ╰────────────────────╯│
+││                         │ │                         │                       │
+││Block math:              │ │                         │ ╭──Unicode Showcase──╮│
+││                         │ │                         │ │Text        │Type  │││
+││  ∑ᵢ₌₁ⁿ xᵢ = n(n+1)/2    │ │                         │ │Hello       │ASCII │││
+││                         │ │                         │ │????????    │CJK   │││
+││  ∫_{−∞}^{∞} e^{−x²} dx  │ │                         │ │??????????  │Hiraga│││
+││= √{π}                   │ │                         │ │??????      │Emoji │││
+││                         │ │  [░░░░░░░░░░░░░░░░░░░░░]│ │café        │Latin+│││
+││Admonitions              │ │  Detection: 0 indicators│ │α β γ δ     │Greek │││
+││                         │ │  Confidence: 0% | Chars:│ │→ ← ↑ ↓     │Arrows│││
+││ℹ  NOTE                  │ │  Space: play/pause | r: │ ╰────────────────────╯│
+│╰─────────────────────────╯ ╰─────────────────────────╯                       │
+╰──────────────────────────────────────────────────────────────────────────────╯
+ Markdown [15/45] [h] [cmd] [p] [d]     Tab/Shift+Tab: next/prev      0x0 00:00 

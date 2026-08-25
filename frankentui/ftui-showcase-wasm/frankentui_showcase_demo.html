@@ -1,0 +1,2454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>FrankenTUI — Showcase Demo</title>
+<link rel="preload" href="../../fonts/pragmasevka-nf-subset.woff2" as="font" type="font/woff2" crossorigin>
+<style>
+	  @font-face {
+	    font-family: "Pragmasevka NF";
+	    src: url("../../fonts/pragmasevka-nf-subset.woff2") format("woff2");
+	    font-weight: 400;
+	    font-style: normal;
+	    font-display: block;
+	  }
+	  * { margin: 0; padding: 0; box-sizing: border-box; }
+	  html, body { width: 100%; height: 100%; overflow: hidden; background: #0a0a0a; overscroll-behavior: none; }
+	  #container {
+	    width: 100%; height: 100%;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+  }
+  #terminal-canvas {
+    display: block;
+    width: 100%; height: 100%;
+    image-rendering: pixelated;
+    touch-action: none;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+	  #mobile-kb-proxy {
+	    position: fixed;
+	    left: 0;
+	    top: 0;
+	    width: 1px;
+	    height: 1px;
+	    opacity: 0;
+	    pointer-events: none;
+	    border: 0;
+	    padding: 0;
+	    margin: 0;
+	    background: transparent;
+	    color: transparent;
+	    caret-color: transparent;
+	  }
+	  #status {
+	    position: fixed; bottom: 8px; right: 12px;
+	    color: #666; font: 12px/1 "Pragmasevka NF", monospace;
+	    pointer-events: none; z-index: 10;
+	  }
+	  #pane-ghost {
+	    position: fixed;
+	    border: 1px solid rgba(120, 220, 255, 0.95);
+	    background: linear-gradient(135deg, rgba(90, 190, 235, 0.14), rgba(90, 190, 235, 0.24));
+	    border-radius: 10px;
+	    pointer-events: none;
+	    z-index: 12;
+	    display: none;
+	    opacity: 0;
+	    transform: scale(0.985);
+	    backdrop-filter: blur(1.5px);
+	    box-shadow: 0 0 0 rgba(0, 0, 0, 0);
+	    transition:
+	      left 85ms cubic-bezier(0.22, 1, 0.36, 1),
+	      top 85ms cubic-bezier(0.22, 1, 0.36, 1),
+	      width 90ms cubic-bezier(0.22, 1, 0.36, 1),
+	      height 90ms cubic-bezier(0.22, 1, 0.36, 1),
+	      opacity 80ms ease-out,
+	      transform 90ms cubic-bezier(0.2, 0.9, 0.2, 1);
+	    will-change: left, top, width, height, opacity, transform;
+	  }
+	  #pane-dock-hint {
+	    position: fixed;
+	    padding: 4px 10px;
+	    border-radius: 999px;
+	    border: 1px solid rgba(180, 220, 240, 0.55);
+	    background: rgba(16, 26, 34, 0.85);
+	    color: #d5edf8;
+	    font: 11px/1.2 "Pragmasevka NF", monospace;
+	    pointer-events: none;
+	    z-index: 13;
+	    display: none;
+	    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+	    backdrop-filter: blur(2px);
+	  }
+	  #pane-ghost-alt-1,
+	  #pane-ghost-alt-2 {
+	    position: fixed;
+	    border: 1px dashed rgba(130, 205, 236, 0.65);
+	    background: rgba(60, 130, 170, 0.08);
+	    border-radius: 8px;
+	    pointer-events: none;
+	    z-index: 11;
+	    display: none;
+	    opacity: 0;
+	    transform: scale(0.99);
+	    transition:
+	      left 90ms cubic-bezier(0.22, 1, 0.36, 1),
+	      top 90ms cubic-bezier(0.22, 1, 0.36, 1),
+	      width 95ms cubic-bezier(0.22, 1, 0.36, 1),
+	      height 95ms cubic-bezier(0.22, 1, 0.36, 1),
+	      opacity 80ms ease-out;
+	    will-change: left, top, width, height, opacity;
+	  }
+	  #pane-selection-halo {
+	    position: fixed;
+	    border: 1px solid rgba(124, 198, 228, 0.70);
+	    background: linear-gradient(180deg, rgba(68, 128, 164, 0.10), rgba(34, 74, 96, 0.06));
+	    border-radius: 12px;
+	    pointer-events: none;
+	    z-index: 10;
+	    display: none;
+	    opacity: 0;
+	    transform: scale(0.995);
+	    box-shadow: 0 8px 26px rgba(0, 0, 0, 0.28);
+	    transition:
+	      left 95ms cubic-bezier(0.22, 1, 0.36, 1),
+	      top 95ms cubic-bezier(0.22, 1, 0.36, 1),
+	      width 100ms cubic-bezier(0.22, 1, 0.36, 1),
+	      height 100ms cubic-bezier(0.22, 1, 0.36, 1),
+	      opacity 90ms ease-out;
+	    will-change: left, top, width, height, opacity;
+	  }
+	  #error-overlay {
+	    display: none;
+	    position: fixed; inset: 0;
+	    background: rgba(0,0,0,0.85);
+	    color: #f44; font: 16px/1.5 "Pragmasevka NF", monospace;
+	    padding: 32px; overflow: auto; z-index: 20;
+	  }
+	  #error-overlay.visible { display: block; }
+	  /* ── Loading overlay ─────────────────────────────────────────────── */
+	  #loading-overlay {
+	    position: fixed; inset: 0;
+	    background: #0a0a0a;
+	    display: flex; flex-direction: column;
+	    align-items: center; justify-content: center;
+	    z-index: 30; transition: opacity 0.3s;
+	  }
+	  #loading-overlay.hidden { opacity: 0; pointer-events: none; }
+	  #loading-label {
+	    color: #888; font: 14px/1.4 "Pragmasevka NF", monospace;
+	    margin-bottom: 16px;
+	  }
+	  #loading-bar-container {
+	    width: 320px; max-width: 80vw; height: 4px;
+	    background: #222; border-radius: 2px; overflow: hidden;
+	  }
+	  #loading-bar {
+	    height: 100%; width: 0%;
+	    background: #4a9; border-radius: 2px;
+	    transition: width 0.15s ease-out;
+	  }
+	  #loading-bar.indeterminate {
+	    width: 30%;
+	    animation: indeterminate 1.2s ease-in-out infinite;
+	  }
+	  @keyframes indeterminate {
+	    0%   { transform: translateX(-100%); }
+	    100% { transform: translateX(400%); }
+	  }
+	  @supports (height: 100dvh) {
+	    #container { height: 100dvh; }
+	  }
+	  /* Touch controls — only visible on coarse-pointer (touch) devices */
+	  #touch-zoom {
+	    display: none;
+	    position: fixed; top: 8px; right: 8px;
+	    z-index: 15;
+	  }
+	  #touch-zoom button {
+	    width: 34px; height: 34px;
+	    border: 1px solid #444; border-radius: 6px;
+	    background: rgba(30,30,30,0.85);
+	    color: #ccc; font: 12px/1 "Pragmasevka NF", monospace;
+	    cursor: pointer;
+	    -webkit-tap-highlight-color: transparent;
+	  }
+	  #touch-zoom button:active { background: rgba(80,80,80,0.85); }
+	  #touch-zoom button[data-active="true"] {
+	    border-color: #4a9;
+	    background: rgba(28, 82, 58, 0.9);
+	    color: #dff7eb;
+	  }
+	  @media (pointer: coarse) {
+	    #touch-zoom { display: flex; }
+	  }
+</style>
+</head>
+<body>
+<div id="container">
+  <canvas id="terminal-canvas" tabindex="0" role="application" aria-label="FrankenTUI terminal interface"></canvas>
+  <!-- Semantic proxy layer: screen-reader-accessible description of the
+       active TUI state. The WASM runtime should update this div with
+       semantic HTML elements that mirror the accessibility tree (A11yTree)
+       built on each render pass. This makes the canvas content visible to
+       assistive technology (AT) via the browser's accessibility API.
+       See: https://github.com/Dicklesworthstone/frankentui/issues/44 -->
+  <div id="a11y-proxy"
+       role="document"
+       aria-label="Terminal content (accessible proxy)"
+       aria-live="polite"
+       style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;">
+    <p>FrankenTUI demo application. Use Tab and Shift+Tab to navigate between screens. Press ? for help.</p>
+  </div>
+</div>
+<textarea
+  id="mobile-kb-proxy"
+  aria-hidden="true"
+  tabindex="-1"
+  inputmode="text"
+  autocomplete="off"
+  autocorrect="off"
+  autocapitalize="off"
+  spellcheck="false"></textarea>
+<div id="pane-ghost" aria-hidden="true"></div>
+<div id="pane-ghost-alt-1" aria-hidden="true"></div>
+<div id="pane-ghost-alt-2" aria-hidden="true"></div>
+<div id="pane-selection-halo" aria-hidden="true"></div>
+<div id="pane-dock-hint" aria-hidden="true"></div>
+<div id="touch-zoom">
+  <button id="mobile-kb-toggle" aria-pressed="false" title="Toggle keyboard mode">KB</button>
+</div>
+<div id="loading-overlay">
+  <div id="loading-label">Loading WASM...</div>
+  <div id="loading-bar-container"><div id="loading-bar"></div></div>
+</div>
+<div id="status">Loading WASM...</div>
+<div id="error-overlay"></div>
+
+<script type="module">
+// ── URL Settings ──────────────────────────────────────────────────────
+const params = new URLSearchParams(window.location.search);
+const INITIAL_COLS    = parseInt(params.get("cols"), 10) || 80;
+const INITIAL_ROWS    = parseInt(params.get("rows"), 10) || 24;
+const CELL_WIDTH      = parseInt(params.get("cellWidth"), 10) || 8;
+const CELL_HEIGHT     = parseInt(params.get("cellHeight"), 10) || 16;
+const START_SCREEN    = parseInt(params.get("screen"), 10) || 0;
+const URL_ZOOM        = parseFloat(params.get("zoom")) || 0;
+// Console JSONL is extremely expensive at 60fps; enable only when debugging.
+const LOG_JSONL       = params.get("jsonl") === "1";
+const LOG_PERF        = false;  // Per-frame timing in console
+// Bump when deploying to bypass Cloudflare/browser caches for JS/WASM artifacts.
+const ASSET_VERSION = "2026-02-20.4";
+
+// ── DOM refs ───────────────────────────────────────────────────────────
+const canvas         = document.getElementById("terminal-canvas");
+const status         = document.getElementById("status");
+const errorDiv       = document.getElementById("error-overlay");
+const loadingOverlay = document.getElementById("loading-overlay");
+const loadingLabel   = document.getElementById("loading-label");
+const loadingBar     = document.getElementById("loading-bar");
+const keyboardProxy  = document.getElementById("mobile-kb-proxy");
+const paneGhost      = document.getElementById("pane-ghost");
+const paneGhostAlt1  = document.getElementById("pane-ghost-alt-1");
+const paneGhostAlt2  = document.getElementById("pane-ghost-alt-2");
+const paneSelectionHalo = document.getElementById("pane-selection-halo");
+const paneGhostAlts  = [paneGhostAlt1, paneGhostAlt2];
+const paneDockHint   = document.getElementById("pane-dock-hint");
+const mobileKbToggle = document.getElementById("mobile-kb-toggle");
+const PANE_WORKSPACE_KEY = "ftui-pane-workspace-v1";
+const PANE_WORKSPACE_SAVE_RETRY_MS = 2000;
+let paneWorkspaceNextSaveRetryAt = 0;
+let paneWorkspaceSaveWarningShown = false;
+const paneActivePointers = new Set();
+const paneTouchPointers = new Set();
+const activeTouchPointerIds = new Set();
+let paneGhostDecay = null;
+let paneOverlaySyncFailed = false;
+
+function showError(msg) {
+  errorDiv.textContent = msg;
+  errorDiv.classList.add("visible");
+  loadingOverlay.classList.add("hidden");
+  status.textContent = "Error";
+  console.error("[ShowcaseDemo]", msg);
+}
+
+function setProgress(pct, label) {
+  loadingLabel.textContent = label;
+  if (pct < 0) {
+    // Indeterminate mode.
+    loadingBar.classList.add("indeterminate");
+    loadingBar.style.width = "";
+  } else {
+    loadingBar.classList.remove("indeterminate");
+    loadingBar.style.width = Math.min(100, Math.round(pct)) + "%";
+  }
+}
+
+// ── Font loading (must happen before first glyph rasterization) ───────────
+const fontsReady = (async () => {
+  if (!("fonts" in document) || !document.fonts?.load) return;
+  try {
+    await document.fonts.load('16px "Pragmasevka NF"');
+    await document.fonts.ready;
+  } catch (e) {
+    console.warn("[ShowcaseDemo] Font load failed; continuing with fallback.", e);
+  }
+})();
+
+// ── Large text assets (loaded out-of-band to keep WASM small) ────────────
+// These blobs are huge (multiple MB). Embedding them in WASM bloats downloads
+// and, worse, slows instantiation due to large data-segment memcpy.
+const largeAssetsPromise = (async () => {
+  try {
+    const shakespeareUrl = `./crates/ftui-demo-showcase/data/shakespeare.txt?v=${ASSET_VERSION}`;
+    const sqliteUrl      = `./crates/ftui-demo-showcase/data/sqlite3.c?v=${ASSET_VERSION}`;
+    const [shakespeare, sqlite] = await Promise.all([
+      fetch(shakespeareUrl).then((r) => {
+        if (!r.ok) throw new Error(`GET ${shakespeareUrl} -> ${r.status}`);
+        return r.text();
+      }),
+      fetch(sqliteUrl).then((r) => {
+        if (!r.ok) throw new Error(`GET ${sqliteUrl} -> ${r.status}`);
+        return r.text();
+      }),
+    ]);
+    return { shakespeare, sqlite };
+  } catch (e) {
+    console.warn("[ShowcaseDemo] Failed to fetch large assets; some screens may be unavailable.", e);
+    return null;
+  }
+})();
+
+// ── WASM module loading ────────────────────────────────────────────────
+let termMod, runnerMod;
+let runnerWasmExports = null;
+try {
+  // 1a. Download JS glue modules.
+  setProgress(0, "Downloading JS modules...");
+  const termJsUrl = `../../pkg/FrankenTerm.js?v=${ASSET_VERSION}`;
+  const runnerJsUrl = `../../pkg/ftui_showcase_wasm.js?v=${ASSET_VERSION}`;
+  [termMod, runnerMod] = await Promise.all([
+    import(termJsUrl),
+    import(runnerJsUrl),
+  ]);
+
+  // 1b. Initialize WASM modules directly from URLs.
+  // Let wasm-bindgen use the browser's streaming compilation path instead of
+  // buffering + copying full ArrayBuffers in JS first.
+  setProgress(-1, "Initializing WASM modules...");
+  const termWasmUrl = `../../pkg/FrankenTerm_bg.wasm?v=${ASSET_VERSION}`;
+  const runnerWasmUrl = `../../pkg/ftui_showcase_wasm_bg.wasm?v=${ASSET_VERSION}`;
+
+  [, runnerWasmExports] = await Promise.all([
+    termMod.default(termWasmUrl),
+    runnerMod.default(runnerWasmUrl),
+  ]);
+  setProgress(95, "Starting WebGPU...");
+} catch (e) {
+  showError(
+    `Failed to load WASM modules.\n\n` +
+    `Expected wasm-pack output at ../../pkg/FrankenTerm.js and ../../pkg/ftui_showcase_wasm.js\n\n` +
+    `Build with:\n` +
+    `  ./build-wasm.sh\n\n` +
+    `Error: ${e.message || e}`
+  );
+  throw e;
+}
+
+// ── Create instances ───────────────────────────────────────────────────
+const { FrankenTermWeb }  = termMod;
+const { ShowcaseRunner }  = runnerMod;
+
+const term   = new FrankenTermWeb();
+const dpr    = window.devicePixelRatio || 1.0;
+
+try {
+  await fontsReady;
+  setProgress(96, "Initializing WebGPU terminal...");
+  await term.init(canvas, {
+    cols: INITIAL_COLS,
+    rows: INITIAL_ROWS,
+    cellWidth: CELL_WIDTH,
+    cellHeight: CELL_HEIGHT,
+    dpr,
+    focused: true,
+  });
+} catch (e) {
+  showError(`FrankenTermWeb.init() failed: ${e.message || e}\n\nWebGPU may not be supported in this browser.`);
+  throw e;
+}
+
+// ── Host storage + media helpers ──────────────────────────────────────
+function storageGet(key) {
+  try {
+    return window.localStorage ? window.localStorage.getItem(key) : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function storageSet(key, value) {
+  try {
+    if (window.localStorage) {
+      window.localStorage.setItem(key, value);
+      return true;
+    }
+  } catch (_) {}
+  return false;
+}
+
+function mediaQueryMatches(query) {
+  try {
+    return window.matchMedia(query).matches;
+  } catch (_) {
+    return false;
+  }
+}
+
+function addMediaQueryChangeListener(query, handler) {
+  let mql;
+  try {
+    mql = window.matchMedia(query);
+  } catch (_) {
+    return () => {};
+  }
+  if (typeof mql.addEventListener === "function") {
+    mql.addEventListener("change", handler);
+    return () => {
+      try { mql.removeEventListener("change", handler); } catch (_) {}
+    };
+  }
+  if (typeof mql.addListener === "function") {
+    mql.addListener(handler);
+    return () => {
+      try { mql.removeListener(handler); } catch (_) {}
+    };
+  }
+  return () => {};
+}
+
+// ── User zoom (Ctrl+/- font sizing) ──────────────────────────────────
+let userZoom = URL_ZOOM || parseFloat(storageGet("ftui-zoom")) || 1.0;
+
+function applyZoom() {
+  if (typeof term.setZoom === "function") {
+    term.setZoom(userZoom);
+  }
+  queueGeometrySync("user_zoom");
+  setRunningStatusText();
+  syncPaneOverlayFromRunner();
+  storageSet("ftui-zoom", String(userZoom));
+  // Update URL without reload.
+  const url = new URL(window.location);
+  if (Math.abs(userZoom - 1.0) > 0.01) {
+    url.searchParams.set("zoom", userZoom.toFixed(2));
+  } else {
+    url.searchParams.delete("zoom");
+  }
+  history.replaceState(null, "", url);
+}
+
+// Auto-zoom on narrow touch devices if user has no saved preference.
+const isTouchDevice = mediaQueryMatches("(pointer: coarse)");
+if (isTouchDevice && !URL_ZOOM && !storageGet("ftui-zoom")) {
+  const vw = document.documentElement.clientWidth;
+  const TARGET_COLS = 40;
+  const autoZoom = vw / (TARGET_COLS * CELL_WIDTH);
+  if (autoZoom > 1.05) {
+    userZoom = Math.round(autoZoom * 20) / 20; // snap to 0.05 increments
+  }
+}
+
+// Apply initial zoom if set.
+if (userZoom !== 1.0 && typeof term.setZoom === "function") {
+  term.setZoom(userZoom);
+}
+
+// Fit to actual container size and get real cols/rows.
+const container = document.getElementById("container");
+function sanitizeTerminalCells(value, fallback) {
+  const fallbackRaw = Number.isFinite(fallback) ? Math.trunc(fallback) : 1;
+  const safeFallback = Math.max(1, Math.min(0xffff, fallbackRaw));
+  if (!Number.isFinite(value)) return safeFallback;
+  const cells = Math.trunc(value);
+  if (cells <= 0) return safeFallback;
+  return Math.min(0xffff, cells);
+}
+function normalizeTerminalGeometry(rawCols, rawRows, fallbackCols, fallbackRows) {
+  return {
+    cols: sanitizeTerminalCells(rawCols, fallbackCols),
+    rows: sanitizeTerminalCells(rawRows, fallbackRows),
+  };
+}
+const geo = term.fitToContainer(container.clientWidth, container.clientHeight, dpr);
+const initialGeometry = normalizeTerminalGeometry(geo.cols, geo.rows, 80, 24);
+let currentCols = initialGeometry.cols;
+let currentRows = initialGeometry.rows;
+let lastGeometrySignature = "";
+
+const runner = new ShowcaseRunner(currentCols, currentRows);
+runner.init();
+
+function disablePaneOverlaySync(error, context = "pane overlay sync") {
+  if (!paneOverlaySyncFailed) {
+    paneOverlaySyncFailed = true;
+  }
+  try {
+    paneGhostDecay = null;
+    hideAlternateDockGhosts();
+    paneGhost.style.display = "none";
+    paneGhost.style.opacity = "0";
+    if (paneSelectionHalo) {
+      paneSelectionHalo.style.display = "none";
+      paneSelectionHalo.style.opacity = "0";
+    }
+    paneDockHint.style.display = "none";
+  } catch (_) {}
+  const errorText = error && typeof error === "object" && "stack" in error
+    ? String(error.stack)
+    : String(error);
+  console.error(`[ShowcaseDemo] Disabled pane overlay sync after ${context} failure:`, errorText);
+}
+
+function paneStateSnapshot() {
+  if (paneOverlaySyncFailed) return null;
+  if (typeof runner.paneLayoutState === "function") {
+    try {
+      return runner.paneLayoutState();
+    } catch (error) {
+      disablePaneOverlaySync(error, "pane state snapshot");
+      return null;
+    }
+  }
+  return null;
+}
+
+function paneWorkspaceGenerationText(state) {
+  const fromState = state?.workspace_generation;
+  if (fromState !== null && fromState !== undefined) {
+    return String(fromState);
+  }
+  if (typeof runner.paneWorkspaceGeneration === "function") {
+    try {
+      return String(runner.paneWorkspaceGeneration());
+    } catch (_) {}
+  }
+  return "";
+}
+
+function paneWorkspaceSavedGenerationText(state) {
+  const fromState = state?.saved_generation;
+  if (fromState !== null && fromState !== undefined) {
+    return String(fromState);
+  }
+  if (typeof runner.paneSavedWorkspaceGeneration === "function") {
+    try {
+      return String(runner.paneSavedWorkspaceGeneration());
+    } catch (_) {}
+  }
+  return "";
+}
+
+function paneWorkspaceGenerationForAck(state) {
+  const generation = paneWorkspaceGenerationText(state);
+  if (!/^\d+$/.test(generation)) return null;
+  if (typeof BigInt === "function") {
+    return BigInt(generation);
+  }
+  const asNumber = Number(generation);
+  return Number.isSafeInteger(asNumber) && asNumber >= 0 ? asNumber : null;
+}
+
+function paneWorkspaceIsDirty(state) {
+  if (typeof runner.paneWorkspaceDirty === "function") {
+    try {
+      return Boolean(runner.paneWorkspaceDirty());
+    } catch (_) {}
+  }
+  if (state && typeof state.workspace_dirty === "boolean") {
+    return state.workspace_dirty;
+  }
+  const generation = paneWorkspaceGenerationText(state);
+  const savedGeneration = paneWorkspaceSavedGenerationText(state);
+  return generation !== "" && savedGeneration !== ""
+    ? generation !== savedGeneration
+    : false;
+}
+
+function paneWorkspaceHasActivePointer(state) {
+  if (state && state.active_pointer_id !== null && state.active_pointer_id !== undefined) {
+    return true;
+  }
+  if (typeof runner.paneActivePointerId === "function") {
+    try {
+      const pointerId = runner.paneActivePointerId();
+      return pointerId !== null && pointerId !== undefined;
+    } catch (_) {}
+  }
+  return paneActivePointers.size > 0;
+}
+
+function warnPaneWorkspaceSaveFailure(context) {
+  if (paneWorkspaceSaveWarningShown) return;
+  paneWorkspaceSaveWarningShown = true;
+  console.warn(`[ShowcaseDemo] Pane workspace save skipped: ${context}. Will retry after state changes or retry window.`);
+}
+
+function applyGhostVisualState(rectPx, strength, zone, alphaScale = 1.0) {
+  paneGhost.style.left = `${Math.round(rectPx.left)}px`;
+  paneGhost.style.top = `${Math.round(rectPx.top)}px`;
+  paneGhost.style.width = `${Math.max(1, Math.round(rectPx.width))}px`;
+  paneGhost.style.height = `${Math.max(1, Math.round(rectPx.height))}px`;
+  const accent = ({
+    left: "86, 214, 255",
+    right: "83, 226, 181",
+    top: "244, 198, 84",
+    bottom: "255, 141, 94",
+    center: "141, 201, 255",
+  })[zone] || "86, 214, 255";
+  paneGhost.style.borderColor = `rgba(${accent}, ${(0.55 + strength * 0.45) * alphaScale})`;
+  paneGhost.style.background =
+    `linear-gradient(135deg, rgba(${accent}, ${(0.12 + strength * 0.10) * alphaScale}), rgba(${accent}, ${(0.24 + strength * 0.22) * alphaScale}))`;
+  paneGhost.style.boxShadow =
+    `0 0 ${Math.round(14 + strength * 24)}px rgba(${accent}, ${(0.18 + strength * 0.45) * alphaScale})`;
+  paneGhost.style.opacity = `${(0.28 + strength * 0.72) * alphaScale}`;
+  paneGhost.style.transform = `scale(${0.985 + strength * 0.02})`;
+  paneGhost.style.display = "block";
+}
+
+function hideAlternateDockGhosts() {
+  for (const ghost of paneGhostAlts) {
+    ghost.style.display = "none";
+    ghost.style.opacity = "0";
+  }
+}
+
+function applyAlternateGhostVisualState(node, rectPx, strength, zone, rank = 1) {
+  const accent = ({
+    left: "92, 183, 222",
+    right: "90, 199, 170",
+    top: "214, 186, 104",
+    bottom: "226, 152, 120",
+    center: "144, 183, 220",
+  })[zone] || "92, 183, 222";
+  const alpha = Math.max(0.12, Math.min(0.75, (0.52 - rank * 0.14) * (0.42 + strength * 0.58)));
+  node.style.left = `${Math.round(rectPx.left)}px`;
+  node.style.top = `${Math.round(rectPx.top)}px`;
+  node.style.width = `${Math.max(1, Math.round(rectPx.width))}px`;
+  node.style.height = `${Math.max(1, Math.round(rectPx.height))}px`;
+  node.style.borderColor = `rgba(${accent}, ${0.36 + alpha * 0.55})`;
+  node.style.background = `rgba(${accent}, ${0.07 + alpha * 0.20})`;
+  node.style.opacity = `${alpha}`;
+  node.style.display = "block";
+}
+
+function paneDockCandidatesFromState(state) {
+  if (!state) return [];
+  if (Array.isArray(state.dock_candidates) && state.dock_candidates.length > 0) {
+    return state.dock_candidates;
+  }
+  if (!state.ghost_rect) return [];
+  return [{
+    target: state.dock_target,
+    zone: state.dock_zone,
+    dock_strength_bps: state.dock_strength_bps,
+    ghost_rect: state.ghost_rect,
+  }];
+}
+
+function renderSelectionHalo(state, rect, cellW, cellH) {
+  if (!paneSelectionHalo) return;
+  const bounds = state?.selection_bounds;
+  if (!bounds) {
+    paneSelectionHalo.style.display = "none";
+    paneSelectionHalo.style.opacity = "0";
+    return;
+  }
+  const selectedCount = Array.isArray(state?.selected_ids) ? state.selected_ids.length : 0;
+  const activeBoost = state?.active_pointer_id !== null && state?.active_pointer_id !== undefined;
+  const emphasis = Math.min(1, Math.max(0.25, selectedCount / 4 + (activeBoost ? 0.2 : 0)));
+  paneSelectionHalo.style.left = `${Math.round(rect.left + bounds.x * cellW)}px`;
+  paneSelectionHalo.style.top = `${Math.round(rect.top + bounds.y * cellH)}px`;
+  paneSelectionHalo.style.width = `${Math.max(1, Math.round(bounds.width * cellW))}px`;
+  paneSelectionHalo.style.height = `${Math.max(1, Math.round(bounds.height * cellH))}px`;
+  paneSelectionHalo.style.opacity = `${(0.26 + emphasis * 0.42).toFixed(3)}`;
+  paneSelectionHalo.style.display = "block";
+}
+
+function renderPaneGhost(state) {
+  const rect = canvas.getBoundingClientRect();
+  const cellW = currentCols > 0 ? rect.width / currentCols : CELL_WIDTH;
+  const cellH = currentRows > 0 ? rect.height / currentRows : CELL_HEIGHT;
+  renderSelectionHalo(state, rect, cellW, cellH);
+  const dockCandidates = paneDockCandidatesFromState(state);
+  const primaryCandidate = dockCandidates[0];
+  if (primaryCandidate && primaryCandidate.ghost_rect) {
+    const strength = Math.max(
+      0,
+      Math.min(1, Number(primaryCandidate.dock_strength_bps || state?.dock_strength_bps || 0) / 10000),
+    );
+    const zone = String(primaryCandidate.zone || state?.dock_zone || "center");
+    const rectPx = {
+      left: rect.left + primaryCandidate.ghost_rect.x * cellW,
+      top: rect.top + primaryCandidate.ghost_rect.y * cellH,
+      width: primaryCandidate.ghost_rect.width * cellW,
+      height: primaryCandidate.ghost_rect.height * cellH,
+    };
+    applyGhostVisualState(rectPx, strength, zone);
+    hideAlternateDockGhosts();
+    const alternates = dockCandidates.slice(1, 3);
+    alternates.forEach((candidate, idx) => {
+      if (!candidate?.ghost_rect) return;
+      const altStrength = Math.max(0, Math.min(1, Number(candidate.dock_strength_bps || 0) / 10000));
+      const altRect = {
+        left: rect.left + candidate.ghost_rect.x * cellW,
+        top: rect.top + candidate.ghost_rect.y * cellH,
+        width: candidate.ghost_rect.width * cellW,
+        height: candidate.ghost_rect.height * cellH,
+      };
+      const node = paneGhostAlts[idx];
+      if (!node) return;
+      applyAlternateGhostVisualState(node, altRect, altStrength, String(candidate.zone || "center"), idx + 1);
+    });
+    paneGhostDecay = {
+      startedAtMs: performance.now(),
+      rectPx,
+      strength,
+      zone,
+    };
+
+    const label = zone === "center" ? "Swap" : `Dock ${zone.charAt(0).toUpperCase()}${zone.slice(1)}`;
+    paneDockHint.textContent = `${label} · ${Math.round(strength * 100)}%`;
+    paneDockHint.style.left = `${Math.round(rectPx.left + 8)}px`;
+    const hintTop = Math.max(6, Math.round(rectPx.top - 26));
+    paneDockHint.style.top = `${hintTop}px`;
+    paneDockHint.style.display = strength > 0.05 ? "block" : "none";
+    return;
+  }
+
+  const decay = paneGhostDecay;
+  if (decay) {
+    const elapsed = performance.now() - decay.startedAtMs;
+    const durationMs = 150;
+    if (elapsed < durationMs) {
+      const t = elapsed / durationMs;
+      const fade = 1.0 - t;
+      applyGhostVisualState(
+        {
+          left: decay.rectPx.left,
+          top: decay.rectPx.top,
+          width: decay.rectPx.width * (0.985 + fade * 0.015),
+          height: decay.rectPx.height * (0.985 + fade * 0.015),
+        },
+        decay.strength,
+        decay.zone,
+        fade,
+      );
+      hideAlternateDockGhosts();
+      paneDockHint.style.display = "none";
+      return;
+    }
+  }
+
+  paneGhostDecay = null;
+  hideAlternateDockGhosts();
+  paneGhost.style.display = "none";
+  paneGhost.style.opacity = "0";
+  paneDockHint.style.display = "none";
+}
+
+function updatePaneStatusSuffix(state) {
+  if (!state) return;
+  const timeline = `${state.timeline_cursor || 0}/${state.timeline_length || 0}`;
+  const selected = Array.isArray(state.selected_ids) ? state.selected_ids.length : 0;
+  const zone = state.dock_zone ? ` ${state.dock_zone}` : "";
+  const strength = Number(state.dock_strength_bps || 0);
+  const speed = Number(state.motion_speed_cps || 0);
+  const modeText = zone ? ` dock${zone}` : "";
+  const glideText = speed > 0 ? ` v${speed}` : "";
+  const snapText = strength > 0 ? ` s${Math.round(strength / 100)}` : "";
+  if (Math.abs(userZoom - 1.0) > 0.01) {
+    status.textContent =
+      `${currentCols}\u00d7${currentRows} \u2014 zoom ${Math.round(userZoom * 100)}% \u2014 panes ${timeline} sel ${selected}${modeText}${glideText}${snapText}`;
+  } else {
+    status.textContent =
+      `${currentCols}\u00d7${currentRows} \u2014 panes ${timeline} sel ${selected}${modeText}${glideText}${snapText}`;
+  }
+}
+
+function syncPaneOverlayFromRunner() {
+  if (paneOverlaySyncFailed) {
+    persistPaneWorkspaceIfChanged(null);
+    return null;
+  }
+  try {
+    const state = paneStateSnapshot();
+    renderPaneGhost(state);
+    updatePaneStatusSuffix(state);
+    persistPaneWorkspaceIfChanged(state);
+    return state;
+  } catch (error) {
+    disablePaneOverlaySync(error, "runtime sync");
+    persistPaneWorkspaceIfChanged(null);
+    return null;
+  }
+}
+
+function persistPaneWorkspace(state, options = {}) {
+  if (typeof runner.paneExportWorkspaceSnapshot !== "function") return false;
+  if (typeof runner.paneMarkWorkspaceSaved !== "function") return false;
+  const now = performance.now();
+  if (!options.force && now < paneWorkspaceNextSaveRetryAt) return false;
+  const tokenState = state || paneStateSnapshot();
+  const generationForAck = paneWorkspaceGenerationForAck(tokenState);
+  if (generationForAck === null) {
+    paneWorkspaceNextSaveRetryAt = now + PANE_WORKSPACE_SAVE_RETRY_MS;
+    warnPaneWorkspaceSaveFailure("workspace generation could not be decoded");
+    return false;
+  }
+  let snapshot = null;
+  try {
+    snapshot = runner.paneExportWorkspaceSnapshot();
+  } catch (error) {
+    paneWorkspaceNextSaveRetryAt = now + PANE_WORKSPACE_SAVE_RETRY_MS;
+    warnPaneWorkspaceSaveFailure(`snapshot export failed: ${error?.message || error}`);
+    return false;
+  }
+  if (!snapshot) return false;
+  if (!storageSet(PANE_WORKSPACE_KEY, snapshot)) {
+    paneWorkspaceNextSaveRetryAt = now + PANE_WORKSPACE_SAVE_RETRY_MS;
+    warnPaneWorkspaceSaveFailure("localStorage write failed");
+    return false;
+  }
+  let saveAcknowledged = false;
+  try {
+    saveAcknowledged = runner.paneMarkWorkspaceSaved(generationForAck);
+  } catch (error) {
+    paneWorkspaceNextSaveRetryAt = now + PANE_WORKSPACE_SAVE_RETRY_MS;
+    warnPaneWorkspaceSaveFailure(`save acknowledgement failed: ${error?.message || error}`);
+    return false;
+  }
+  if (!saveAcknowledged) {
+    paneWorkspaceNextSaveRetryAt = now + PANE_WORKSPACE_SAVE_RETRY_MS;
+    return false;
+  }
+  paneWorkspaceNextSaveRetryAt = 0;
+  paneWorkspaceSaveWarningShown = false;
+  return true;
+}
+
+function persistPaneWorkspaceIfChanged(state) {
+  if (paneWorkspaceHasActivePointer(state)) {
+    return;
+  }
+  if (!paneWorkspaceIsDirty(state)) return;
+  persistPaneWorkspace(state);
+}
+
+function restorePaneWorkspace() {
+  if (typeof runner.paneImportWorkspaceSnapshot !== "function") return false;
+  const snapshot = storageGet(PANE_WORKSPACE_KEY);
+  if (!snapshot) return false;
+  let restored = false;
+  try {
+    restored = runner.paneImportWorkspaceSnapshot(snapshot);
+  } catch (error) {
+    console.warn("[ShowcaseDemo] Pane workspace restore failed:", error);
+    return false;
+  }
+  if (restored) {
+    paneWorkspaceNextSaveRetryAt = 0;
+    paneWorkspaceSaveWarningShown = false;
+  }
+  return restored;
+}
+
+function paneModsFromDomEvent(e) {
+  return (e.shiftKey ? 1 : 0) | (e.altKey ? 2 : 0) | (e.ctrlKey ? 4 : 0) | (e.metaKey ? 8 : 0);
+}
+
+function paneButtonFromDomEvent(e) {
+  const raw = Number.isFinite(e?.button) ? Math.trunc(e.button) : 0;
+  if (raw < 0 || raw > 2) return 0;
+  return raw;
+}
+
+function panePointerIdFromEvent(e) {
+  if (!e) return 1;
+  return clampPointerId(e.pointerId);
+}
+
+function clampPointerId(value) {
+  if (!Number.isFinite(value)) return 1;
+  return Math.max(1, Math.min(0xFFFFFFFF, Math.trunc(value)));
+}
+
+function applyPaneCaptureCommand(dispatch, options = {}) {
+  if (!dispatch || !dispatch.capture_command) return dispatch;
+  const command = dispatch.capture_command;
+  const pointerInt = clampPointerId(Number(command.pointer_id));
+  if (command.kind === "acquire") {
+    let captureAcquired = false;
+    try {
+      if (typeof canvas.setPointerCapture === "function") {
+        canvas.setPointerCapture(pointerInt);
+        captureAcquired = typeof canvas.hasPointerCapture === "function"
+          ? canvas.hasPointerCapture(pointerInt)
+          : true;
+      }
+    } catch (_) {
+      captureAcquired = false;
+    }
+    if (
+      !options.skipAcquireAck &&
+      captureAcquired &&
+      typeof runner.panePointerCaptureAcquired === "function"
+    ) {
+      const ack = runner.panePointerCaptureAcquired(pointerInt);
+      return ack || dispatch;
+    }
+  } else if (command.kind === "release") {
+    try {
+      if (
+        typeof canvas.releasePointerCapture === "function" &&
+        (typeof canvas.hasPointerCapture !== "function" || canvas.hasPointerCapture(pointerInt))
+      ) {
+        canvas.releasePointerCapture(pointerInt);
+      }
+    } catch (_) {}
+  }
+  return dispatch;
+}
+
+function paneDispatchPointerDown(e, activeTouchPoints = 1) {
+  if (typeof runner.panePointerDownAt !== "function") return null;
+  const point = domMouseToInput(e, "down");
+  const pointerId = panePointerIdFromEvent(e);
+  const touchPoints = Number.isFinite(activeTouchPoints)
+    ? Math.max(1, Math.min(255, Math.trunc(activeTouchPoints)))
+    : 1;
+  const dispatch =
+    e && e.pointerType !== "mouse" && typeof runner.paneTouchPointerDownAt === "function"
+      ? runner.paneTouchPointerDownAt(
+          pointerId,
+          point.x,
+          point.y,
+          touchPoints,
+          paneModsFromDomEvent(e),
+        )
+      : runner.panePointerDownAt(
+          pointerId,
+          paneButtonFromDomEvent(e),
+          point.x,
+          point.y,
+          paneModsFromDomEvent(e),
+        );
+  return applyPaneCaptureCommand(dispatch);
+}
+
+function paneDispatchYieldedToNativeTouch(dispatch) {
+  return dispatch && dispatch.phase === "native_touch_gesture";
+}
+
+function paneDispatchPointerMove(e) {
+  if (typeof runner.panePointerMoveAt !== "function") return null;
+  const point = domMouseToInput(e, "move");
+  const pointerId = panePointerIdFromEvent(e);
+  const dispatch = runner.panePointerMoveAt(pointerId, point.x, point.y, paneModsFromDomEvent(e));
+  return applyPaneCaptureCommand(dispatch, { skipAcquireAck: true });
+}
+
+function paneDispatchPointerUp(e) {
+  if (typeof runner.panePointerUpAt !== "function") return null;
+  const point = domMouseToInput(e, "up");
+  const pointerId = panePointerIdFromEvent(e);
+  const dispatch = runner.panePointerUpAt(
+    pointerId,
+    paneButtonFromDomEvent(e),
+    point.x,
+    point.y,
+    paneModsFromDomEvent(e),
+  );
+  return applyPaneCaptureCommand(dispatch, { skipAcquireAck: true });
+}
+
+function paneDispatchPointerCancel(e) {
+  if (typeof runner.panePointerCancel !== "function") return null;
+  const pointerId = panePointerIdFromEvent(e);
+  const dispatch = runner.panePointerCancel(pointerId);
+  return applyPaneCaptureCommand(dispatch, { skipAcquireAck: true });
+}
+
+function paneDispatchPointerLeave(e) {
+  if (typeof runner.panePointerLeave !== "function") return null;
+  const pointerId = panePointerIdFromEvent(e);
+  const dispatch = runner.panePointerLeave(pointerId);
+  return applyPaneCaptureCommand(dispatch, { skipAcquireAck: true });
+}
+
+function paneDispatchLostPointerCapture(e) {
+  if (typeof runner.paneLostPointerCapture !== "function") return null;
+  const pointerId = panePointerIdFromEvent(e);
+  return runner.paneLostPointerCapture(pointerId);
+}
+
+const restoredPaneWorkspace = restorePaneWorkspace();
+if (restoredPaneWorkspace) {
+  syncPaneOverlayFromRunner();
+}
+
+function resolveWasmMemory(mod) {
+  if (!mod) return null;
+  const direct = mod.memory;
+  if (direct instanceof WebAssembly.Memory) return direct;
+  if (typeof direct === "function") {
+    const maybe = direct();
+    if (maybe instanceof WebAssembly.Memory) return maybe;
+  }
+  return null;
+}
+
+const runnerWasmMemory =
+  resolveWasmMemory(runnerWasmExports) ||
+  resolveWasmMemory(runnerMod);
+const canUseZeroCopyPatches = Boolean(
+  runnerWasmMemory &&
+  typeof runner.prepareFlatPatches === "function" &&
+  typeof runner.flatCellsPtr === "function" &&
+  typeof runner.flatCellsLen === "function" &&
+  typeof runner.flatSpansPtr === "function" &&
+  typeof runner.flatSpansLen === "function"
+);
+const EMPTY_PATCH_U32 = new Uint32Array(0);
+let cachedCellsView = EMPTY_PATCH_U32;
+let cachedCellsPtr = -1;
+let cachedCellsLen = -1;
+let cachedCellsBuffer = null;
+let cachedSpansView = EMPTY_PATCH_U32;
+let cachedSpansPtr = -1;
+let cachedSpansLen = -1;
+let cachedSpansBuffer = null;
+
+function patchViewU32(ptr, len, isCells) {
+  if (len === 0) return EMPTY_PATCH_U32;
+  const buffer = runnerWasmMemory.buffer;
+  if (isCells) {
+    if (cachedCellsPtr === ptr && cachedCellsLen === len && cachedCellsBuffer === buffer) {
+      return cachedCellsView;
+    }
+    cachedCellsPtr = ptr;
+    cachedCellsLen = len;
+    cachedCellsBuffer = buffer;
+    cachedCellsView = new Uint32Array(buffer, ptr, len);
+    return cachedCellsView;
+  }
+  if (cachedSpansPtr === ptr && cachedSpansLen === len && cachedSpansBuffer === buffer) {
+    return cachedSpansView;
+  }
+  cachedSpansPtr = ptr;
+  cachedSpansLen = len;
+  cachedSpansBuffer = buffer;
+  cachedSpansView = new Uint32Array(buffer, ptr, len);
+  return cachedSpansView;
+}
+
+function takeRunnerPatches() {
+  if (!canUseZeroCopyPatches) {
+    return runner.takeFlatPatches();
+  }
+  runner.prepareFlatPatches();
+  const cellsLen = runner.flatCellsLen();
+  const spansLen = runner.flatSpansLen();
+  if (cellsLen === 0 || spansLen === 0) {
+    return { cells: EMPTY_PATCH_U32, spans: EMPTY_PATCH_U32 };
+  }
+  const cellsPtr = runner.flatCellsPtr();
+  const spansPtr = runner.flatSpansPtr();
+  return {
+    cells: patchViewU32(cellsPtr, cellsLen, true),
+    spans: patchViewU32(spansPtr, spansLen, false),
+  };
+}
+
+// Navigate to a specific screen if requested via URL.
+if (START_SCREEN > 0) {
+  const screenIdx = START_SCREEN - 1;
+  // Send number key press to navigate: '1'-'9' for screens 1-9, '0' for 10.
+  // For screens > 10, we send repeated Tab presses.
+  if (screenIdx < 10) {
+    const key = screenIdx === 9 ? "0" : String(screenIdx + 1);
+    runner.pushEncodedInput(JSON.stringify({ kind: "key", phase: "down", key, code: `Digit${key}`, mods: 0, repeat: false }));
+  } else {
+    // Navigate with Tab presses.
+    for (let i = 0; i < screenIdx; i++) {
+      runner.pushEncodedInput(JSON.stringify({ kind: "key", phase: "down", key: "Tab", code: "Tab", mods: 0, repeat: false }));
+    }
+  }
+}
+
+// `ShowcaseRunner.init()` renders frame 1 and produces a full repaint patch batch.
+// If we don't apply it immediately, the first `step()` often returns `rendered=false`
+// and the initial frame never becomes visible (or later diffs apply against an empty buffer).
+const initPatches = takeRunnerPatches();
+if (initPatches.cells.length > 0) {
+  term.applyPatchBatchFlat(initPatches.spans, initPatches.cells);
+}
+term.render();
+
+// Hide loading overlay, show status.
+setProgress(100, "Ready");
+loadingOverlay.classList.add("hidden");
+setRunningStatusText();
+syncPaneOverlayFromRunner();
+
+// Inject large text assets after first frame so startup work is not blocked.
+largeAssetsPromise.then((assets) => {
+  if (!assets) return;
+  // Defer one frame so injection cannot interleave with startup frame calls.
+  requestAnimationFrame(() => {
+    try {
+      const okA = runner.setShakespeareText(assets.shakespeare);
+      const okB = runner.setSqliteSource(assets.sqlite);
+      jsonl({
+        event: "assets_loaded",
+        shakespeare_bytes: assets.shakespeare.length,
+        sqlite_bytes: assets.sqlite.length,
+        ok: Boolean(okA && okB),
+        ts: Date.now(),
+      });
+    } catch (e) {
+      console.warn("[ShowcaseDemo] Failed to inject large assets into WASM runner.", e);
+    }
+  });
+});
+
+// ── JSONL logger ───────────────────────────────────────────────────────
+function jsonl(obj) {
+  if (LOG_JSONL) console.log(JSON.stringify(obj));
+}
+
+jsonl({ event: "init", cols: currentCols, rows: currentRows, dpr, zoom: userZoom, ts: Date.now() });
+
+function geometrySignature(cols, rows, dprValue, zoomValue) {
+  return `${cols}x${rows}@${dprValue.toFixed(4)}:z${Math.round(zoomValue * 1000)}`;
+}
+
+function setRunningStatusText() {
+  if (Math.abs(userZoom - 1.0) > 0.01) {
+    status.textContent = `${currentCols}\u00d7${currentRows} \u2014 zoom ${Math.round(userZoom * 100)}%`;
+  } else {
+    status.textContent = `${currentCols}\u00d7${currentRows} \u2014 running`;
+  }
+}
+
+let pendingGeometrySync = false;
+const pendingGeometryReasons = new Set();
+
+function queueGeometrySync(reason) {
+  pendingGeometrySync = true;
+  if (typeof reason === "string" && reason.length > 0) {
+    pendingGeometryReasons.add(reason);
+  } else {
+    pendingGeometryReasons.add("unspecified");
+  }
+}
+
+function applyQueuedGeometrySync(trigger = "frame_tick") {
+  if (!pendingGeometrySync) return;
+  pendingGeometrySync = false;
+  pendingGeometryReasons.add(trigger);
+  const reasons = Array.from(pendingGeometryReasons).sort();
+  pendingGeometryReasons.clear();
+
+  const widthCss = container.clientWidth;
+  const heightCss = container.clientHeight;
+  if (widthCss <= 0 || heightCss <= 0) {
+    return;
+  }
+
+  const newDpr = window.devicePixelRatio || 1.0;
+  const prevCols = currentCols;
+  const prevRows = currentRows;
+  const geo = term.fitToContainer(widthCss, heightCss, newDpr);
+  const normalizedGeometry = normalizeTerminalGeometry(geo.cols, geo.rows, prevCols, prevRows);
+  currentCols = normalizedGeometry.cols;
+  currentRows = normalizedGeometry.rows;
+
+  const nextSignature = geometrySignature(currentCols, currentRows, newDpr, userZoom);
+  const signatureChanged = nextSignature !== lastGeometrySignature;
+  const sizeChanged = currentCols !== prevCols || currentRows !== prevRows;
+  if (signatureChanged) {
+    // Force a resize signal to the runner whenever host geometry semantics changed.
+    // The runner now treats every resize signal as a repaint boundary, even if
+    // cols/rows are numerically unchanged (e.g. DPR/zoom transitions).
+    runner.resize(currentCols, currentRows);
+    lastGeometrySignature = nextSignature;
+  }
+
+  if (signatureChanged || reasons.length > 0) {
+    jsonl({
+      event: "resize",
+      reason: reasons.join("+"),
+      changed: signatureChanged,
+      size_changed: sizeChanged,
+      prev_cols: prevCols,
+      prev_rows: prevRows,
+      raw_cols: geo.cols,
+      raw_rows: geo.rows,
+      cols: currentCols,
+      rows: currentRows,
+      dpr: newDpr,
+      zoom: userZoom,
+      width_css: widthCss,
+      height_css: heightCss,
+      ts: Date.now(),
+    });
+  }
+
+  setRunningStatusText();
+  syncPaneOverlayFromRunner();
+}
+
+function flushPendingGeometrySync(trigger = "input_event") {
+  if (!pendingGeometrySync) return;
+  applyQueuedGeometrySync(trigger);
+}
+
+lastGeometrySignature = geometrySignature(currentCols, currentRows, dpr, userZoom);
+
+// ── Resize handling ────────────────────────────────────────────────────
+const resizeObserver = new ResizeObserver(() => {
+  queueGeometrySync("resize_observer");
+});
+resizeObserver.observe(container);
+
+// Handle DPR changes via visualViewport API (more reliable than matchMedia).
+if (window.visualViewport && typeof window.visualViewport.addEventListener === "function") {
+  window.visualViewport.addEventListener("resize", () => {
+    queueGeometrySync("visual_viewport_resize");
+  });
+} else {
+  // Fallback: matchMedia for DPR changes (only fires once per threshold).
+  addMediaQueryChangeListener(`(resolution: ${dpr}dppx)`, () => {
+    queueGeometrySync("match_media_dpr_change");
+  });
+}
+
+// ── Input forwarding ───────────────────────────────────────────────────
+// DOM events -> FrankenTermWeb.input() -> drainEncodedInputs() -> runner
+
+function safeTermInput(ev) {
+  try {
+    term.input(ev);
+  } catch (e) {
+    console.error("[ShowcaseDemo] term.input failed:", e, ev);
+  }
+}
+
+function isCoarsePointerDevice() {
+  return mediaQueryMatches("(pointer: coarse)");
+}
+
+function shouldUseMobileKeyboardProxy() {
+  return Boolean(keyboardProxy) && isCoarsePointerDevice();
+}
+
+let mobileInputMode = "touch";
+
+function updateMobileInputToggleUi() {
+  if (!mobileKbToggle) return;
+  const keyboardMode = mobileInputMode === "keyboard";
+  mobileKbToggle.dataset.active = keyboardMode ? "true" : "false";
+  mobileKbToggle.setAttribute("aria-pressed", keyboardMode ? "true" : "false");
+  mobileKbToggle.title = keyboardMode
+    ? "Keyboard mode enabled (tap to switch to touch mode)"
+    : "Touch mode enabled (tap to switch to keyboard mode)";
+}
+
+function setMobileInputMode(mode, { focusTarget = true } = {}) {
+  const normalized = mode === "keyboard" ? "keyboard" : "touch";
+  if (!shouldUseMobileKeyboardProxy() && normalized === "keyboard") {
+    mobileInputMode = "touch";
+  } else {
+    mobileInputMode = normalized;
+  }
+  updateMobileInputToggleUi();
+  if (!focusTarget) return;
+  if (mobileInputMode === "keyboard") {
+    focusKeyboardProxyInput();
+  } else {
+    if (keyboardProxy && document.activeElement === keyboardProxy) {
+      keyboardProxy.blur();
+    }
+    focusCanvasInput();
+  }
+}
+
+function useMobileKeyboardForPointer(pointerType) {
+  return pointerType !== "mouse" && mobileInputMode === "keyboard" && shouldUseMobileKeyboardProxy();
+}
+
+const LONG_PRESS_KEYBOARD_MS = 420;
+const LONG_PRESS_MOVE_PX = 14;
+let pendingKeyboardLongPress = null;
+
+function cancelKeyboardLongPressTracker() {
+  if (!pendingKeyboardLongPress) return false;
+  const { timerId, triggered } = pendingKeyboardLongPress;
+  clearTimeout(timerId);
+  pendingKeyboardLongPress = null;
+  return triggered;
+}
+
+function startKeyboardLongPressTracker(pointerId, clientX, clientY) {
+  if (!shouldUseMobileKeyboardProxy() || mobileInputMode !== "touch") return;
+  cancelKeyboardLongPressTracker();
+
+  const tracker = {
+    pointerId,
+    startX: clientX,
+    startY: clientY,
+    triggered: false,
+    timerId: 0,
+  };
+
+  tracker.timerId = window.setTimeout(() => {
+    if (!pendingKeyboardLongPress || pendingKeyboardLongPress !== tracker) return;
+    if (!shouldUseMobileKeyboardProxy() || mobileInputMode !== "touch") return;
+
+    tracker.triggered = true;
+    setMobileInputMode("keyboard", { focusTarget: true });
+
+    if (
+      Number.isFinite(tracker.pointerId) &&
+      typeof runner.panePointerCancel === "function"
+    ) {
+      try {
+        const dispatch = runner.panePointerCancel(tracker.pointerId);
+        applyPaneCaptureCommand(dispatch, { skipAcquireAck: true });
+      } catch (_) {}
+    }
+    paneActivePointers.delete(tracker.pointerId);
+    paneTouchPointers.delete(tracker.pointerId);
+    activeTouchPointerIds.delete(tracker.pointerId);
+    touchGestureSuppressedByPane = false;
+    touchState = TOUCH_IDLE;
+    touchScrollAccX = 0;
+    touchScrollAccY = 0;
+    pinchStartDist = 0;
+    syncPaneOverlayFromRunner();
+  }, LONG_PRESS_KEYBOARD_MS);
+
+  pendingKeyboardLongPress = tracker;
+}
+
+function updateKeyboardLongPressTracker(clientX, clientY) {
+  if (!pendingKeyboardLongPress || pendingKeyboardLongPress.triggered) return;
+  const dx = clientX - pendingKeyboardLongPress.startX;
+  const dy = clientY - pendingKeyboardLongPress.startY;
+  if (Math.hypot(dx, dy) > LONG_PRESS_MOVE_PX) {
+    cancelKeyboardLongPressTracker();
+  }
+}
+
+function focusCanvasInput() {
+  try {
+    canvas.focus({ preventScroll: true });
+  } catch (_) {
+    canvas.focus();
+  }
+}
+
+function resetKeyboardProxyValue() {
+  if (!keyboardProxy) return;
+  keyboardProxy.value = "";
+  try {
+    keyboardProxy.setSelectionRange(0, 0);
+  } catch (_) {}
+}
+
+function focusKeyboardProxyInput() {
+  if (!keyboardProxy) {
+    focusCanvasInput();
+    return;
+  }
+  try {
+    keyboardProxy.focus({ preventScroll: true });
+  } catch (_) {
+    keyboardProxy.focus();
+  }
+  resetKeyboardProxyValue();
+}
+
+function focusTerminalInputTarget(preferMobileKeyboard) {
+  if (preferMobileKeyboard && shouldUseMobileKeyboardProxy()) {
+    focusKeyboardProxyInput();
+    return;
+  }
+  if (keyboardProxy && document.activeElement === keyboardProxy) {
+    keyboardProxy.blur();
+  }
+  focusCanvasInput();
+}
+
+let keyboardProxyComposing = false;
+let keyboardProxyExpectedInputEcho = null;
+let keyboardProxySuppressNextInput = false;
+
+function markKeyboardProxyBeforeInputHandled(expectedEcho = "", suppressNextInput = false) {
+  keyboardProxyExpectedInputEcho = expectedEcho;
+  keyboardProxySuppressNextInput = suppressNextInput;
+}
+
+function emitSyntheticKeyPress(key, code) {
+  const down = { kind: "key", phase: "down", key, code, mods: 0, repeat: false };
+  const up = { kind: "key", phase: "up", key, code, mods: 0, repeat: false };
+  safeTermInput(down);
+  safeTermInput(up);
+}
+
+function emitTextAsKeyPresses(text) {
+  if (!text) return;
+  for (const ch of text) {
+    emitSyntheticKeyPress(ch, ch);
+  }
+}
+
+function handleKeyboardProxyBeforeInput(e) {
+  const inputType = typeof e.inputType === "string" ? e.inputType : "";
+  const data = typeof e.data === "string" ? e.data : "";
+  if (
+    keyboardProxyComposing ||
+    e.isComposing ||
+    inputType === "insertCompositionText" ||
+    inputType === "deleteCompositionText"
+  ) {
+    return;
+  }
+  if (inputType === "insertFromComposition") {
+    e.preventDefault();
+    // Composition commits are forwarded from compositionend -> rust parser.
+    markKeyboardProxyBeforeInputHandled("", true);
+    resetKeyboardProxyValue();
+    return;
+  }
+
+  if (inputType === "insertLineBreak" || inputType === "insertParagraph") {
+    e.preventDefault();
+    emitSyntheticKeyPress("Enter", "Enter");
+    markKeyboardProxyBeforeInputHandled("", true);
+    resetKeyboardProxyValue();
+    return;
+  }
+  if (inputType === "insertTab") {
+    e.preventDefault();
+    emitSyntheticKeyPress("Tab", "Tab");
+    markKeyboardProxyBeforeInputHandled("", true);
+    resetKeyboardProxyValue();
+    return;
+  }
+  if (
+    inputType === "deleteContentBackward" ||
+    inputType === "deleteWordBackward" ||
+    inputType === "deleteSoftLineBackward"
+  ) {
+    e.preventDefault();
+    emitSyntheticKeyPress("Backspace", "Backspace");
+    markKeyboardProxyBeforeInputHandled("", true);
+    resetKeyboardProxyValue();
+    return;
+  }
+  if (
+    inputType === "deleteContentForward" ||
+    inputType === "deleteWordForward" ||
+    inputType === "deleteSoftLineForward"
+  ) {
+    e.preventDefault();
+    emitSyntheticKeyPress("Delete", "Delete");
+    markKeyboardProxyBeforeInputHandled("", true);
+    resetKeyboardProxyValue();
+    return;
+  }
+  if (inputType.startsWith("insert") && data.length > 0) {
+    e.preventDefault();
+    emitTextAsKeyPresses(data);
+    markKeyboardProxyBeforeInputHandled(data);
+    resetKeyboardProxyValue();
+  }
+}
+
+function handleKeyboardProxyInput(e) {
+  if (!keyboardProxy) return;
+  if (keyboardProxyComposing || e.isComposing) return;
+  const inputType = typeof e.inputType === "string" ? e.inputType : "";
+  if (inputType === "insertFromComposition") {
+    keyboardProxySuppressNextInput = false;
+    keyboardProxyExpectedInputEcho = null;
+    resetKeyboardProxyValue();
+    return;
+  }
+  if (keyboardProxySuppressNextInput) {
+    keyboardProxySuppressNextInput = false;
+    keyboardProxyExpectedInputEcho = null;
+    resetKeyboardProxyValue();
+    return;
+  }
+  const eventData = typeof e.data === "string" ? e.data : "";
+  const proxyData = keyboardProxy.value || "";
+  if (keyboardProxyExpectedInputEcho !== null) {
+    const expected = keyboardProxyExpectedInputEcho;
+    keyboardProxyExpectedInputEcho = null;
+    const expectedEmptyEcho = expected.length === 0 && eventData.length === 0 && proxyData.length === 0;
+    const expectedEventDataEcho = eventData.length > 0 && eventData === expected;
+    const expectedProxyDataEcho = proxyData.length > 0 && proxyData === expected;
+    if (expectedEmptyEcho || expectedEventDataEcho || expectedProxyDataEcho) {
+      resetKeyboardProxyValue();
+      return;
+    }
+  }
+  let data = eventData;
+  if (!data && proxyData) {
+    data = proxyData;
+  }
+  if (data) {
+    emitTextAsKeyPresses(data);
+  }
+  resetKeyboardProxyValue();
+}
+
+function isEditableTarget(target) {
+  if (!(target instanceof Element)) return false;
+  if (keyboardProxy && target === keyboardProxy) return false;
+  if (
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLTextAreaElement ||
+    target instanceof HTMLSelectElement
+  ) {
+    return true;
+  }
+  return Boolean(target.closest("[contenteditable]"));
+}
+
+function shouldHandleKeyboardViaProxyBeforeInput(e) {
+  if (!keyboardProxy || document.activeElement !== keyboardProxy) return false;
+  if (e.ctrlKey || e.altKey || e.metaKey) return false;
+  const key = typeof e.key === "string" ? e.key : "";
+  if (key === "Enter" || key === "Tab" || key === "Backspace" || key === "Delete") {
+    return true;
+  }
+  return (
+    key.length === 1 ||
+    key === "Dead" ||
+    key === "Unidentified"
+  );
+}
+
+function terminalDomHasFocus() {
+  const active = document.activeElement;
+  return active === canvas || (keyboardProxy && active === keyboardProxy);
+}
+
+function syncTerminalFocusFromDom() {
+  safeTermInput({ kind: "focus", focused: terminalDomHasFocus() });
+}
+
+function domKeyToInput(e, phase) {
+  return {
+    kind: "key",
+    phase,
+    // `key` and `code` are both required by `frankenterm-web` wasm bindings.
+    // - key: logical key value (e.g. "a", "Enter")
+    // - code: physical key code (e.g. "KeyA", "Enter")
+    key: (typeof e.key === "string") ? e.key : "",
+    code: (typeof e.code === "string") ? e.code : "",
+    mods: (e.shiftKey ? 1 : 0) | (e.altKey ? 2 : 0) | (e.ctrlKey ? 4 : 0) | (e.metaKey ? 8 : 0),
+    repeat: e.repeat || false,
+  };
+}
+
+function domMouseToInput(e, phase) {
+  flushPendingGeometrySync("pointer_input");
+  const normalizedButton = (() => {
+    const raw = Number.isFinite(e.button) ? Math.trunc(e.button) : 0;
+    if (phase === "move" && raw < 0) return 0;
+    if (raw < 0 || raw > 2) return 0;
+    return raw;
+  })();
+  const rect = canvas.getBoundingClientRect();
+  const cols = Math.max(1, currentCols | 0);
+  const rows = Math.max(1, currentRows | 0);
+  const cellW = Math.max(1e-6, rect.width / cols);
+  const cellH = Math.max(1e-6, rect.height / rows);
+  const x = Math.floor((e.clientX - rect.left) / cellW);
+  const y = Math.floor((e.clientY - rect.top)  / cellH);
+  const maxX = cols - 1;
+  const maxY = rows - 1;
+  return {
+    kind: "mouse",
+    phase,
+    button: normalizedButton,
+    x: Math.max(0, Math.min(x, maxX)),
+    y: Math.max(0, Math.min(y, maxY)),
+    mods: (e.shiftKey ? 1 : 0) | (e.altKey ? 2 : 0) | (e.ctrlKey ? 4 : 0) | (e.metaKey ? 8 : 0),
+  };
+}
+
+function domWheelToInput(e) {
+  flushPendingGeometrySync("wheel_input");
+  const rect = canvas.getBoundingClientRect();
+  const cols = Math.max(1, currentCols | 0);
+  const rows = Math.max(1, currentRows | 0);
+  const cellW = Math.max(1e-6, rect.width / cols);
+  const cellH = Math.max(1e-6, rect.height / rows);
+  const x = Math.floor((e.clientX - rect.left) / cellW);
+  const y = Math.floor((e.clientY - rect.top)  / cellH);
+  const maxX = cols - 1;
+  const maxY = rows - 1;
+  return {
+    kind: "wheel",
+    x: Math.max(0, Math.min(x, maxX)),
+    y: Math.max(0, Math.min(y, maxY)),
+    dx: Math.round(e.deltaX),
+    dy: Math.round(e.deltaY),
+    mods: (e.shiftKey ? 1 : 0) | (e.altKey ? 2 : 0) | (e.ctrlKey ? 4 : 0) | (e.metaKey ? 8 : 0),
+  };
+}
+
+function shouldForwardKeyEvent(e) {
+  // Avoid double-encoding during IME composition.
+  if (e.isComposing || e.key === "Process") return false;
+  if (isEditableTarget(e.target)) return false;
+  if (shouldHandleKeyboardViaProxyBeforeInput(e)) return false;
+  return true;
+}
+
+// Intercept Ctrl+/- (or Cmd+/- on Mac) for zoom, forward everything else.
+window.addEventListener("keydown", (e) => {
+  if (!shouldForwardKeyEvent(e)) return;
+
+  // Zoom modifier: Ctrl on Windows/Linux, Cmd (Meta) on macOS.
+  const zoomMod = e.ctrlKey || e.metaKey;
+
+  // Zoom in: Ctrl/Cmd + Plus or Equal.
+  if (zoomMod && (e.key === "+" || e.key === "=")) {
+    e.preventDefault();
+    userZoom = Math.min(3.0, userZoom * 1.1);
+    applyZoom();
+    return;
+  }
+  // Zoom out: Ctrl/Cmd + Minus.
+  if (zoomMod && e.key === "-") {
+    e.preventDefault();
+    userZoom = Math.max(0.3, userZoom / 1.1);
+    applyZoom();
+    return;
+  }
+  // Reset zoom: Ctrl/Cmd + 0.
+  if (zoomMod && e.key === "0") {
+    e.preventDefault();
+    userZoom = 1.0;
+    applyZoom();
+    return;
+  }
+
+  const lowerKey = String(e.key || "").toLowerCase();
+  if (zoomMod && lowerKey === "z") {
+    e.preventDefault();
+    const changed = e.shiftKey
+      ? (typeof runner.paneRedoLayout === "function" && runner.paneRedoLayout())
+      : (typeof runner.paneUndoLayout === "function" && runner.paneUndoLayout());
+    if (changed) {
+      persistPaneWorkspace();
+      syncPaneOverlayFromRunner();
+    }
+    return;
+  }
+  if (zoomMod && lowerKey === "y") {
+    e.preventDefault();
+    const changed = typeof runner.paneRedoLayout === "function" && runner.paneRedoLayout();
+    if (changed) {
+      persistPaneWorkspace();
+      syncPaneOverlayFromRunner();
+    }
+    return;
+  }
+  if (zoomMod && lowerKey === "r") {
+    e.preventDefault();
+    const changed = typeof runner.paneReplayLayout === "function" && runner.paneReplayLayout();
+    if (changed) {
+      persistPaneWorkspace();
+      syncPaneOverlayFromRunner();
+    }
+    return;
+  }
+  if (e.ctrlKey && e.altKey && ["1", "2", "3", "4"].includes(e.key)) {
+    e.preventDefault();
+    const mode = Number(e.key) - 1;
+    const changed =
+      typeof runner.paneApplyLayoutMode === "function" &&
+      runner.paneApplyLayoutMode(mode, 0);
+    if (changed) {
+      persistPaneWorkspace();
+      syncPaneOverlayFromRunner();
+    }
+    return;
+  }
+
+  e.preventDefault();
+  safeTermInput(domKeyToInput(e, "down"));
+}, { capture: true });
+
+window.addEventListener("keyup", (e) => {
+  if (!shouldForwardKeyEvent(e)) return;
+  e.preventDefault();
+  safeTermInput(domKeyToInput(e, "up"));
+}, { capture: true });
+
+// Track mouse button state for drag detection.
+// `e.button` is always 0 during mousemove, so we must remember which button
+// initiated the drag from the mousedown event.
+let mouseButtonsDown = 0;
+let dragButton = 0;
+if ("PointerEvent" in window) {
+	  canvas.addEventListener("pointerdown", (e) => {
+	    const preferKeyboard = useMobileKeyboardForPointer(e.pointerType);
+	    focusTerminalInputTarget(preferKeyboard);
+	    const pointerId = panePointerIdFromEvent(e);
+	    const touchLikePointer = e.pointerType !== "mouse";
+	    if (touchLikePointer) {
+	      activeTouchPointerIds.add(pointerId);
+	    }
+	    const activeTouchPoints = touchLikePointer ? activeTouchPointerIds.size : 1;
+	    mouseButtonsDown = e.pointerType === "mouse" ? e.buttons : mouseButtonsDown;
+	    dragButton = e.pointerType === "mouse" ? e.button : dragButton;
+	    const dispatch = paneDispatchPointerDown(e, activeTouchPoints);
+	    const yieldedToNativeTouch = touchLikePointer && paneDispatchYieldedToNativeTouch(dispatch);
+	    const paneAccepted = !yieldedToNativeTouch && (!dispatch || dispatch.accepted !== false);
+	    if (!yieldedToNativeTouch) {
+	      e.preventDefault();
+	    }
+	    if (yieldedToNativeTouch) {
+	      cancelKeyboardLongPressTracker();
+	      paneActivePointers.clear();
+	      paneTouchPointers.clear();
+	      touchGestureSuppressedByPane = false;
+	      touchState = TOUCH_IDLE;
+	      touchScrollAccX = 0;
+	      touchScrollAccY = 0;
+	      pinchStartDist = 0;
+	    } else if (!paneAccepted && e.pointerType !== "mouse" && !preferKeyboard) {
+	      // Smart keyboard mode should never steal pane drags/resizes; only allow
+	      // long-press keyboard activation when the pane layer rejects the pointer.
+	      startKeyboardLongPressTracker(pointerId, e.clientX, e.clientY);
+	    } else {
+	      cancelKeyboardLongPressTracker();
+	    }
+	    if (paneAccepted) {
+	      paneActivePointers.add(pointerId);
+	    }
+	    if (e.pointerType !== "mouse") {
+	      if (paneAccepted) {
+	        paneTouchPointers.add(pointerId);
+	      } else {
+	        paneTouchPointers.delete(pointerId);
+	      }
+	    }
+	    if (e.pointerType !== "mouse" && paneAccepted) {
+	      // A touch pointer that was accepted by the pane layer must suppress the
+	      // touch-to-wheel gesture layer (ordering differs across browsers).
+	      touchGestureSuppressedByPane = true;
+	      touchState = TOUCH_IDLE;
+	      touchScrollAccX = 0;
+	      touchScrollAccY = 0;
+	      pinchStartDist = 0;
+	    }
+	    syncPaneOverlayFromRunner();
+	    if (e.pointerType === "mouse") {
+	      safeTermInput(domMouseToInput(e, "down"));
+	    }
+	  });
+
+	  canvas.addEventListener("pointerup", (e) => {
+	    cancelKeyboardLongPressTracker();
+	    e.preventDefault();
+	    const pointerId = panePointerIdFromEvent(e);
+	    paneActivePointers.delete(pointerId);
+    paneTouchPointers.delete(pointerId);
+    if (e.pointerType !== "mouse") {
+      activeTouchPointerIds.delete(pointerId);
+    }
+    if (e.pointerType === "mouse") {
+      mouseButtonsDown = e.buttons;
+    }
+    paneDispatchPointerUp(e);
+    persistPaneWorkspace();
+    syncPaneOverlayFromRunner();
+    if (e.pointerType === "mouse") {
+      safeTermInput(domMouseToInput(e, "up"));
+    }
+  });
+
+	  canvas.addEventListener("pointermove", (e) => {
+	    const pointerId = panePointerIdFromEvent(e);
+	    if (e.pointerType === "mouse") {
+      mouseButtonsDown = e.buttons;
+      if (mouseButtonsDown) {
+        const ev = domMouseToInput(e, "drag");
+        ev.button = dragButton;
+        if (paneActivePointers.has(pointerId)) {
+          paneDispatchPointerMove(e);
+          syncPaneOverlayFromRunner();
+        }
+        safeTermInput(ev);
+      } else {
+        if (paneActivePointers.has(pointerId)) {
+          paneDispatchPointerMove(e);
+          syncPaneOverlayFromRunner();
+        }
+        safeTermInput(domMouseToInput(e, "move"));
+      }
+      return;
+	    }
+
+	    updateKeyboardLongPressTracker(e.clientX, e.clientY);
+	    if (paneActivePointers.has(pointerId)) {
+	      e.preventDefault();
+	      paneDispatchPointerMove(e);
+	      syncPaneOverlayFromRunner();
+	    }
+	  }, { passive: false });
+
+	  canvas.addEventListener("pointercancel", (e) => {
+	    cancelKeyboardLongPressTracker();
+	    const pointerId = panePointerIdFromEvent(e);
+	    const hadMouseButtonsDown = e.pointerType === "mouse" && mouseButtonsDown !== 0;
+	    paneActivePointers.delete(pointerId);
+    paneTouchPointers.delete(pointerId);
+    if (e.pointerType !== "mouse") {
+      activeTouchPointerIds.delete(pointerId);
+    }
+    paneDispatchPointerCancel(e);
+    syncPaneOverlayFromRunner();
+    if (hadMouseButtonsDown) {
+      mouseButtonsDown = 0;
+      safeTermInput(domMouseToInput(e, "up"));
+    }
+  });
+
+	  canvas.addEventListener("pointerleave", (e) => {
+	    cancelKeyboardLongPressTracker();
+	    const pointerId = panePointerIdFromEvent(e);
+	    if (!paneActivePointers.has(pointerId)) return;
+	    paneDispatchPointerLeave(e);
+	    syncPaneOverlayFromRunner();
+	  });
+
+	  canvas.addEventListener("lostpointercapture", (e) => {
+	    cancelKeyboardLongPressTracker();
+	    const pointerId = panePointerIdFromEvent(e);
+	    paneActivePointers.delete(pointerId);
+	    paneTouchPointers.delete(pointerId);
+	    if (e.pointerType !== "mouse") {
+	      activeTouchPointerIds.delete(pointerId);
+	    }
+    paneDispatchLostPointerCapture(e);
+    syncPaneOverlayFromRunner();
+  });
+
+	  window.addEventListener("pointerup", (e) => {
+	    cancelKeyboardLongPressTracker();
+	    const pointerId = panePointerIdFromEvent(e);
+	    const wasPaneActive = paneActivePointers.has(pointerId);
+	    const hadMouseButtonsDown = e.pointerType === "mouse" && mouseButtonsDown !== 0;
+    if (wasPaneActive) {
+      paneDispatchPointerUp(e);
+      persistPaneWorkspace();
+      syncPaneOverlayFromRunner();
+    }
+    paneActivePointers.delete(pointerId);
+    paneTouchPointers.delete(pointerId);
+    if (e.pointerType !== "mouse") {
+      activeTouchPointerIds.delete(pointerId);
+    }
+    if (e.pointerType === "mouse") {
+      if (hadMouseButtonsDown) {
+        safeTermInput(domMouseToInput(e, "up"));
+      }
+      mouseButtonsDown = 0;
+	    }
+	  });
+} else {
+  canvas.addEventListener("mousedown", (e) => {
+    e.preventDefault();
+    focusTerminalInputTarget(false);
+    mouseButtonsDown = e.buttons;
+    dragButton = e.button;
+    paneDispatchPointerDown(e);
+    syncPaneOverlayFromRunner();
+    safeTermInput(domMouseToInput(e, "down"));
+  });
+  canvas.addEventListener("mouseup", (e) => {
+    e.preventDefault();
+    mouseButtonsDown = e.buttons;
+    paneDispatchPointerUp(e);
+    persistPaneWorkspace();
+    syncPaneOverlayFromRunner();
+    safeTermInput(domMouseToInput(e, "up"));
+  });
+  canvas.addEventListener("mousemove", (e) => {
+    mouseButtonsDown = e.buttons;
+    if (mouseButtonsDown) {
+      const ev = domMouseToInput(e, "drag");
+      ev.button = dragButton;
+      paneDispatchPointerMove(e);
+      syncPaneOverlayFromRunner();
+      safeTermInput(ev);
+    } else {
+      safeTermInput(domMouseToInput(e, "move"));
+    }
+  });
+  window.addEventListener("mouseup", (e) => {
+    const hadMouseButtonsDown = mouseButtonsDown !== 0;
+    mouseButtonsDown = 0;
+    if (hadMouseButtonsDown) {
+      safeTermInput(domMouseToInput(e, "up"));
+    }
+  });
+}
+
+window.addEventListener("blur", () => {
+  if (paneActivePointers.size > 0 && typeof runner.panePointerCancel === "function") {
+    for (const pointerId of paneActivePointers) {
+      const dispatch = runner.panePointerCancel(pointerId);
+      applyPaneCaptureCommand(dispatch, { skipAcquireAck: true });
+    }
+    syncPaneOverlayFromRunner();
+  }
+    mouseButtonsDown = 0;
+    paneActivePointers.clear();
+    paneTouchPointers.clear();
+    activeTouchPointerIds.clear();
+});
+	// Suppress context menu on canvas (right-click is forwarded to terminal).
+	canvas.addEventListener("contextmenu", (e) => { e.preventDefault(); });
+
+	// Wheel input is normalized to discrete steps because the Rust web parser
+	// maps wheel events to directional `Scroll*` kinds (no delta magnitude).
+	let wheelAccX = 0;
+	let wheelAccY = 0;
+	const MAX_WHEEL_STEPS_PER_EVENT = 24;
+
+	function handleWheel(e) {
+	  const scrollStep = touchScrollStepsPx();
+	  const cell = touchCellCoords(e.clientX, e.clientY);
+	  const mods = paneModsFromDomEvent(e);
+
+	  let dx = Number.isFinite(e.deltaX) ? e.deltaX : 0;
+	  let dy = Number.isFinite(e.deltaY) ? e.deltaY : 0;
+	  const mode = Number.isFinite(e.deltaMode) ? e.deltaMode : 0;
+	  if (mode === 1) {
+	    // Lines → approximate pixel deltas using cell size.
+	    dx *= scrollStep.x;
+	    dy *= scrollStep.y;
+	  } else if (mode === 2) {
+	    // Pages → approximate as a viewport worth of cells.
+	    dx *= scrollStep.x * Math.max(1, currentCols | 0);
+	    dy *= scrollStep.y * Math.max(1, currentRows | 0);
+	  }
+
+	  wheelAccX += dx;
+	  wheelAccY += dy;
+
+	  const rawYSteps = wheelAccY / scrollStep.y;
+	  let ySteps = rawYSteps > 0 ? Math.floor(rawYSteps) : Math.ceil(rawYSteps);
+	  ySteps = Math.max(-MAX_WHEEL_STEPS_PER_EVENT, Math.min(MAX_WHEEL_STEPS_PER_EVENT, ySteps));
+	  if (ySteps !== 0) {
+	    const stepDy = Math.sign(ySteps);
+	    for (let i = 0; i < Math.abs(ySteps); i++) {
+	      safeTermInput({ kind: "wheel", x: cell.x, y: cell.y, dx: 0, dy: stepDy, mods });
+	    }
+	    wheelAccY -= ySteps * scrollStep.y;
+	    if (Math.abs(rawYSteps) > MAX_WHEEL_STEPS_PER_EVENT) {
+	      wheelAccY = Math.sign(wheelAccY) * Math.max(0, scrollStep.y - 1);
+	    }
+	  }
+
+	  const rawXSteps = wheelAccX / scrollStep.x;
+	  let xSteps = rawXSteps > 0 ? Math.floor(rawXSteps) : Math.ceil(rawXSteps);
+	  xSteps = Math.max(-MAX_WHEEL_STEPS_PER_EVENT, Math.min(MAX_WHEEL_STEPS_PER_EVENT, xSteps));
+	  if (xSteps !== 0) {
+	    const stepDx = Math.sign(xSteps);
+	    for (let i = 0; i < Math.abs(xSteps); i++) {
+	      safeTermInput({ kind: "wheel", x: cell.x, y: cell.y, dx: stepDx, dy: 0, mods });
+	    }
+	    wheelAccX -= xSteps * scrollStep.x;
+	    if (Math.abs(rawXSteps) > MAX_WHEEL_STEPS_PER_EVENT) {
+	      wheelAccX = Math.sign(wheelAccX) * Math.max(0, scrollStep.x - 1);
+	    }
+	  }
+	}
+
+	canvas.addEventListener("wheel", (e) => {
+	  e.preventDefault();
+	  handleWheel(e);
+	}, { passive: false });
+window.addEventListener("paste", (e) => {
+  if (!terminalDomHasFocus()) return;
+  const text = (e.clipboardData || window.clipboardData).getData("text");
+  if (!text) return;
+  e.preventDefault();
+  safeTermInput({ kind: "paste", data: text });
+  resetKeyboardProxyValue();
+}, { capture: true });
+canvas.addEventListener("focus", syncTerminalFocusFromDom);
+canvas.addEventListener("blur", () => { queueMicrotask(syncTerminalFocusFromDom); });
+if (keyboardProxy) {
+  keyboardProxy.addEventListener("focus", syncTerminalFocusFromDom);
+  keyboardProxy.addEventListener("blur", () => {
+    keyboardProxyComposing = false;
+    keyboardProxyExpectedInputEcho = null;
+    keyboardProxySuppressNextInput = false;
+    resetKeyboardProxyValue();
+    if (mobileInputMode === "keyboard" && isCoarsePointerDevice()) {
+      setMobileInputMode("touch", { focusTarget: false });
+    }
+    queueMicrotask(syncTerminalFocusFromDom);
+  });
+  keyboardProxy.addEventListener("beforeinput", handleKeyboardProxyBeforeInput, { capture: true });
+  keyboardProxy.addEventListener("input", handleKeyboardProxyInput, { capture: true });
+}
+
+if (mobileKbToggle) {
+  mobileKbToggle.addEventListener("click", (e) => {
+    e.preventDefault();
+    const nextMode = mobileInputMode === "keyboard" ? "touch" : "keyboard";
+    setMobileInputMode(nextMode, { focusTarget: true });
+  });
+}
+setMobileInputMode("touch", { focusTarget: false });
+
+window.addEventListener("blur", () => {
+  safeTermInput({ kind: "focus", focused: false });
+  if (typeof runner.paneBlur === "function") {
+    runner.paneBlur();
+    syncPaneOverlayFromRunner();
+  }
+});
+window.addEventListener("focus", () => { queueMicrotask(syncTerminalFocusFromDom); });
+document.addEventListener("visibilitychange", () => {
+  safeTermInput({ kind: "focus", focused: !document.hidden && terminalDomHasFocus() });
+  if (document.hidden && typeof runner.paneVisibilityHidden === "function") {
+    runner.paneVisibilityHidden();
+    syncPaneOverlayFromRunner();
+    persistPaneWorkspace(undefined, { force: true });
+  }
+});
+window.addEventListener("pagehide", () => {
+  safeTermInput({ kind: "focus", focused: false });
+  if (typeof runner.paneVisibilityHidden === "function") {
+    runner.paneVisibilityHidden();
+    syncPaneOverlayFromRunner();
+    persistPaneWorkspace(undefined, { force: true });
+  }
+});
+
+// Composition (IME) events.
+function handleCompositionStart(e) {
+  if (keyboardProxy && e && e.target === keyboardProxy) {
+    keyboardProxyComposing = true;
+  }
+  safeTermInput({ kind: "composition", phase: "start" });
+}
+function handleCompositionUpdate(e) {
+  safeTermInput({ kind: "composition", phase: "update", data: e.data || "" });
+}
+function handleCompositionEnd(e) {
+  if (keyboardProxy && e && e.target === keyboardProxy) {
+    keyboardProxyComposing = false;
+    keyboardProxyExpectedInputEcho = null;
+    keyboardProxySuppressNextInput = false;
+    resetKeyboardProxyValue();
+  }
+  safeTermInput({ kind: "composition", phase: "end", data: e.data || "" });
+}
+canvas.addEventListener("compositionstart", handleCompositionStart);
+canvas.addEventListener("compositionupdate", handleCompositionUpdate);
+canvas.addEventListener("compositionend", handleCompositionEnd);
+if (keyboardProxy) {
+  keyboardProxy.addEventListener("compositionstart", handleCompositionStart);
+  keyboardProxy.addEventListener("compositionupdate", handleCompositionUpdate);
+  keyboardProxy.addEventListener("compositionend", handleCompositionEnd);
+}
+
+// ── Orientation change + visual viewport scroll pinning ──────────────
+let orientationTimer = 0;
+window.addEventListener("orientationchange", () => {
+  clearTimeout(orientationTimer);
+  orientationTimer = setTimeout(() => {
+    queueGeometrySync("orientation_change");
+  }, 150);
+});
+
+if (window.visualViewport && typeof window.visualViewport.addEventListener === "function") {
+  window.visualViewport.addEventListener("scroll", () => {
+    if (keyboardProxy && document.activeElement === keyboardProxy) {
+      return;
+    }
+    window.scrollTo(0, 0);
+  });
+}
+
+// ── Touch state machine ─────────────────────────────────────────────────
+// Translates touch gestures to mouse/wheel events for the Rust showcase runner.
+// States: IDLE → TRACKING → SCROLLING or PINCHING
+const TOUCH_IDLE = 0, TOUCH_TRACKING = 1, TOUCH_SCROLLING = 2, TOUCH_PINCHING = 3;
+let touchState = TOUCH_IDLE;
+let touchStartX = 0, touchStartY = 0, touchStartTime = 0;
+let touchLastX = 0, touchLastY = 0;
+let touchScrollAccX = 0, touchScrollAccY = 0;
+let pinchStartDist = 0, pinchStartZoom = 1.0;
+let touchGestureSuppressedByPane = false;
+const TAP_MAX_DIST = 10;   // px
+const TAP_MAX_TIME = 300;  // ms
+const MAX_TOUCH_WHEEL_STEPS_PER_MOVE = 16;
+
+function resetTransientPointerAndTouchState() {
+  cancelKeyboardLongPressTracker();
+  mouseButtonsDown = 0;
+  dragButton = 0;
+  paneActivePointers.clear();
+  paneTouchPointers.clear();
+  activeTouchPointerIds.clear();
+  wheelAccX = 0;
+  wheelAccY = 0;
+  touchGestureSuppressedByPane = false;
+  touchState = TOUCH_IDLE;
+  touchScrollAccX = 0;
+  touchScrollAccY = 0;
+  pinchStartDist = 0;
+}
+
+window.addEventListener("blur", resetTransientPointerAndTouchState, { capture: true });
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) {
+    resetTransientPointerAndTouchState();
+  }
+}, { capture: true });
+window.addEventListener("pagehide", resetTransientPointerAndTouchState, { capture: true });
+
+function touchScrollStepsPx() {
+  const rect = canvas.getBoundingClientRect();
+  const rawX = currentCols > 0 ? rect.width / currentCols : CELL_WIDTH;
+  const rawY = currentRows > 0 ? rect.height / currentRows : CELL_HEIGHT;
+  return {
+    x: Math.max(4, Math.round(rawX || CELL_WIDTH)),
+    y: Math.max(4, Math.round(rawY || CELL_HEIGHT)),
+  };
+}
+
+function touchCellCoords(clientX, clientY) {
+  flushPendingGeometrySync("touch_input");
+  const rect = canvas.getBoundingClientRect();
+  const cols = Math.max(1, currentCols | 0);
+  const rows = Math.max(1, currentRows | 0);
+  const cellW = Math.max(1e-6, rect.width / cols);
+  const cellH = Math.max(1e-6, rect.height / rows);
+  const maxX = cols - 1;
+  const maxY = rows - 1;
+  return {
+    x: Math.max(0, Math.min(Math.floor((clientX - rect.left) / cellW), maxX)),
+    y: Math.max(0, Math.min(Math.floor((clientY - rect.top) / cellH), maxY)),
+  };
+}
+
+function pinchDistance(t0, t1) {
+  const dx = t1.clientX - t0.clientX;
+  const dy = t1.clientY - t0.clientY;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+canvas.addEventListener("touchstart", (e) => {
+  e.preventDefault();
+  focusTerminalInputTarget(useMobileKeyboardForPointer("touch"));
+  if (!("PointerEvent" in window) && e.touches.length === 1) {
+    const t0 = e.touches[0];
+    const pointerId = clampPointerId(Number(t0.identifier ?? 0) + 1);
+    startKeyboardLongPressTracker(pointerId, t0.clientX, t0.clientY);
+  } else if (!("PointerEvent" in window)) {
+    cancelKeyboardLongPressTracker();
+  }
+  if ("PointerEvent" in window && paneTouchPointers.size > 0) {
+    touchGestureSuppressedByPane = true;
+    touchState = TOUCH_IDLE;
+    touchScrollAccX = 0;
+    touchScrollAccY = 0;
+    pinchStartDist = 0;
+    return;
+  }
+  touchGestureSuppressedByPane = false;
+  const touches = e.touches;
+  if (touches.length === 1) {
+    touchState = TOUCH_TRACKING;
+    touchStartX = touchLastX = touches[0].clientX;
+    touchStartY = touchLastY = touches[0].clientY;
+    touchStartTime = Date.now();
+    touchScrollAccX = 0;
+    touchScrollAccY = 0;
+  } else if (touches.length === 2) {
+    touchState = TOUCH_PINCHING;
+    pinchStartDist = pinchDistance(touches[0], touches[1]);
+    pinchStartZoom = userZoom;
+  }
+}, { passive: false });
+
+canvas.addEventListener("touchmove", (e) => {
+  e.preventDefault();
+  const touches = e.touches;
+  if (!("PointerEvent" in window) && touches.length === 1) {
+    updateKeyboardLongPressTracker(touches[0].clientX, touches[0].clientY);
+  }
+  if ("PointerEvent" in window && paneTouchPointers.size > 0) {
+    touchGestureSuppressedByPane = true;
+    touchState = TOUCH_IDLE;
+    touchScrollAccX = 0;
+    touchScrollAccY = 0;
+    pinchStartDist = 0;
+    return;
+  }
+  if (touchGestureSuppressedByPane) {
+    return;
+  }
+
+  if (touches.length === 2 && touchState !== TOUCH_IDLE) {
+    // Two fingers always means pinch, even if we started as single-finger tracking.
+    if (touchState !== TOUCH_PINCHING) {
+      touchState = TOUCH_PINCHING;
+      pinchStartDist = pinchDistance(touches[0], touches[1]);
+      pinchStartZoom = userZoom;
+      return;
+    }
+    const dist = pinchDistance(touches[0], touches[1]);
+    if (pinchStartDist > 0) {
+      const scale = dist / pinchStartDist;
+      userZoom = Math.max(0.3, Math.min(3.0, pinchStartZoom * scale));
+      applyZoom();
+    }
+    return;
+  }
+
+  if (touches.length === 1 && (touchState === TOUCH_TRACKING || touchState === TOUCH_SCROLLING)) {
+    const cx = touches[0].clientX;
+    const cy = touches[0].clientY;
+    const dx = cx - touchLastX;
+    const dy = cy - touchLastY;
+    touchLastX = cx;
+    touchLastY = cy;
+
+    // Once movement exceeds tap threshold, switch to scrolling.
+    if (touchState === TOUCH_TRACKING) {
+      const totalDx = cx - touchStartX;
+      const totalDy = cy - touchStartY;
+      if (Math.abs(totalDx) > TAP_MAX_DIST || Math.abs(totalDy) > TAP_MAX_DIST) {
+        touchState = TOUCH_SCROLLING;
+      } else {
+        return;
+      }
+    }
+
+    // Accumulate movement and emit wheel events at cell-sized intervals.
+    // Natural scrolling: finger-down → content follows finger down → sees earlier
+    // content → equivalent to "scroll up" → negative wheel dy.
+    touchScrollAccX += dx;
+    touchScrollAccY += dy;
+    const scrollStep = touchScrollStepsPx();
+    const cell = touchCellCoords(cx, cy);
+    const rawYSteps = touchScrollAccY / scrollStep.y;
+    let ySteps = rawYSteps > 0 ? Math.floor(rawYSteps) : Math.ceil(rawYSteps);
+    ySteps = Math.max(-MAX_TOUCH_WHEEL_STEPS_PER_MOVE, Math.min(MAX_TOUCH_WHEEL_STEPS_PER_MOVE, ySteps));
+    if (ySteps !== 0) {
+      // `ftui-web` treats wheel events as discrete step directions (sign-only).
+      // Emit one event per step so large touch deltas scroll proportionally.
+      const stepDy = -Math.sign(ySteps); // natural scrolling
+      for (let i = 0; i < Math.abs(ySteps); i++) {
+        safeTermInput({ kind: "wheel", x: cell.x, y: cell.y, dx: 0, dy: stepDy, mods: 0 });
+      }
+      touchScrollAccY -= ySteps * scrollStep.y;
+      if (Math.abs(rawYSteps) > MAX_TOUCH_WHEEL_STEPS_PER_MOVE) {
+        touchScrollAccY = Math.sign(touchScrollAccY) * Math.max(0, scrollStep.y - 1);
+      }
+    }
+
+    const rawXSteps = touchScrollAccX / scrollStep.x;
+    let xSteps = rawXSteps > 0 ? Math.floor(rawXSteps) : Math.ceil(rawXSteps);
+    xSteps = Math.max(-MAX_TOUCH_WHEEL_STEPS_PER_MOVE, Math.min(MAX_TOUCH_WHEEL_STEPS_PER_MOVE, xSteps));
+    if (xSteps !== 0) {
+      // Match vertical direction convention for horizontal wheel.
+      const stepDx = -Math.sign(xSteps); // natural scrolling
+      for (let i = 0; i < Math.abs(xSteps); i++) {
+        safeTermInput({ kind: "wheel", x: cell.x, y: cell.y, dx: stepDx, dy: 0, mods: 0 });
+      }
+      touchScrollAccX -= xSteps * scrollStep.x;
+      if (Math.abs(rawXSteps) > MAX_TOUCH_WHEEL_STEPS_PER_MOVE) {
+        touchScrollAccX = Math.sign(touchScrollAccX) * Math.max(0, scrollStep.x - 1);
+      }
+    }
+  }
+}, { passive: false });
+
+canvas.addEventListener("touchend", (e) => {
+  e.preventDefault();
+  const keyboardLongPressTriggered = cancelKeyboardLongPressTracker();
+  if (keyboardLongPressTriggered) {
+    touchGestureSuppressedByPane = false;
+    touchState = TOUCH_IDLE;
+    touchScrollAccX = 0;
+    touchScrollAccY = 0;
+    pinchStartDist = 0;
+    return;
+  }
+  if (touchGestureSuppressedByPane) {
+    if (e.touches.length === 0) {
+      touchGestureSuppressedByPane = false;
+      touchState = TOUCH_IDLE;
+      touchScrollAccX = 0;
+      touchScrollAccY = 0;
+      pinchStartDist = 0;
+    }
+    return;
+  }
+  // If we were tracking a single finger and it ended quickly without much movement, it's a tap.
+  if (touchState === TOUCH_TRACKING && e.changedTouches.length > 0) {
+    const elapsed = Date.now() - touchStartTime;
+    const t = e.changedTouches[0];
+    const dist = Math.hypot(t.clientX - touchStartX, t.clientY - touchStartY);
+    if (elapsed < TAP_MAX_TIME && dist < TAP_MAX_DIST) {
+      const cell = touchCellCoords(t.clientX, t.clientY);
+      // Pointer Events are unavailable on this browser, so synthesize pane
+      // tap lifecycle directly to keep pane interactions functional on touch.
+      if (!("PointerEvent" in window)) {
+        const pointerId = clampPointerId(Number(t.identifier ?? 0) + 1);
+        if (typeof runner.panePointerDownAt === "function") {
+          const downDispatch = runner.panePointerDownAt(pointerId, 0, cell.x, cell.y, 0);
+          applyPaneCaptureCommand(downDispatch);
+        }
+        if (typeof runner.panePointerUpAt === "function") {
+          const upDispatch = runner.panePointerUpAt(pointerId, 0, cell.x, cell.y, 0);
+          applyPaneCaptureCommand(upDispatch, { skipAcquireAck: true });
+        }
+        persistPaneWorkspace();
+        syncPaneOverlayFromRunner();
+      }
+      safeTermInput({ kind: "mouse", phase: "down", button: 0, x: cell.x, y: cell.y, mods: 0 });
+      safeTermInput({ kind: "mouse", phase: "up",   button: 0, x: cell.x, y: cell.y, mods: 0 });
+    }
+  }
+  // If all fingers lifted, reset state.
+  if (e.touches.length === 0) {
+    touchState = TOUCH_IDLE;
+    touchScrollAccX = 0;
+    touchScrollAccY = 0;
+    pinchStartDist = 0;
+  } else if (e.touches.length === 1 && touchState === TOUCH_PINCHING) {
+    // Went from two fingers to one — restart tracking from current position.
+    touchState = TOUCH_TRACKING;
+    touchStartX = touchLastX = e.touches[0].clientX;
+    touchStartY = touchLastY = e.touches[0].clientY;
+    touchStartTime = Date.now();
+    touchScrollAccX = 0;
+    touchScrollAccY = 0;
+  }
+}, { passive: false });
+
+canvas.addEventListener("touchcancel", (e) => {
+  e.preventDefault();
+  cancelKeyboardLongPressTracker();
+  touchGestureSuppressedByPane = false;
+  touchState = TOUCH_IDLE;
+  touchScrollAccX = 0;
+  touchScrollAccY = 0;
+  pinchStartDist = 0;
+}, { passive: false });
+
+// ── Host frame loop ────────────────────────────────────────────────────
+let lastTs = 0;
+let totalFrames = 0;
+
+function frame(timestamp) {
+  try {
+    const dt = lastTs === 0 ? 16.0 : timestamp - lastTs;
+    lastTs = timestamp;
+
+    // 1. Coalesce and apply pending geometry/fit signals before stepping.
+    applyQueuedGeometrySync("frame_tick");
+
+    // 2. Advance deterministic clock.
+    runner.advanceTime(dt);
+
+    // 3. Drain normalized inputs from FrankenTermWeb -> push to runner.
+    const inputs = term.drainEncodedInputs();
+    for (let i = 0; i < inputs.length; i++) {
+      runner.pushEncodedInput(inputs[i]);
+    }
+
+    // 4. Step the application.
+    const result = runner.step();
+
+    // 5. If a frame was rendered, apply patches and present.
+    if (result.rendered) {
+      const patches = takeRunnerPatches();
+      if (patches.cells.length > 0) {
+        term.applyPatchBatchFlat(patches.spans, patches.cells);
+      }
+      term.render();
+      totalFrames++;
+
+      if (LOG_JSONL) {
+        const stats = runner.patchStats();
+        jsonl({
+          event: "frame",
+          frame_idx: result.frame_idx,
+          events_processed: result.events_processed,
+          patch_hash: runner.patchHash(),
+          dirty_cells: stats ? stats.dirty_cells : 0,
+          patch_count: stats ? stats.patch_count : 0,
+          ts: Date.now(),
+        });
+      }
+    }
+
+    // 6. Drain logs.
+    const logs = runner.takeLogs();
+    for (let i = 0; i < logs.length; i++) {
+      jsonl({ event: "log", text: logs[i], frame_idx: result.frame_idx, ts: Date.now() });
+    }
+    syncPaneOverlayFromRunner();
+
+    // 7. Continue or stop.
+    if (result.running) {
+      requestAnimationFrame(frame);
+    } else {
+      status.textContent = `${currentCols}\u00d7${currentRows} \u2014 stopped (${totalFrames} frames)`;
+      jsonl({ event: "quit", total_frames: totalFrames, ts: Date.now() });
+      runner.destroy();
+    }
+  } catch (e) {
+    const errorText = e && typeof e === "object" && "stack" in e ? String(e.stack) : String(e);
+    jsonl({ event: "runtime_error", error: errorText, ts: Date.now() });
+    showError(`Runtime error in frame loop:\n${errorText}`);
+    try {
+      runner.destroy();
+    } catch (_) {}
+  }
+}
+
+// Focus the canvas and start.
+focusTerminalInputTarget(false);
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

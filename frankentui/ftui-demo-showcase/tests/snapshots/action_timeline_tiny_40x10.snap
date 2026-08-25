@@ -1,0 +1,10 @@
+╭───────────Filters + Follow───────────╮
+│Follow[F]: ON  Component[C]: all  Seve│
+╰──────────────────────────────────────╯
+╭────────────Event Timeline────────────╮
+│   7 INFO  widgets sub     Subscriptio│
+│   8 WARN  core    sub     Subscriptio│
+│   9 ERROR core    render  Frame diff │
+│  10 TRACE runtime render  Frame diff │
+│  11 DEBUG runtime render  Frame diff │
+╰──────────────────────────────────────╯

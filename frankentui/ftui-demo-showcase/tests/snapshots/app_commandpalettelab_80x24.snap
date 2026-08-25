@@ -1,0 +1,24 @@
+ 1: Tour │ 2: Dash │ 3: Shakes │ 4: Code │ 5: Widgets │ 6: Layout │ 7: Forms    
+╭─────────────────────────Command Palette Evidence Lab─────────────────────────╮
+│Match Mode: 0 All  1 Exact  2 Prefix  3 WordStart  4 Substring  5 Fuzzy       │
+│Type to filter · ↑/↓ navigate · Enter execute · b bench · m cycle             │
+│                                            ╭────────Evidence Ledger─────────╮│
+│                                            │Selected: Go to Log Search      ││
+│                                            │Match: Substring  P=74.3%  BF=  ││
+│      ╭───── Command Palette ──────╮        │2.89                            ││
+│      │>log                        │        │Why this won: Go to Log Search ·││
+│      │> [Navigation] Go to Log Se…│        │                                ││
+│      │                            │        │MatchType: BF=2.00 (supports) - ││
+│      ╰────────────────────────────╯        │contiguous substring            ││
+│                                            │Position: BF=1.07 (supports) -  ││
+│                                            │first match at position 6       ││
+│                                            │WordBoundary: BF=1.30 (supports)││
+│                                            │- 1 word boundary matches       ││
+│                                            │                                ││
+│                                            │╭Bench (determi╮ ╭─Hint Ranker─╮││
+│                                            ││Status: OFF   │ │1. Enter     │││
+│                                            ││QPS: 0.0      │ │Execute      │││
+│                                            │╰──────────────╯ ╰─────────────╯││
+│                                            ╰────────────────────────────────╯│
+╰──────────────────────────────────────────────────────────────────────────────╯
+ Command Palette Evidence Lab [39/45]    Tab/Shift+Tab: next/prev     0x0 00:00 

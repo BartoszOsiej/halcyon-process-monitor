@@ -1,0 +1,24 @@
+ 1: Tour │ 2: Dash │ 3: Shakes │ 4: Code │ 5: Widgets │ 6: Layout │ 7: Forms    
+╭────────────────────────────────Widget Gallery────────────────────────────────╮
+│▸ A: Inputs │   B: Display │   C: Status │   D: Data Viz │   E: Navigation │  │
+│╭TextInput────╮╭Masked Input─╮╭Command Palette────────╮╭Log Viewer───────────╮│
+││@example.com ││••••••       ││                       ││DEBUG layout:        ││
+││             ││             ││                       ││resolved 6           ││
+│╰─────────────╯╰─────────────╯│                       ││constraints          ││
+│╭TextArea────────────────────╮│                       ││WARN  io: slow disk  ││
+││1  FrankenTUI text area     │╰───────────────────────╯│detected, using ca 0 ││
+││2  - Multi-line editing     │╭File Picker────────────╮╰─────────────────────╯│
+││3  - Soft wrap enabled      ││.                      │╭ProgressBar──────────╮│
+││4  - Line numbers           ││> ?? benches           ││         0%          ││
+││                            ││  ?? data              ││         25%         ││
+││                            ││  ?? src               ││         50%         ││
+│╰────────────────────────────╯╰───────────────────────╯╰─────────────────────╯│
+│╭Checkbo╮╭Select╮╭Validation ╮╭Notifications──────────╮╭Spinners─────────────╮│
+││[ ] Ena││Select││! Invalid …││                       ││⠋ Loading (DOTS)     ││
+││[x] Syn││Number││ETA  00:59 ││                       │╰─────────────────────╯│
+││( ) Lig││Slider││[?]…       ││                       │╭Toast────────────────╮│
+││(*) Dar││      ││           │╰───────────────────────╯│                     ││
+│╰───────╯╰──────╯╰───────────╯                         ╰─────────────────────╯│
+│*.......                                                                      │
+╰──────────────────────────────────────────────────────────────────────────────╯
+ Widget Gallery [5/45] [h] [cmd] [p] [d]   Tab/Shift+Tab: next/prev   0x0 00:00 

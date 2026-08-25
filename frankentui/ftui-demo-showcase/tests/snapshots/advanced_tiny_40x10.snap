@@ -1,0 +1,10 @@
+╭─Error Traceback──╮╭Timers & Spinners─╮
+│── Application Err││Compact timer: 5m0│
+│  File "src/main.r││Clock timer:   02:│
+│   40 │ fn main() │╰──────────────────╯
+│   41 │     let co│╭──Macro Recorder──╮
+│ ❱ 42 │     app::r││State: Idle       │
+│   43 │     Ok(())│╰──────────────────╯
+│   44 │ }         │╭───System Info────╮
+╰──────────────────╯╰──────────────────╯
+Tick: 0 | Ctrl+←/→: panels | r: reset | 

@@ -1,0 +1,10 @@
+╭Sparklines─╮╭Bar Chart (╮╭Spectrum Bar╮
+│Sine wave: ││▄▄ ▄▄ ▆▆  ▆││      █ █ █ │
+│▄▇█▅▁ ▃▇█▆▂││   Q1      ││3 6 1 2 5 1 │
+╰───────────╯╰───────────╯╰────────────╯
+╭Line Chart─╮╭Canvas + He╮╭Signal Matri╮
+│           ││           ││            │
+╰───────────╯╰───────────╯╰────────────╯
+╭─Sine──╮ ╭──Cos──╮ ╭─Noise─╮ ╭──Mix──╮ 
+╰───────╯ ╰───────╯ ╰───────╯ ╰───────╯ 
+Tick: 30 | Arrows: panels | d: bar dir |

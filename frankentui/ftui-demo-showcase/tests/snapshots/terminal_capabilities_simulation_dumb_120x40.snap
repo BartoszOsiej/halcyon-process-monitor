@@ -1,0 +1,40 @@
+╭──────────────────────────────────────────── Terminal Capability Explorer ────────────────────────────────────────────╮
+│Detected: xterm-256color | Simulated: dumb | View: Simulation                                                         │
+│Color depth: mono | Mux: no | Sync output: no                                                                         │
+│Scroll region: no | Hyperlinks: no | Clipboard: no | overrides: none                                                  │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭ Detected vs Simulated ─────────────────────────────────────────────╮╭ Profile Simulation ────────────────────────────╮
+│Capability                                   │Detected │Simulated│Δ ││Simulated profile: dumb                         │
+│True color (24-bit)                          │no       │no       │  ││  detected                                      │
+│256-color palette                            │yes      │no       │! ││  modern                                        │
+│Synchronized output                          │no       │no       │  ││  xterm-256color                                │
+│Scroll region (DECSTBM)                      │yes      │no       │! ││  xterm                                         │
+│OSC 8 hyperlinks                             │no       │no       │  ││  vt100                                         │
+│Kitty keyboard protocol                      │no       │no       │  ││> dumb                                          │
+│Focus events                                 │no       │no       │  ││  tmux                                          │
+│Bracketed paste                              │yes      │no       │! ││  screen                                        │
+│SGR mouse                                    │yes      │no       │! ││  zellij                                        │
+│OSC 52 clipboard                             │no       │no       │  ││  kitty                                         │
+│                                                                    ││  windows-console                               │
+│                                                                    ││  linux                                         │
+│                                                                    ││P: cycle profiles | R: reset to detected        │
+│                                                                    ││                                                │
+│                                                                    ││                                                │
+│                                                                    ││Preview: color=mono sync=no mux=no              │
+│                                                                    │╰────────────────────────────────────────────────╯
+│                                                                    │╭ Fallback Policy ───────────────────────────────╮
+│                                                                    ││Sync output: no (terminal lacks support)        │
+│                                                                    ││Scroll region: no (terminal lacks support)      │
+│                                                                    ││Mux safety: inactive                            │
+│                                                                    ││                                                │
+│                                                                    ││                                                │
+│                                                                    ││                                                │
+│                                                                    ││                                                │
+│                                                                    │╰────────────────────────────────────────────────╯
+│                                                                    │╭ Environment ───────────────────────────────────╮
+│                                                                    ││TERM=xterm-256color                             │
+│                                                                    ││TERM_PROGRAM=ftui-test                          │
+│                                                                    ││COLORTERM=truecolor                             │
+│                                                                    ││NO_COLOR=no                                     │
+│                                                                    ││MUX: tmux=no screen=no zellij=no wezterm_socket=│
+╰────────────────────────────────────────────────────────────────────╯╰────────────────────────────────────────────────╯

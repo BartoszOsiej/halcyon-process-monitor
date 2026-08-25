@@ -1,0 +1,89 @@
+{
+  "model_id": "opentui-migration-confidence-model",
+  "schema_version": "confidence-model-v1",
+  "model_version": "2026-02-25",
+  "decision_space": {
+    "actions": ["accept", "hold", "reject", "rollback", "conservative_fallback"],
+    "states": ["pre_certification", "certified", "deployed", "rolled_back"]
+  },
+  "loss_matrix": {
+    "accept_correct": 0.0,
+    "accept_incorrect": 100.0,
+    "hold_correct": 5.0,
+    "hold_incorrect": 10.0,
+    "reject_correct": 2.0,
+    "reject_incorrect": 50.0,
+    "rollback_cost": 25.0,
+    "conservative_fallback_cost": 8.0
+  },
+  "prior_config": {
+    "semantic_pass_rate_alpha": 2.0,
+    "semantic_pass_rate_beta": 1.0,
+    "performance_mean_prior": 0.0,
+    "performance_variance_prior": 1.0,
+    "unsupported_feature_penalty_per_item": 5.0
+  },
+  "likelihood_sources": [
+    {
+      "source_id": "semantic_diff",
+      "weight": 0.35,
+      "description": "Semantic equivalence diff outcomes per contract clause"
+    },
+    {
+      "source_id": "metamorphic_test",
+      "weight": 0.25,
+      "description": "Metamorphic and concolic test pass rate"
+    },
+    {
+      "source_id": "performance_delta",
+      "weight": 0.20,
+      "description": "Performance regression relative to source baseline"
+    },
+    {
+      "source_id": "unsupported_features",
+      "weight": 0.10,
+      "description": "Penalty for unresolved unsupported features"
+    },
+    {
+      "source_id": "accessibility_delta",
+      "weight": 0.10,
+      "description": "Accessibility compliance delta"
+    }
+  ],
+  "decision_boundaries": {
+    "auto_approve_threshold": 0.95,
+    "human_review_lower": 0.70,
+    "human_review_upper": 0.95,
+    "reject_threshold": 0.40,
+    "hard_reject_threshold": 0.20,
+    "rollback_trigger": 0.15
+  },
+  "calibration": {
+    "credible_interval_width": 0.90,
+    "conformal_coverage_target": 0.95,
+    "min_calibration_samples": 10,
+    "recalibration_trigger_drift": 0.05
+  },
+  "fallback_triggers": [
+    {
+      "trigger_id": "ft-critical-clause-fail",
+      "condition": "Any critical-severity contract clause fails",
+      "action": "reject"
+    },
+    {
+      "trigger_id": "ft-determinism-failure",
+      "condition": "Determinism attestation shows divergence",
+      "action": "reject"
+    },
+    {
+      "trigger_id": "ft-confidence-collapse",
+      "condition": "Posterior credible interval width exceeds 0.5",
+      "action": "hold"
+    },
+    {
+      "trigger_id": "ft-performance-regression",
+      "condition": "p99 latency exceeds 3x source baseline",
+      "action": "hold"
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+ 1: Tour │ 2: Dash │ 3: Shakes │ 4: Code │ 5: Widgets │ 6: Layout │ 7: Forms    
+╭──────────────────────────────Virtualized Search──────────────────────────────╮
+│╭Search (/ to focus, Esc to clear)───────────────────────────────────────────╮│
+││Type to search...                                                           ││
+│╰────────────────────────────────────────────────────────────────────────────╯│
+│╭─────────────────Items (10000 total)─────────────────╮╭────────Stats────────╮│
+││[00000] Configuration :: CoreService initialized — pa││Total:    10000 items││
+││[00001] Authentication :: CoreService initialized — p││Matches:  10000      ││
+││[00002] Database :: CoreService initialized — payload││Selected: 1          ││
+││[00003] Network :: CoreService initialized — payload_││Query:    ""         ││
+││[00004] FileSystem :: CoreService initialized — paylo││Top score: 0         ││
+││[00005] Logging :: CoreService initialized — payload_││                     ││
+││[00006] Security :: CoreService initialized — payload││Keybindings:         ││
+││[00007] Performance :: CoreService initialized — payl││  /      Focus search││
+││[00008] Configuration :: CoreService updated — payloa││  Esc    Clear search││
+││[00009] Authentication :: CoreService updated — paylo││  j/k    Navigate    ││
+││[00010] Database :: CoreService updated — payload_10 ││  g/G    Top/Bottom  ││
+││[00011] Network :: CoreService updated — payload_11  ││  PgUp/Dn  Page scrol││
+││[00012] FileSystem :: CoreService updated — payload_1││                     ││
+││[00013] Logging :: CoreService updated — payload_13  ││                     ││
+││[00014] Security :: CoreService updated — payload_14 ││                     ││
+│╰─────────────────────────────────────────────────────╯╰─────────────────────╯│
+╰──────────────────────────────────────────────────────────────────────────────╯
+ Virtualized Search [28/45] [h] [cmd] [p] [d]Tab/Shift+Tab: next/prev 0x0 00:00 

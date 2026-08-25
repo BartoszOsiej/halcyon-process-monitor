@@ -1,0 +1,24 @@
+ 1: Tour │ 2: Dash │ 3: Shakes │ 4: Code │ 5: Widgets │ 6: Layout │ 7: Forms    
+╭────────────────────────────Performance Challenge─────────────────────────────╮
+│PERFORMANCE CHALLENGE MODE — DEGRADATION TIERS                                │
+│╭──────Real-Time Metrics───────╮╭Tick Intervals (µs╮╭─────Render Budget──────╮│
+││  Sim FPS:        60.0 (Full F││                  ││  Budget: 16.67ms (60fps││
+││  Obs FPS:         0.0        ││                  ││  Observed: 0.00ms avg  ││
+││  Tick Rate:       0.0 tps    ││                  ││  Simulated: 16.67ms (+0││
+││                              ││                  ││  Usage:  100%          ││
+││  Latency (ms)                ││                  ││                        ││
+││  avg:      0.00              ││                  ││  Budget Bar            ││
+││  p50:      0.00              ││                  ││  ██████████|░░░░░░░░░  ││
+││  p95:      0.00              ││                  ││                        ││
+││  p99:      0.00              ││                  ││  Stress Harness        ││
+││  min:      0.00              ││                  ││  Mode: Off  | Load   0%││
+││  max:      0.00              ││                  ││  Decision: stable      ││
+││                              ││                  ││  Last change: --       ││
+││  Counters                    ││                  ││                        ││
+││  Views:             1        ││                  ││                        ││
+││  Ticks:             0        ││                  ││  Degradation Tier      ││
+││  Samples:           0        ││                  ││  ████ Full Fidelity    ││
+│╰──────────────────────────────╯╰──────────────────╯╰────────────────────────╯│
+│s:stress(Off) | c:cool | r:reset | p:pause | m:mode(intervals) | 1-4:tier(Full│
+╰──────────────────────────────────────────────────────────────────────────────╯
+ Performance Challenge [32/45]        Tab/Shift+Tab: next/prev        0x0 00:00 

@@ -1,0 +1,40 @@
+╭───────────────────────────────────────────────────Filters + Follow───────────────────────────────────────────────────╮
+│Follow[F]: OFF  Component[C]: all  Severity[S]: all  Type[T]: all  Clear[X]                                           │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭──────────────────────────Event Timeline──────────────────────────╮╭───────────────────Event Detail───────────────────╮
+│   0 TRACE core    input   Key event processed                    ││ID: 1                                             │
+│   1 DEBUG core    input   Key event processed                    ││Tick: 0                                           │
+│   2 INFO  runtime input   Key event processed                    ││Severity: TRACE                                   │
+│   3 WARN  runtime cmd     Command dispatched to model            ││Component: core                                   │
+│   4 ERROR render  cmd     Command dispatched to model            ││Type: input                                       │
+│   5 TRACE render  cmd     Command dispatched to model            ││                                                  │
+│   6 DEBUG widgets sub     Subscription tick delivered            ││Summary:                                          │
+│   7 INFO  widgets sub     Subscription tick delivered            ││  Key event processed                             │
+│   8 WARN  core    sub     Subscription tick delivered            ││                                                  │
+│   9 ERROR core    render  Frame diff computed                    ││Fields:                                           │
+│  10 TRACE runtime render  Frame diff computed                    ││  latency_ms: 2                                   │
+│  11 DEBUG runtime render  Frame diff computed                    ││  diff_cells: 0                                   │
+│   2 INFO  runtime input   Key event processed                    ││  ansi_bytes: 0                                   │
+│   4 ERROR render  cmd     Command dispatched to model            ││                                                  │
+│   6 DEBUG widgets sub     Subscription tick delivered            ││                                                  │
+│   8 WARN  core    sub     Subscription tick delivered            ││                                                  │
+│  10 TRACE runtime render  Frame diff computed                    ││                                                  │
+│  12 INFO  render  present Presenter emitted ANSI batch           ││                                                  │
+│  14 ERROR widgets present Presenter emitted ANSI batch           ││                                                  │
+│  16 DEBUG core    caps    Capability probe updated               ││                                                  │
+│  18 WARN  runtime budget  Render budget degraded                 ││                                                  │
+│  20 TRACE render  budget  Render budget degraded                 ││                                                  │
+│  20 INFO  runtime cmd     Auto-follow disabled                   ││                                                  │
+│                                                                  ││                                                  │
+│                                                                  ││                                                  │
+│                                                                  ││                                                  │
+│                                                                  ││                                                  │
+│                                                                  ││                                                  │
+│                                                                  ││                                                  │
+│                                                                  ││                                                  │
+│                                                                  ││                                                  │
+│                                                                  ││                                                  │
+│                                                                  ││                                                  │
+│                                                                  ││                                                  │
+│                                                                  ││                                                  │
+╰──────────────────────────────────────────────────────────────────╯╰──────────────────────────────────────────────────╯

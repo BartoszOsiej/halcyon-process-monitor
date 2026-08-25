@@ -1,0 +1,24 @@
+Mode: Inline  |  Compare: OFF  |  Anchor: Bottom  |  UI height: 2  |  Rate: 2/ti
+Status: Live  |  Lines: 60  |  Scrollback preserved in inline mode              
+╭Inline Mode Story─────────────────────────────────────────────────────────────╮
+│000042 [ERROR] runtime inline anchor                                          │
+│000043 [DEBUG] runtime inline anchor                                          │
+│000044 [INFO ] runtime inline anchor                                          │
+│000045 [WARN ] widgets inline anchor                                          │
+│000046 [ERROR] widgets inline anchor                                          │
+│000047 [DEBUG] widgets inline anchor                                          │
+│000048 [INFO ] io      inline anchor                                          │
+│000049 [WARN ] io      budget check                                           │
+│000050 [ERROR] io      budget check                                           │
+│000051 [DEBUG] layout  budget check                                           │
+│000052 [INFO ] layout  budget check                                           │
+│000053 [WARN ] layout  budget check                                           │
+│000054 [ERROR] core    budget check                                           │
+│000055 [DEBUG] core    budget check                                           │
+│000056 [INFO ] core    diff pass                                              │
+│000057 [WARN ] render  diff pass                                              │
+│000058 [ERROR] render  diff pass                                              │
+│000059 [DEBUG] render  diff pass                                              │
+│ INLINE MODE - SCROLLBACK PRESERVED                                           │
+│ Anchor: BOTTOM  |  UI height: 2  |  Log rate: 2/tick                         │
+╰──────────────────────────────────────────────────────────────────────────────╯

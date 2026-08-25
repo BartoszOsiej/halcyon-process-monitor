@@ -1,0 +1,40 @@
+╭───────────────────────────Timeline (1/50)────────────────────────────╮╭──────────────────Frame Info──────────────────╮
+│░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░││Status: ▶ Playing                             │
+╰──────────────────────────────────────────────────────────────────────╯│                                              │
+╭────────────────────────────Frame Preview─────────────────────────────╮│Frame: 1/50                                   │
+│Frame 1/50                                                            ││Size: 40x15                                   │
+│                                                                      ││Changes: 600 cells                            │
+│                                                                      ││Memory: 9600 bytes                            │
+│Hello, World!                                                         ││Checksum: 18f5a12b74525a16                    │
+│                                                                      ││Render: 100µs                                 │
+│                                                                      ││                                              │
+│                                                                      ││Chain hash: 48a61a424c087d5d                  │
+│                                                                      ││Markers: 0                                    │
+│                                                                      ││Marked: No                                    │
+│                                                                      ││                                              │
+│                                                                      ││── Compare ──                                 │
+│                                                                      ││View: Single                                  │
+│                                                                      ││Heatmap: Off                                  │
+│█                                                                     ││A: #1  18f5a12b74525a16                       │
+│                                                                      ││B: #2  c5b5eeab873924ca                       │
+│                                                                      ││Diff: n/a                                     │
+│                                                                      ││                                              │
+│                                                                      ││── Controls ──                                │
+│                                                                      ││Space: Play/Pause                             │
+│                                                                      ││←/→ or h/l: Step                              │
+│                                                                      ││Home/End or g/G: First/Last                   │
+│                                                                      ││M: Toggle marker                              │
+│                                                                      ││R: Toggle record                              │
+│                                                                      ││C: Clear                                      │
+│                                                                      ││D: Diagnostics                                │
+│                                                                      ││V: Toggle compare view                        │
+│                                                                      ││A/B: Pin compare A/B                          │
+│                                                                      ││X: Swap A/B                                   │
+│                                                                      ││H: Heatmap overlay                            │
+│                                                                      ││E: Export JSONL                               │
+│                                                                      ││                                              │
+│                                                                      ││                                              │
+│                                                                      ││                                              │
+│                                                                      ││                                              │
+│                                                                      ││                                              │
+╰──────────────────────────────────────────────────────────────────────╯╰──────────────────────────────────────────────╯

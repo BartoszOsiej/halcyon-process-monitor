@@ -1,0 +1,60 @@
+Mermaid Showcase | Flow Basic (1/29) | Layout: Auto | Score: 0.8 | Viewport: auto | OK                                                                                                                  
+╭─────────────────────Samples──────────────────────╮╭───────────────────────────────────────────────Viewport───────────────────────────────────────────────╮╭─────────────────Controls─────────────────╮
+│> Flow Basic [flow, S, branch, decision]          ││                                                                                                      ││Layout: Auto (l)                          │
+│  Flow Subgraphs [flow, M, subgraph, clusters]    ││                                                                                                      ││Tier: auto (t)                            │
+│  Flow Dense [flow, L, dense, dag]                ││                                                                                                      ││Guard: Default (x)                        │
+│  Flow Long Labels [flow, M, labels, wrap]        ││                                                                                                      ││Glyphs: unicode (g)                       │
+│  Flow Unicode [flow, S, unicode, labels]         ││                                                                                                      ││Render: braille (b)                       │
+│  Flow Styles [flow, M, classdef, style]          ││                                                                                                      ││Wrap: wordchar (w)                        │
+│  Sequence Mini [sequence, S, compact]            ││                                                                                                      ││Styles: on (s)                            │
+│  Sequence Checkout [sequence, M, multi-hop, api] ││                                                                                                      ││Links: off (u)                            │
+│  Sequence Dense [sequence, L, dense, timing]     ││                                                                                                      ││Init: off (I)                             │
+│  Class Basic [class, S, inheritance, association]││                                                                                                      ││Errors: panel (e)                         │
+│  Class Members [class, M, fields, methods]       ││                                                                                                      ││Viewport: auto (v)                        │
+│  State Basic [state, S, start-end]               ││                                                                                                      ││Zoom: 100% (+/-)                          │
+│  State Composite [state, M, composite, notes]    ││                                                                                                      ││Fit: f                                    │
+│  ER Basic [er, M, cardinality, relations]        ││                                                                                                      ││Metrics: on (m)                           │
+│  Gantt Basic [gantt, M, sections, tasks]         ││                                                                                                      ││                                          │
+│  Mindmap Seed [mindmap, S, tree]                 ││                                                                                                      ││                                          │
+│  Mindmap Deep [mindmap, L, deep, wide]           ││                                                                           ┌────────────────────────┐ ││                                          │
+│  Pie Basic [pie, S, title, showdata]             ││                                                                           │▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄│ ││                                          │
+│  Pie Many [pie, M, many-slices]                  ││                                                                           │                        │ ││                                          │
+│  Gitgraph Basic [gitgraph, M, gitgraph, branches]││                                                                           │           OK           │ ││                                          │
+│  Journey Basic [journey, M, journey, sections]   ││                                                                           │                        │ ││                                          │
+│  Requirement Basic [requirement, M, requirement, ││                                                                           │                        │ ││                                          │
+│  Block Beta Basic [block-beta, S, block-beta, col││                                                                           │▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀│ ││                                          │
+│  Block Beta Nested [block-beta, M, block-beta, ne││                                                                           └────────────────────────┘ ││                                          │
+│  Flow Node Shapes [flow, S, shapes, node-shapes] ││ ┌────────────────────────┐                       ╲╱                  Yes  │                          ││                                          │
+│  ER Multi-Entity [er, L, multi-entity, complex-re││ │▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄│                    ╲      ╱                    │                          ││                                          │
+│  Gantt Dependencies [gantt, L, dependencies, mile││ │                        │                 ╲            ╱                 │                          ││                                          │
+│  Class Hierarchy [class, L, inheritance, abstract││ │         Start          │              ╲      Check       ╱              │                          ││                                          │
+│  State Concurrent [state, L, concurrent, fork, ch││ │                        │───────────╲                        ╱───────────┤                          ││                                          │
+│                                                  ││ │                        │              ╱                  ╲              │                          ││                                          │
+│                                                  ││ │▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀│                 ╱            ╲                 │                          │╰──────────────────────────────────────────╯
+│                                                  ││ └────────────────────────┘                    ╱      ╲                    │                          │╭─────────────────Metrics──────────────────╮
+│                                                  ││                                                                      No   ┌────────────────────────┐ ││Cache: hit 0  miss 1  last miss           │
+│                                                  ││                                                                           │▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄│ ││Warnings: 0                               │
+│                                                  ││                                                                           │                        │ ││Parse: 0.00 ms                            │
+│                                                  ││                                                                           │          Fix           │ ││Layout: 0.00 ms                           │
+│                                                  ││                                                                           │                        │ ││Render: 0.00 ms                           │
+│                                                  ││                                                                           │                        │ ││Viewport: auto                            │
+│                                                  ││                                                                           │▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀│ ││Zoom: 100%                                │
+│                                                  ││                                                                           └────────────────────────┘ ││Iters: 1                                  │
+│                                                  ││                                                                                                      ││Score: 0.77                               │
+│                                                  ││                                                                                                      ││Cross: 0                                  │
+│                                                  ││                                                                                                      ││Bends: 0                                  │
+│                                                  ││                                                                                                      ││Sym: 0.67                                 │
+│                                                  ││                                                                                                      ││Comp: 0.35                                │
+│                                                  ││                                                                                                      ││Edge var: 0.47                            │
+│                                                  ││                                                                                                      ││Label col: 0                              │
+│                                                  ││                                                                                                      ││Guard                                     │
+│                                                  ││                                                                                                      ││Nodes: 4/200                              │
+│                                                  ││                                                                                                      ││Edges: 3/400                              │
+│                                                  ││                                                                                                      ││Route ops: 38/4000                        │
+│                                                  ││                                                                                                      ││Layout iters: 5/200                       │
+│                                                  ││                                                                                                      ││Degrade: normal (none)                    │
+│                                                  ││                                                                                                      ││                                          │
+│                                                  ││                                                                                                      ││                                          │
+│                                                  ││                                                                                                      ││                                          │
+╰──────────────────────────────────────────────────╯╰──────────────────────────────────────────────────────────────────────────────────────────────────────╯╰──────────────────────────────────────────╯
+j/k sample  Enter render  l layout  t tier  u links  I init  e errors  x guard  v view  +/- zoom  m metrics  ? help | parse 0ms | layout 0ms | render 0ms                                               

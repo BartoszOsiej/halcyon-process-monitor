@@ -1,0 +1,24 @@
+╭──────────Registration Form───────────╮╭─────────────Text Inputs──────────────╮
+│ DRAFT   REQ 0/3   ERR 0   FIELDS 3/6 ││ Search   Search...                   │
+│Name *:         Enter your name...    ││ Password Password                    │
+│Email *:        user@example.com      ││                                      │
+│Role:             Developer           │╰──────────────────────────────────────╯
+│Theme:          (1) Light             │╭─────────────Text Editor──────────────╮
+│Age:              25                  ││1  Hello, world!                      │
+│Accept Terms *: [ ]                   ││2                                     │
+│                                      ││3  This is a multi-line text editor.  │
+│                                      ││4  You can type, select, undo/redo, an│
+│                                      ││5                                     │
+│                                      ││6  Try Shift+Arrow to select text.    │
+│                                      ││7  Ctrl+A selects all.                │
+│                                      ││8  Ctrl+Z to undo, Ctrl+Y to redo.    │
+│                                      ││                                      │
+│                                      ││                                      │
+│                                      ││                                      │
+│                                      ││                                      │
+│                                      ││                                      │
+│                                      ││                                      │
+│Tab: next | Enter: submit | Esc: cance││                                      │
+│Legend: * required | red=error | green││                                      │
+╰──────────────────────────────────────╯╰──────────────────────────────────────╯
+Editing: Name (field 1/6) | Required: 0/3 | Undo:0 Redo:0 | Errors: 0 | Ctrl+U: 

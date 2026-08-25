@@ -1,0 +1,24 @@
+Match Mode: 0 All  1 Exact  2 Prefix  3 WordStart  4 Substring  5 Fuzzy         
+Type to filter · ↑/↓ navigate · Enter execute · b bench · m cycle               
+                                             ╭─────────Evidence Ledger─────────╮
+                                             │Selected: Go to Log Search       │
+                                             │Match: Substring  P=74.3%  BF=   │
+      ╭───── Command Palette ──────╮         │2.89                             │
+      │>log                        │         │Why this won: Go to Log Search · │
+      │> [Navigation] Go to Log Se…│         │                                 │
+      │                            │         │MatchType: BF=2.00 (supports) -  │
+      ╰────────────────────────────╯         │contiguous substring             │
+                                             │Position: BF=1.07 (supports) -   │
+                                             │first match at position 6        │
+                                             │WordBoundary: BF=1.30 (supports) │
+                                             │- 1 word boundary matches        │
+                                             │TitleLength: BF=1.04 (supports) -│
+                                             │                                 │
+                                             │╭Bench (determi╮ ╭─Hint Ranker──╮│
+                                             ││Status: OFF   │ │1. Enter      ││
+                                             ││QPS: 0.0      │ │Execute       ││
+                                             ││Processed: 0  │ │EU=0.83  V=   ││
+                                             ││Query: -      │ │0.75          ││
+                                             ││Latency: 0us  │ │2. Ctrl+P Open││
+                                             │╰──────────────╯ ╰──────────────╯│
+                                             ╰─────────────────────────────────╯

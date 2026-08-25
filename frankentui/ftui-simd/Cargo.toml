@@ -1,0 +1,14 @@
+[package]
+name = "ftui-simd"
+version = "0.6.0"
+edition = "2024"
+license = "LicenseRef-MIT-OpenAI-Anthropic-Rider"
+description = "Optional safe SIMD-friendly optimizations for FrankenTUI."
+repository = "https://github.com/Dicklesworthstone/frankentui"
+homepage = "https://github.com/Dicklesworthstone/frankentui"
+documentation = "https://docs.rs/ftui-simd"
+readme = "../../README.md"
+keywords = ["tui", "terminal", "ui", "ftui", "frankentui"]
+categories = ["command-line-interface", "gui"]
+
+[dependencies]

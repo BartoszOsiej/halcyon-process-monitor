@@ -86,6 +86,7 @@ pub struct RecordedEvent {
     /// Full command path from argv[0] (execve events only).
     pub argv: Option<String>,
     /// Bytes count (for network send/recv events).
+    #[allow(dead_code)]
     pub bytes: Option<String>,
 }
 
@@ -123,6 +124,7 @@ pub struct FileRank {
 
 /// Event-rate sample for sparkline visualisation.
 #[derive(Debug, Clone, Copy)]
+#[allow(dead_code)]
 pub struct RateSample {
     pub exec_count: u64,
     pub open_count: u64,
@@ -131,6 +133,7 @@ pub struct RateSample {
 
 /// A node in the process tree.
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct ProcessNode {
     pub pid: u32,
     #[allow(dead_code)]
@@ -408,11 +411,13 @@ impl Monitor {
     }
 
     /// Extension frequency map (extension → total open count across all processes).
+    #[allow(dead_code)]
     pub fn extension_counts(&self) -> &HashMap<String, u64> {
         &self.ext_counts
     }
 
     /// Sparkline-ready rate history (last N samples).
+    #[allow(dead_code)]
     pub fn rate_history(&self) -> &VecDeque<RateSample> {
         &self.rate_history
     }

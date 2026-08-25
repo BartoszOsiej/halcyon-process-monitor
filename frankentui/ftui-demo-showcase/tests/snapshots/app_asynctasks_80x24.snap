@@ -1,0 +1,24 @@
+ 1: Tour │ 2: Dash │ 3: Shakes │ 4: Code │ 5: Widgets │ 6: Layout │ 7: Forms    
+╭─────────────────────────────────Async Tasks──────────────────────────────────╮
+│Q:3 R:0 D:0 F:0 | FIFO[First-In-First-Out] | Aging:✓                          │
+│╭─────────────────Task Queue──────────────────╮╭────────Task Details─────────╮│
+││▶ Queued   [M] Initial Setup                 ││ID: 1                        ││
+││  Queued   [L] Data Sync                     ││Name: Initial Setup          ││
+││  Queued   [H] Cache Warm                    ││State: Queued                ││
+││                                             ││Priority: 2                  ││
+││                                             ││Progress: 0%                 ││
+││                                             ││Elapsed: 0 ticks             ││
+││                                             ││Estimated: 30 ticks          ││
+││                                             │╰─────────────────────────────╯│
+││                                             │╭──────────Activity───────────╮│
+││                                             ││Spawned: Initial Setup       ││
+││                                             ││Spawned: Data Sync           ││
+││                                             ││Spawned: Cache Warm          ││
+││                                             ││                             ││
+││                                             ││                             ││
+││                                             ││                             ││
+││                                             ││                             ││
+│╰─────────────────────────────────────────────╯╰─────────────────────────────╯│
+│n:spawn  c:cancel  s:scheduler  a:aging  r:retry  j/k:nav                     │
+╰──────────────────────────────────────────────────────────────────────────────╯
+ Async Tasks [29/45] [h] [cmd] [p] [d]    Tab/Shift+Tab: next/prev    0x0 00:00 

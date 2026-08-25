@@ -1,0 +1,10 @@
+╭Registration Form─╮╭───Text Inputs────╮
+│ DRAFT   REQ 0/3  ││ Search   Search..│
+│Name *:         En││ Password Password│
+│Email *:        us││                  │
+│Role:             │╰──────────────────╯
+│Theme:          (1│╭───Text Editor────╮
+│Tab: next | Enter:││1  Hello, world!  │
+│Legend: * required││2                 │
+╰──────────────────╯╰──────────────────╯
+Editing: Name (field 1/6) | Required: 0/

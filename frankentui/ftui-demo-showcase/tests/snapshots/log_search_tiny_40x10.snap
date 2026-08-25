@@ -1,0 +1,10 @@
+╭ Log Viewer ──────────────────────────╮
+│[     0]  INFO server::http       Requ│
+│[     1]  INFO db::pool           Conn│
+│[     2]  INFO auth::jwt          Toke│
+│[     3]  INFO cache::redis       Cach│
+│[     4]  INFO queue::worker      Work│
+│[     5]  INFO api::handler       Rate│
+│[     6] DEBUG core::runtime       43 │
+╰──────────────────────────────────────╯
+ NORMAL | lines: 50 | gen: 50           

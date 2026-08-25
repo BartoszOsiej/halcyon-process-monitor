@@ -1,0 +1,24 @@
+ 1: Tour │ 2: Dash │ 3: Shakes │ 4: Code │ 5: Widgets │ 6: Layout │ 7: Forms    
+╭───────────────────────────────Intrinsic Sizing───────────────────────────────╮
+│ Intrinsic Sizing Demo • Adaptive Sidebar (1/4)                               │
+│╭──╮╭Content──────────────────────────────────╮  ┌─────── Pane Studio ───────┐│
+││??││Current width: 47                        │  │mode:Focus sel:1 tl:0/0 ops││
+││? ││Sidebar mode: Icon-only mode (width < 60)│  │┃           ││            │││
+││??││                                         │  │┃ 13x6  @51 ││ 14x6  @64, │││
+││??││The sidebar adapts to terminal width:    │  │┃           ││            │││
+││??││• Narrow: icon-only (4 cols)             │  │┃           ││            │││
+││  ││• Wide: full labels (20 cols)            │  │─────■■■──────────■■■──────││
+││  ││                                         │  │╭─5 pane-3──■╭──7 pane-4──╮││
+││  ││Try resizing your terminal!              │  ││           ■│            │││
+││  ││                                         │  ││ 13x7  @51 ││ 14x7  @64, │││
+││  ││                                         │  ││           ││            │││
+││  ││                                         │  ││           ││            │││
+││  ││                                         │  ││           ││            │││
+││  ││                                         │  │╰───────────│╰────────────╯││
+││  ││                                         │  └───────────────────────────┘│
+││  ││                                         │                               │
+││  ││                                         │  ╭Pane Studio────────────────╮│
+││  ││                                         │  │Drag panes | Right click mo││
+│╰──╯╰─────────────────────────────────────────╯  ╰───────────────────────────╯│
+╰──────────────────────────────────────────────────────────────────────────────╯
+ Intrinsic Sizing [23/45] [h] [cmd] [p] [d] Tab/Shift+Tab: next/prev  0x0 00:00 

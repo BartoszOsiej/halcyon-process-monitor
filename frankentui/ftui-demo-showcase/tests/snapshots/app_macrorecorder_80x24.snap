@@ -1,0 +1,24 @@
+ 1: Tour │ 2: Dash │ 3: Shakes │ 4: Code │ 5: Widgets │ 6: Layout │ 7: Forms    
+╭────────────────────────────────Macro Recorder────────────────────────────────╮
+│╭───────────────────────────────Macro Recorder───────────────────────────────╮│
+││State: ○ Idle   Events: 0   Duration: 0ms                                   ││
+││Speed: 1.00x   Loop: Off   Progress:   0%   Filtered: 0                     ││
+││Focus: [Controls]  [Timeline]  [Scenarios]   Ctrl/Alt+Arrows: ↑Controls  ←Ti││
+││Quick Start: Enter load scenario  Space record  ↑/↓ scrub timeline          ││
+││Space/r record/stop  Enter/p play/pause  Esc stop  L loop  +/- speed        ││
+│╰────────────────────────────────────────────────────────────────────────────╯│
+│╭──────────────────Timeline───────────────────╮╭────────Event Detail─────────╮│
+││No macro loaded.                             ││Select a scenario or record a││
+││Space to record, or select a scenario and pre││                             ││
+││                                             ││                             ││
+││                                             ││                             ││
+││                                             ││                             ││
+││                                             ││                             ││
+││                                             │╰─────────────────────────────╯│
+││                                             │╭───────Scenario Runner───────╮│
+││                                             ││Preset scenarios (Enter to lo││
+││                                             ││                             ││
+││                                             ││Tab Tour                     ││
+│╰─────────────────────────────────────────────╯╰─────────────────────────────╯│
+╰──────────────────────────────────────────────────────────────────────────────╯
+ Macro Recorder [13/45] [h] [cmd] [p] [d]  Tab/Shift+Tab: next/prev   0x0 00:00 

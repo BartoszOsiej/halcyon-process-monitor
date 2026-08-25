@@ -1,0 +1,10 @@
+╭ ► Presets ╮ ╭   Token Inspector ─────╮
+│▶ Cyberpunk│ │     fg::PRIMARY        │
+│  Darcula  │ │     fg::SECONDARY      │
+│  Lumen Lig│ │     fg::MUTED          │
+│  Nordic Fr│ │     fg::DISABLED       │
+│  Doom     │ │     bg::DEEP           │
+│  Quake    │ │     bg::BASE           │
+│  Monokai  │ │     bg::SURFACE        │
+╰───────────╯ ╰────────────────────────╯
+Press E to export theme                 

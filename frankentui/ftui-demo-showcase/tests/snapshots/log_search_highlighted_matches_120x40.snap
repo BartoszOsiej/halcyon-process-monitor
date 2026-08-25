@@ -1,0 +1,40 @@
+╭ Log Viewer ──────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│[     9]  WARN server::http       Retry attempt 2/3 for downstream call                                               │
+│[    10]  WARN db::pool           Scheduled maintenance window check                                                  │
+│[    11] ERROR auth::jwt          Request processed successfully                                                      │
+│[    12] TRACE cache::redis       Connection pool health check passed                                                 │
+│[    13]  INFO queue::worker      Token refresh completed for session                                                 │
+│[    14]  INFO api::handler       Cache hit ratio: 0.94                                                               │
+│[    15]  INFO core::runtime      Worker picked up job from queue                                                     │
+│[    16]  INFO metrics::push      Rate limit threshold approaching                                                    │
+│[    17]  INFO config::reload     Garbage collection cycle completed                                                  │
+│[    18]  INFO server::http       Metric batch flushed to backend                                                     │
+│[    19] DEBUG db::pool           Configuration hot-reload triggered                                                  │
+│[    20] DEBUG auth::jwt          Retry attempt 2/3 for downstream call                                               │
+│[    21] DEBUG cache::redis       Scheduled maintenance window check                                                  │
+│[    22]  WARN queue::worker      Request processed successfully                                                      │
+│[    23]  WARN api::handler       Connection pool health check passed                                                 │
+│[    24] ERROR core::runtime      Token refresh completed for session                                                 │
+│[    25] TRACE metrics::push      Cache hit ratio: 0.94                                                               │
+│[    26]  INFO config::reload     Worker picked up job from queue                                                     │
+│[    27]  INFO server::http       Rate limit threshold approaching                                                    │
+│[    28]  INFO db::pool           Garbage collection cycle completed                                                  │
+│[    29]  INFO auth::jwt          Metric batch flushed to backend                                                     │
+│[    30]  INFO cache::redis       Configuration hot-reload triggered                                                  │
+│[    31]  INFO queue::worker      Retry attempt 2/3 for downstream call                                               │
+│[    32] DEBUG api::handler       Scheduled maintenance window check                                                  │
+│[    33] DEBUG core::runtime      Request processed successfully                                                      │
+│[    34] DEBUG metrics::push      Connection pool health check passed                                                 │
+│[    35]  WARN config::reload     Token refresh completed for session                                                 │
+│[    36]  WARN server::http       Cache hit ratio: 0.94                                                               │
+│[    37] ERROR db::pool           Worker picked up job from queue                                                     │
+│[    38] TRACE auth::jwt          Rate limit threshold approaching                                                    │
+│[    39]  INFO cache::redis       Garbage collection cycle completed                                                  │
+│[    40]  INFO queue::worker      Metric batch flushed to backend                                                     │
+│[    41]  INFO api::handler       Configuration hot-reload triggered                                                  │
+│[    42]  INFO core::runtime      Retry attempt 2/3 for downstream call                                               │
+│[    43]  INFO metrics::push      Scheduled maintenance window check                                                  │
+│[    44]  INFO config::reload     Request processed successfully                                                      │
+│ 1/8 45] DEBUG server::http       Connection pool health check passed                                               4 │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+ NORMAL | 1/8 | lines: 50 | gen: 50                                                                                     

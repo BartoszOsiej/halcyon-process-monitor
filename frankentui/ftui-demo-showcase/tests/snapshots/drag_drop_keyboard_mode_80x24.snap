@@ -1,0 +1,24 @@
+ Sortable List  |  Cross-Container  | [Keyboard Drag]                           
+╭List A────────────────────────────────╮╭List B────────────────────────────────╮
+│> Item 1                              ││  File 1                              │
+│  Item 2                              ││  File 2                              │
+│  Item 3                              ││  File 3                              │
+│  Item 4                              ││  File 4                              │
+│  Item 5                              ││  File 5                              │
+│  Item 6                              ││  File 6                              │
+│  Item 7                              ││  File 7                              │
+│  Item 8                              ││  File 8                              │
+│                                      ││                                      │
+│                                      ││                                      │
+│                                      ││                                      │
+│                                      ││                                      │
+│                                      ││                                      │
+│                                      ││                                      │
+│                                      ││                                      │
+╰──────────────────────────────────────╯╰──────────────────────────────────────╯
+╭Drag Status───────────────────────────────────────────────────────────────────╮
+│Press Space/Enter on an item to start dragging                                │
+╰──────────────────────────────────────────────────────────────────────────────╯
+ Instructions ──────────────────────────────────────────────────────────────────
+Press Space/Enter to pick up an item, arrows to navigate targets, Enter to drop.
+Escape cancels the drag. Fully keyboard-accessible drag-and-drop!               

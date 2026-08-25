@@ -1,0 +1,24 @@
+Hyperlink Playground  OSC-8 + Hit Regions                                       
+Up/Down move · Tab cycle · Enter activate · Mouse hover/click                   
+                                                                                
+╭Links (OSC-8)─────────────────────╮╭Details & Registry────────────────────────╮
+│> FrankenTUI                      ││Selected: FrankenTUI                      │
+│  Docs                            ││URL: https://ftui.dev                     │
+│  GitHub                          ││Registry ID: 1                            │
+│  OSC 8 Spec                      ││Hit: id=8000 region=Link data=1           │
+│  ANSI Reference                  ││OSC 8 open: \x1b]8;;https://ftui.dev\x1b\ │
+│                                  ││OSC 8 close: \x1b]8;;\x1b\                │
+│                                  ││Notes: Project home + overview            │
+│                                  ││Hover: None                               │
+│                                  ││                                          │
+│                                  ││Registry map                              │
+│                                  ││[1] FrankenTUI                            │
+│                                  ││[2] Docs                                  │
+│                                  ││[3] GitHub                                │
+│                                  ││[4] OSC 8 Spec                            │
+│                                  ││[5] ANSI Reference                        │
+│                                  ││                                          │
+│                                  ││                                          │
+│                                  ││                                          │
+│                                  ││                                          │
+╰──────────────────────────────────╯╰──────────────────────────────────────────╯

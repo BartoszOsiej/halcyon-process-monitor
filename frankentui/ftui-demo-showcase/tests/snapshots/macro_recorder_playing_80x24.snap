@@ -1,0 +1,24 @@
+╭────────────────────────────────Macro Recorder────────────────────────────────╮
+│State: ▶ Playing   Events: 3   Duration: 0ms                                  │
+│Speed: 1.00x   Loop: Off   Progress: 100%   Filtered: 0                       │
+│Focus: [Controls]  [Timeline]  [Scenarios]   Ctrl/Alt+Arrows: ↑Controls  ←Time│
+│Quick Start: Enter load scenario  Space record  ↑/↓ scrub timeline            │
+╰──────────────────────────────────────────────────────────────────────────────╯
+╭───────────────────Timeline───────────────────╮╭─────────Event Detail─────────╮
+│▶ 001  +   0ms  @    0ms  a                   ││Selected: #000                │
+│○ 002  +   0ms  @    0ms  b                   ││Delay:    0ms   At:     0ms   │
+│○ 003  +   0ms  @    0ms  c                   ││                              │
+│                                              ││Event: a                      │
+│                                              ││Kind: Press                   │
+│                                              ││Modifiers: Modifiers(0x0)     │
+│                                              ││                              │
+│                                              ││                              │
+│                                              ││                              │
+│                                              ││                              │
+│                                              │╰──────────────────────────────╯
+│                                              │╭───────Scenario Runner────────╮
+│                                              ││Preset scenarios (Enter to loa│
+│                                              ││                              │
+│                                              ││Tab Tour                      │
+│                                              ││  Cycle tabs and toggle the he│
+╰──────────────────────────────────────────────╯╰──────────────────────────────╯
