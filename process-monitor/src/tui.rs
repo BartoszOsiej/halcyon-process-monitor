@@ -22,20 +22,21 @@ const NETWORK_CAP: usize = 500;
 const MAX_FILES: usize = 12;
 const TICK_MS: u64 = 50; // 20 FPS
 
-// ── Cyberpunk palette ─────────────────────────────────────────────────────
+// ── Modern dark palette (2026) ────────────────────────────────────────────
+// Subtle, high-contrast, professional — inspired by GitHub Dark + Catppuccin
 
-const CYAN: Color = Color::Rgb(0, 255, 255);
-const MAGENTA: Color = Color::Rgb(255, 0, 255);
-const NEON_GREEN: Color = Color::Rgb(0, 255, 100);
-const NEON_RED: Color = Color::Rgb(255, 50, 50);
-const NEON_YELLOW: Color = Color::Rgb(255, 255, 0);
-const NEON_ORANGE: Color = Color::Rgb(255, 160, 0);
-const DIM: Color = Color::Rgb(80, 80, 100);
-const DIM_BRIGHT: Color = Color::Rgb(120, 120, 150);
-const PANEL_BORDER: Color = Color::Rgb(60, 60, 90);
-const PANEL_BORDER_ACTIVE: Color = Color::Rgb(0, 180, 255);
-const BG_DARK: Color = Color::Rgb(5, 5, 15);
-const BG_PANEL: Color = Color::Rgb(10, 10, 30);
+const CYAN: Color = Color::Rgb(88, 166, 255); // primary accent
+const MAGENTA: Color = Color::Rgb(188, 140, 255); // purple accent
+const NEON_GREEN: Color = Color::Rgb(63, 185, 80); // muted green
+const NEON_RED: Color = Color::Rgb(248, 81, 73); // soft red
+const NEON_YELLOW: Color = Color::Rgb(210, 153, 34); // amber
+const NEON_ORANGE: Color = Color::Rgb(219, 109, 40); // warm orange
+const DIM: Color = Color::Rgb(76, 82, 99); // muted gray
+const DIM_BRIGHT: Color = Color::Rgb(139, 148, 168); // bright gray
+const PANEL_BORDER: Color = Color::Rgb(48, 55, 73); // subtle border
+const PANEL_BORDER_ACTIVE: Color = Color::Rgb(88, 166, 255); // focused border
+const BG_DARK: Color = Color::Rgb(13, 17, 23); // GitHub dark bg
+const BG_PANEL: Color = Color::Rgb(22, 27, 34); // panel bg
 
 // ── Panel IDs ─────────────────────────────────────────────────────────────
 
@@ -431,7 +432,7 @@ impl App {
                                 .unwrap_or_default();
                             (
                                 Style::new().fg(NEON_GREEN).add_modifier(Modifier::BOLD),
-                                String::from("EXEC"),
+                                String::from("⚡"),
                                 format!("[{}] {} (uid {}){}", ev.pid, ev.comm, ev.uid, argv_info),
                             )
                         }
@@ -444,7 +445,7 @@ impl App {
                                 .unwrap_or_default();
                             (
                                 Style::new().fg(CYAN),
-                                String::from("OPEN"),
+                                String::from("◆"),
                                 format!(
                                     "[{}] {} -> {} {}",
                                     ev.pid,
@@ -487,7 +488,7 @@ impl App {
                             let path = ev.file.as_deref().unwrap_or("?");
                             (
                                 Style::new().fg(NEON_YELLOW),
-                                String::from("MKDIR"),
+                                String::from("📁"),
                                 format!("[{}] {} -> {}", ev.pid, ev.comm, path),
                             )
                         }
@@ -495,7 +496,7 @@ impl App {
                             let path = ev.file.as_deref().unwrap_or("?");
                             (
                                 Style::new().fg(NEON_ORANGE),
-                                String::from("DELETE"),
+                                String::from("🗑"),
                                 format!("[{}] {} -> {}", ev.pid, ev.comm, path),
                             )
                         }
@@ -503,7 +504,7 @@ impl App {
                             let details = ev.argv.as_deref().unwrap_or("?");
                             (
                                 Style::new().fg(NEON_RED).add_modifier(Modifier::BOLD),
-                                String::from("KILL"),
+                                String::from("☠"),
                                 format!("[{}] {} -> {}", ev.pid, ev.comm, details),
                             )
                         }
@@ -511,7 +512,7 @@ impl App {
                             let path = ev.file.as_deref().unwrap_or("?");
                             (
                                 Style::new().fg(MAGENTA).add_modifier(Modifier::BOLD),
-                                String::from("CHMOD"),
+                                String::from("🔒"),
                                 format!("[{}] {} -> {}", ev.pid, ev.comm, path),
                             )
                         }
@@ -528,7 +529,7 @@ impl App {
                     let line = LogLine {
                         style: Style::new().fg(NEON_RED).add_modifier(Modifier::BOLD),
                         text: format!(
-                            "{} ⚠ ALERT [{}] {} — {} opens/s",
+                            "{} ▲ [{}] {} — {} file opens in 1s",
                             alert.ts, alert.pid, alert.comm, alert.opens
                         ),
                     };
@@ -664,14 +665,29 @@ fn draw_header(frame: &mut Frame, app: &App, monitor: &Monitor, area: Rect) {
         Layout::horizontal([Constraint::Length(38), Constraint::Min(0)]).areas(area);
 
     let logo_lines = vec![
-        Line::from(vec![Span::styled(
-            "  ⚡ HALCYON eBPF MONITOR",
-            Style::new().fg(CYAN).add_modifier(Modifier::BOLD),
-        )]),
-        Line::from(vec![Span::styled(
-            "  kernel tracepoint · real-time · v0.4",
-            Style::new().fg(DIM),
-        )]),
+        Line::from(vec![
+            Span::styled("  ", Style::new().fg(BG_DARK)),
+            Span::styled("⬡", Style::new().fg(CYAN).add_modifier(Modifier::BOLD)),
+            Span::styled(
+                " HALCYON",
+                Style::new().fg(CYAN).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(" ", Style::new().fg(BG_DARK)),
+            Span::styled(
+                "eBPF",
+                Style::new().fg(MAGENTA).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(" · ", Style::new().fg(DIM)),
+            Span::styled("PROCESS MONITOR", Style::new().fg(DIM_BRIGHT)),
+        ]),
+        Line::from(vec![
+            Span::styled("  ", Style::new().fg(BG_DARK)),
+            Span::styled("v0.5", Style::new().fg(DIM)),
+            Span::styled(" · ", Style::new().fg(PANEL_BORDER)),
+            Span::styled("kernel tracepoint", Style::new().fg(DIM)),
+            Span::styled(" · ", Style::new().fg(PANEL_BORDER)),
+            Span::styled("real-time", Style::new().fg(DIM)),
+        ]),
     ];
     frame.render_widget(Paragraph::new(logo_lines), logo_area);
 
@@ -725,8 +741,9 @@ fn draw_tab_bar(frame: &mut Frame, app: &App, area: Rect) {
         } else {
             Modifier::empty()
         };
+        let dot = if i == app.focused { "●" } else { "○" };
         all_spans.push(Span::styled(
-            format!(" [{}] {} ", i + 1, p.name()),
+            format!(" {} {} ", dot, p.name()),
             Style::new().fg(color).add_modifier(modifier),
         ));
     }
@@ -755,7 +772,7 @@ fn draw_sparklines(frame: &mut Frame, monitor: &Monitor, area: Rect) {
             Block::default()
                 .borders(Borders::ALL)
                 .title(Span::styled(
-                    format!(" exec/s (peak {max_exec}) "),
+                    format!(" ▲ exec/s  peak: {max_exec} "),
                     Style::new().fg(NEON_GREEN).add_modifier(Modifier::BOLD),
                 ))
                 .border_style(Style::new().fg(PANEL_BORDER)),
@@ -772,7 +789,7 @@ fn draw_sparklines(frame: &mut Frame, monitor: &Monitor, area: Rect) {
             Block::default()
                 .borders(Borders::ALL)
                 .title(Span::styled(
-                    format!(" open/s (peak {max_open}) "),
+                    format!(" ◆ open/s  peak: {max_open} "),
                     Style::new().fg(CYAN).add_modifier(Modifier::BOLD),
                 ))
                 .border_style(Style::new().fg(PANEL_BORDER)),
@@ -909,7 +926,7 @@ fn draw_process_tree(frame: &mut Frame, app: &App, monitor: &Monitor, area: Rect
         .map(|(depth, node)| {
             let indent = "  ".repeat(*depth);
             let prefix = if node.children.is_empty() {
-                "└─ "
+                "╰─ "
             } else {
                 "├─ "
             };
@@ -930,8 +947,8 @@ fn draw_process_tree(frame: &mut Frame, app: &App, monitor: &Monitor, area: Rect
             };
             let opens_badge = if node.total_opens > 0 {
                 // Mini bar visualization
-                let bar_len = (node.total_opens.min(50) / 5) as usize;
-                let bar = "█".repeat(bar_len);
+                let bar_len = (node.total_opens.min(40) / 4) as usize;
+                let bar = "▪".repeat(bar_len);
                 format!(" {} ({})", bar, node.total_opens)
             } else {
                 String::new()
@@ -984,10 +1001,10 @@ fn draw_network_panel(frame: &mut Frame, app: &App, area: Rect) {
                 _ => DIM,
             };
             let kind_icon = match entry.kind.as_str() {
-                "Connect" => "↗",
-                "Accept" => "↙",
-                "SendTo" => "📤",
-                "RecvFrom" => "📥",
+                "Connect" => "→",
+                "Accept" => "←",
+                "SendTo" => "▸",
+                "RecvFrom" => "◂",
                 _ => "•",
             };
             let bytes_info = entry
@@ -1043,8 +1060,8 @@ fn draw_extensions(frame: &mut Frame, monitor: &Monitor, area: Rect) {
         .iter()
         .map(|(ext, count)| {
             let bar_width = (count * 20 / max_ext) as usize;
-            let filled = "█".repeat(bar_width);
-            let empty = "░".repeat(20 - bar_width);
+            let filled = "━".repeat(bar_width);
+            let empty = "─".repeat(20 - bar_width);
             let ext_color = match ext.as_str() {
                 "pdf" | "doc" | "docx" | "xls" | "xlsx" => NEON_YELLOW,
                 "zip" | "tar" | "gz" | "7z" | "rar" => MAGENTA,
@@ -1121,8 +1138,8 @@ fn draw_top_files(frame: &mut Frame, monitor: &Monitor, area: Rect) {
             };
 
             // Mini bar for count
-            let bar_len = (f.count.min(20)) as usize;
-            let bar = "▪".repeat(bar_len);
+            let _bar_len = (f.count.min(16)) as usize;
+            let bar = "/bar"; // placeholder
 
             Row::new(vec![
                 Cell::from(format!("#{}", i + 1)).style(rank_style),
@@ -1170,10 +1187,10 @@ fn draw_alerts(frame: &mut Frame, app: &App, area: Rect) {
     let lines: Vec<Line> = if alert_count == 0 {
         vec![Line::from(vec![
             Span::styled(
-                "  ◆ ",
+                "  ✓ ",
                 Style::new().fg(NEON_GREEN).add_modifier(Modifier::BOLD),
             ),
-            Span::styled("system clean — no alerts", Style::new().fg(DIM)),
+            Span::styled("all clear — no alerts", Style::new().fg(DIM_BRIGHT)),
         ])]
     } else {
         let mut lines: Vec<Line> = app
@@ -1368,7 +1385,7 @@ fn draw_detail_overlay(frame: &mut Frame, _app: &App, monitor: &Monitor, area: R
         .map(|(depth, node)| {
             let indent = "  ".repeat(*depth);
             let prefix = if node.children.is_empty() {
-                "└─ "
+                "╰─ "
             } else {
                 "├─ "
             };
