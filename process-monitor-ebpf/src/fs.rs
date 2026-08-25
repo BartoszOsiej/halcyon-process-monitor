@@ -9,7 +9,7 @@ use aya_ebpf::{
     cty::c_char,
     helpers::{
         bpf_get_current_comm, bpf_get_current_pid_tgid, bpf_get_current_uid_gid,
-        bpf_probe_read_user, bpf_probe_read_user_str_bytes,
+        bpf_probe_read_user_str_bytes,
     },
     macros::{map, tracepoint},
     maps::PerfEventArray,
@@ -90,7 +90,7 @@ pub fn sys_enter_mkdir(ctx: TracePointContext) -> u32 {
     }
 
     // Read pathname (arg0)
-    let ptr_size = core::mem::size_of::<*const c_char>();
+    
     let pathname_offset = 16;
     if let Ok(pathname_ptr) = unsafe { ctx.read_at::<*const c_char>(pathname_offset) } {
         if !pathname_ptr.is_null() {
@@ -133,6 +133,7 @@ pub fn sys_enter_unlinkat(ctx: TracePointContext) -> u32 {
 
     // Read pathname (arg1 — arg0 is dirfd)
     let ptr_size = core::mem::size_of::<*const c_char>();
+    
     let pathname_offset = 16 + 1 * ptr_size;
     if let Ok(pathname_ptr) = unsafe { ctx.read_at::<*const c_char>(pathname_offset) } {
         if !pathname_ptr.is_null() {
@@ -175,6 +176,7 @@ pub fn sys_enter_kill(ctx: TracePointContext) -> u32 {
 
     // Read target PID and signal number
     let ptr_size = core::mem::size_of::<*const c_char>();
+    
 
     // arg0 = target pid (int, so 4 bytes but stored as usize in tracepoint buffer)
     let pid_offset = 16;
@@ -246,6 +248,7 @@ pub fn sys_enter_fchmodat(ctx: TracePointContext) -> u32 {
 
     // arg0 = dirfd, arg1 = filename
     let ptr_size = core::mem::size_of::<*const c_char>();
+    
     let pathname_offset = 16 + 1 * ptr_size;
     if let Ok(pathname_ptr) = unsafe { ctx.read_at::<*const c_char>(pathname_offset) } {
         if !pathname_ptr.is_null() {
