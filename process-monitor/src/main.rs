@@ -143,11 +143,13 @@ fn resolve_bpf_path(explicit: Option<&PathBuf>) -> Result<PathBuf> {
 
     // 1. Build tree (CARGO_TARGET_DIR is set by build.sh / install.sh).
     if let Ok(dir) = std::env::var("CARGO_TARGET_DIR") {
-        let candidate = PathBuf::from(dir).join("bpfel-unknown-none/release/process-monitor-ebpf");
-        if candidate.exists() {
-            return Ok(candidate);
+        for sub in ["bpfel-unknown-none/bpf/process-monitor-ebpf", "bpfel-unknown-none/release/process-monitor-ebpf"] {
+            let candidate = PathBuf::from(&*dir).join(sub);
+            if candidate.exists() {
+                return Ok(candidate);
+            }
+            tried.push(candidate.display().to_string());
         }
-        tried.push(candidate.display().to_string());
     }
 
     // 2. Relative to the running binary (checked before user-local installs so a
@@ -157,6 +159,7 @@ fn resolve_bpf_path(explicit: Option<&PathBuf>) -> Result<PathBuf> {
     if let Ok(exe) = std::env::current_exe() {
         if let Some(dir) = exe.parent() {
             for candidate in [
+                dir.join("../bpfel-unknown-none/bpf/process-monitor-ebpf"),
                 dir.join("../bpfel-unknown-none/release/process-monitor-ebpf"),
                 dir.join("../lib/halcyon/process-monitor-ebpf"),
             ] {
