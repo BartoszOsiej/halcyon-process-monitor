@@ -207,6 +207,10 @@ pub unsafe extern "C" fn halcyon_monitor_poll(
                     Kind::Accept => 3,
                     Kind::SendTo => 4,
                     Kind::RecvFrom => 5,
+                    Kind::Mkdir => 6,
+                    Kind::Unlink => 7,
+                    Kind::Kill => 8,
+                    Kind::Chmod => 9,
                 };
                 event.pid = ev.pid;
                 event.uid = ev.uid;

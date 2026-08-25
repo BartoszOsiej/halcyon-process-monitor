@@ -35,6 +35,10 @@ pub struct NetworkEvent {
 #[map]
 pub static NETWORK_EVENTS: PerfEventArray<NetworkEvent> = PerfEventArray::new(0);
 
+/// Shared EVENTS map from main.rs — network events must go through the same
+/// perf channel so userspace can read them with a single reader.
+use super::EVENTS;
+
 // ── eBPF-safe byte helpers (avoids LLVM memset/memcpy builtins) ──────────
 
 /// Zero-initialize a NetworkEvent on the stack without triggering memset.
@@ -119,7 +123,12 @@ pub fn sys_enter_connect(ctx: TracePointContext) -> u32 {
         }
     }
 
-    NETWORK_EVENTS.output(&ctx, &event, 0);
+    // SAFETY: NetworkEvent and ProcessEvent have identical #[repr(C)] layout.
+    EVENTS.output(
+        &ctx,
+        unsafe { &*(&event as *const _ as *const super::ProcessEvent) },
+        0,
+    );
     0
 }
 
@@ -170,7 +179,12 @@ pub fn sys_enter_accept(ctx: TracePointContext) -> u32 {
         }
     }
 
-    NETWORK_EVENTS.output(&ctx, &event, 0);
+    // SAFETY: NetworkEvent and ProcessEvent have identical #[repr(C)] layout.
+    EVENTS.output(
+        &ctx,
+        unsafe { &*(&event as *const _ as *const super::ProcessEvent) },
+        0,
+    );
     0
 }
 
@@ -228,7 +242,12 @@ pub fn sys_enter_sendto(ctx: TracePointContext) -> u32 {
         }
     }
 
-    NETWORK_EVENTS.output(&ctx, &event, 0);
+    // SAFETY: NetworkEvent and ProcessEvent have identical #[repr(C)] layout.
+    EVENTS.output(
+        &ctx,
+        unsafe { &*(&event as *const _ as *const super::ProcessEvent) },
+        0,
+    );
     0
 }
 
@@ -286,7 +305,12 @@ pub fn sys_enter_recvfrom(ctx: TracePointContext) -> u32 {
         }
     }
 
-    NETWORK_EVENTS.output(&ctx, &event, 0);
+    // SAFETY: NetworkEvent and ProcessEvent have identical #[repr(C)] layout.
+    EVENTS.output(
+        &ctx,
+        unsafe { &*(&event as *const _ as *const super::ProcessEvent) },
+        0,
+    );
     0
 }
 
