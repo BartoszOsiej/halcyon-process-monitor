@@ -143,7 +143,10 @@ fn resolve_bpf_path(explicit: Option<&PathBuf>) -> Result<PathBuf> {
 
     // 1. Build tree (CARGO_TARGET_DIR is set by build.sh / install.sh).
     if let Ok(dir) = std::env::var("CARGO_TARGET_DIR") {
-        for sub in ["bpfel-unknown-none/bpf/process-monitor-ebpf", "bpfel-unknown-none/release/process-monitor-ebpf"] {
+        for sub in [
+            "bpfel-unknown-none/bpf/process-monitor-ebpf",
+            "bpfel-unknown-none/release/process-monitor-ebpf",
+        ] {
             let candidate = PathBuf::from(&*dir).join(sub);
             if candidate.exists() {
                 return Ok(candidate);
@@ -273,7 +276,14 @@ fn run_diagnose(monitor: &mut Monitor) -> Result<()> {
                 Output::Event(ev) => match ev.kind {
                     Kind::Exec => execs += 1,
                     Kind::Open => opens += 1,
-                    Kind::Connect | Kind::Accept | Kind::SendTo | Kind::RecvFrom => {}
+                    Kind::Connect
+                    | Kind::Accept
+                    | Kind::SendTo
+                    | Kind::RecvFrom
+                    | Kind::Mkdir
+                    | Kind::Unlink
+                    | Kind::Kill
+                    | Kind::Chmod => {}
                 },
                 Output::Alert(_) => alerts += 1,
             }
@@ -332,6 +342,10 @@ fn run_json(monitor: &mut Monitor) -> Result<()> {
                         Kind::Accept => "accept",
                         Kind::SendTo => "sendto",
                         Kind::RecvFrom => "recvfrom",
+                        Kind::Mkdir => "mkdir",
+                        Kind::Unlink => "unlink",
+                        Kind::Kill => "kill",
+                        Kind::Chmod => "chmod",
                     };
                     let value = json!({
                         "ts": ev.ts,
@@ -403,6 +417,29 @@ fn run_plain(monitor: &mut Monitor) -> Result<()> {
                             ev.pid,
                             ev.comm.dimmed(),
                             addr.dimmed()
+                        );
+                    }
+                    Kind::Mkdir | Kind::Unlink | Kind::Chmod => {
+                        let kind_str = format!("{:?}", ev.kind).to_uppercase();
+                        let path = ev.file.as_deref().unwrap_or("?");
+                        println!(
+                            "{} {} [{}] {} -> {}",
+                            ev.ts,
+                            kind_str.yellow().bold(),
+                            ev.pid,
+                            ev.comm.dimmed(),
+                            path.dimmed()
+                        );
+                    }
+                    Kind::Kill => {
+                        let details = ev.argv.as_deref().unwrap_or("?");
+                        println!(
+                            "{} {} [{}] {} -> {}",
+                            ev.ts,
+                            "KILL".red().bold(),
+                            ev.pid,
+                            ev.comm.bold(),
+                            details.dimmed()
                         );
                     }
                 },

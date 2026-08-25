@@ -19,6 +19,10 @@ pub const EVENT_CONNECT: u8 = 2;
 pub const EVENT_ACCEPT: u8 = 3;
 pub const EVENT_SENDTO: u8 = 4;
 pub const EVENT_RECVFROM: u8 = 5;
+pub const EVENT_MKDIR: u8 = 6;
+pub const EVENT_UNLINK: u8 = 7;
+pub const EVENT_KILL: u8 = 8;
+pub const EVENT_CHMOD: u8 = 9;
 
 const EVENT_COMM_LEN: usize = 16;
 const EVENT_FILENAME_LEN: usize = 64;
@@ -64,6 +68,10 @@ pub enum Kind {
     Accept,
     SendTo,
     RecvFrom,
+    Mkdir,
+    Unlink,
+    Kill,
+    Chmod,
 }
 
 #[derive(Debug, Clone)]
@@ -205,6 +213,40 @@ impl Monitor {
             .context("failed to attach openat tracepoint")?;
         eprintln!("[halcyon] attached tracepoint syscalls/sys_enter_openat");
 
+        // Attach filesystem and signal tracepoints (best-effort: kernel may lack some).
+        for (name, category, label) in [
+            ("sys_enter_mkdir", "syscalls", "mkdir"),
+            ("sys_enter_unlinkat", "syscalls", "unlinkat"),
+            ("sys_enter_kill", "syscalls", "kill"),
+            ("sys_enter_fchmodat", "syscalls", "fchmodat"),
+        ] {
+            if let Some(prog) = bpf.program_mut(name) {
+                let tp: Result<&mut TracePoint, _> = prog.try_into();
+                if let Ok(tp) = tp {
+                    if tp.load().is_ok() && tp.attach(category, name).is_ok() {
+                        eprintln!("[halcyon] attached tracepoint {category}/{name} ({label})");
+                    }
+                }
+            }
+        }
+
+        // Attach network tracepoints (best-effort).
+        for (name, label) in [
+            ("sys_enter_connect", "connect"),
+            ("sys_enter_accept", "accept"),
+            ("sys_enter_sendto", "sendto"),
+            ("sys_enter_recvfrom", "recvfrom"),
+        ] {
+            if let Some(prog) = bpf.program_mut(name) {
+                let tp: Result<&mut TracePoint, _> = prog.try_into();
+                if let Ok(tp) = tp {
+                    if tp.load().is_ok() && tp.attach("syscalls", name).is_ok() {
+                        eprintln!("[halcyon] attached tracepoint syscalls/{name} ({label})");
+                    }
+                }
+            }
+        }
+
         let perf_array: PerfEventArray<MapData> = bpf
             .take_map("EVENTS")
             .context("failed to find 'EVENTS' map")?
@@ -326,6 +368,13 @@ impl Monitor {
                         opens: stats.window_opens,
                     }));
                 }
+            }
+            Kind::Mkdir | Kind::Unlink | Kind::Kill | Kind::Chmod => {
+                // FS/signal events — track in file counts for the Top Files panel.
+                if let Some(ref file) = ev.file {
+                    *self.file_counts.entry(file.clone()).or_insert(0) += 1;
+                }
+                self.tick_opens += 1;
             }
         }
         outputs.push(Output::Event(ev.clone()));
@@ -651,6 +700,62 @@ fn to_recorded(raw: &ProcessEvent) -> RecordedEvent {
                 } else {
                     Some(bytes_str)
                 },
+            }
+        }
+        EVENT_MKDIR => {
+            let path = raw.filename_str();
+            RecordedEvent {
+                ts,
+                kind: Kind::Mkdir,
+                pid: raw.pid,
+                uid: raw.uid,
+                comm: raw.comm_str(),
+                file: Some(path),
+                extension: None,
+                argv: None,
+                bytes: None,
+            }
+        }
+        EVENT_UNLINK => {
+            let path = raw.filename_str();
+            RecordedEvent {
+                ts,
+                kind: Kind::Unlink,
+                pid: raw.pid,
+                uid: raw.uid,
+                comm: raw.comm_str(),
+                file: Some(path),
+                extension: None,
+                argv: None,
+                bytes: None,
+            }
+        }
+        EVENT_KILL => {
+            let details = raw.argv_str();
+            RecordedEvent {
+                ts,
+                kind: Kind::Kill,
+                pid: raw.pid,
+                uid: raw.uid,
+                comm: raw.comm_str(),
+                file: None,
+                extension: None,
+                argv: Some(details),
+                bytes: None,
+            }
+        }
+        EVENT_CHMOD => {
+            let path = raw.filename_str();
+            RecordedEvent {
+                ts,
+                kind: Kind::Chmod,
+                pid: raw.pid,
+                uid: raw.uid,
+                comm: raw.comm_str(),
+                file: Some(path),
+                extension: None,
+                argv: None,
+                bytes: None,
             }
         }
         _ => RecordedEvent {

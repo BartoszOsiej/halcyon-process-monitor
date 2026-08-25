@@ -384,7 +384,12 @@ impl App {
                         match ev.kind {
                             Kind::Exec => bucket.exec_count += 1,
                             Kind::Open => bucket.open_count += 1,
-                            _ => {}
+                            Kind::Connect | Kind::Accept | Kind::SendTo | Kind::RecvFrom => {
+                                bucket.network_count += 1;
+                            }
+                            Kind::Mkdir | Kind::Unlink | Kind::Kill | Kind::Chmod => {
+                                bucket.open_count += 1;
+                            }
                         }
                     }
 
@@ -476,6 +481,38 @@ impl App {
                                 Style::new().fg(MAGENTA),
                                 kind_str,
                                 format!("[{}] {} -> {}{}", ev.pid, ev.comm, addr, bytes_str),
+                            )
+                        }
+                        Kind::Mkdir => {
+                            let path = ev.file.as_deref().unwrap_or("?");
+                            (
+                                Style::new().fg(NEON_YELLOW),
+                                String::from("MKDIR"),
+                                format!("[{}] {} -> {}", ev.pid, ev.comm, path),
+                            )
+                        }
+                        Kind::Unlink => {
+                            let path = ev.file.as_deref().unwrap_or("?");
+                            (
+                                Style::new().fg(NEON_ORANGE),
+                                String::from("DELETE"),
+                                format!("[{}] {} -> {}", ev.pid, ev.comm, path),
+                            )
+                        }
+                        Kind::Kill => {
+                            let details = ev.argv.as_deref().unwrap_or("?");
+                            (
+                                Style::new().fg(NEON_RED).add_modifier(Modifier::BOLD),
+                                String::from("KILL"),
+                                format!("[{}] {} -> {}", ev.pid, ev.comm, details),
+                            )
+                        }
+                        Kind::Chmod => {
+                            let path = ev.file.as_deref().unwrap_or("?");
+                            (
+                                Style::new().fg(MAGENTA).add_modifier(Modifier::BOLD),
+                                String::from("CHMOD"),
+                                format!("[{}] {} -> {}", ev.pid, ev.comm, path),
                             )
                         }
                     };
