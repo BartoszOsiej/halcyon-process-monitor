@@ -1,5 +1,5 @@
 # ── Stage 1: Build ──
-FROM rust:nightly-slim AS builder
+FROM rustlang/rust:nightly-slim AS builder
 WORKDIR /src
 COPY . .
 RUN cd process-monitor && cargo build --release
