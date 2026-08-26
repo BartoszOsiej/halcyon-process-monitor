@@ -31,6 +31,7 @@ ftui-layout = { path = "../frankentui/ftui-layout" }
 ftui-style = { path = "../frankentui/ftui-style" }
 ftui-text = { path = "../frankentui/ftui-text" }
 ftui-widgets = { path = "../frankentui/ftui-widgets" }
+ftui-extras = { path = "../frankentui/ftui-extras", features = ["charts", "canvas", "text-effects"] }
 
 # Web server (optional, enabled with --features web)
 axum = { version = "0.8", features = ["ws"], optional = true }

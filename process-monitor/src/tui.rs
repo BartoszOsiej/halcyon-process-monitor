@@ -1,6 +1,7 @@
-//! Halcyon Process Monitor — FrankenTUI layer (clean professional build)
+//! Halcyon Process Monitor — FrankenTUI dashboard
 //!
-//! Elm architecture. No emoji. No gradients. Dense data, clean alignment.
+//! Uses MiniBar, BarChart, LineChart, Canvas, Badge, Sparkline, heatmap_gradient,
+//! and StyledText with color wave effects from ftui-extras.
 
 use std::collections::VecDeque;
 use std::sync::mpsc;
@@ -9,8 +10,13 @@ use std::time::Duration;
 
 use ftui_core::event::{Event, KeyCode, KeyEvent, KeyEventKind, Modifiers};
 use ftui_core::geometry::Rect;
+use ftui_extras::canvas::{Canvas, Mode, Painter};
+use ftui_extras::charts::{
+    BarChart, BarDirection, BarGroup, BarMode, LineChart, Series, Sparkline, heatmap_gradient,
+};
+use ftui_extras::text_effects::{StyledText, TextEffect};
 use ftui_layout::{Constraint, Flex};
-use ftui_render::cell::PackedRgba;
+use ftui_render::cell::{Cell as RenderCell, PackedRgba};
 use ftui_render::frame::Frame;
 use ftui_runtime::program::{App, Cmd, Model};
 use ftui_runtime::terminal_writer::ScreenMode;
@@ -18,11 +24,12 @@ use ftui_runtime::{Every, Subscription};
 use ftui_style::{Style, StyleFlags};
 use ftui_text::Line;
 use ftui_text::Span;
-use ftui_widgets::block::Block;
+use ftui_widgets::badge::Badge;
+use ftui_widgets::block::{Alignment, Block};
 use ftui_widgets::borders::{BorderType, Borders};
 use ftui_widgets::log_viewer::{LogViewer, LogViewerState};
 use ftui_widgets::paragraph::Paragraph;
-use ftui_widgets::sparkline::Sparkline;
+use ftui_widgets::progress::{MiniBar, MiniBarColors};
 use ftui_widgets::status_line::{StatusItem, StatusLine};
 use ftui_widgets::{StatefulWidget, Widget};
 
@@ -41,6 +48,8 @@ const FG: PackedRgba = PackedRgba::rgb(180, 190, 210);
 const BRIGHT: PackedRgba = PackedRgba::rgb(220, 230, 245);
 const BORDER: PackedRgba = PackedRgba::rgb(50, 56, 72);
 const BORDER_HI: PackedRgba = PackedRgba::rgb(88, 166, 255);
+
+const CHART_PALETTE: [PackedRgba; 5] = [BLUE, GREEN, AMBER, PURPLE, CYAN];
 
 // ── Panels ────────────────────────────────────────────────────────────────
 
@@ -83,8 +92,6 @@ struct Snapshot {
 #[derive(Clone)]
 struct Evt { ts: String, kind: String, pid: u32, comm: String, file: Option<String>, is_alert: bool, opens: u64 }
 
-// ── Network entry ─────────────────────────────────────────────────────────
-
 #[derive(Clone)]
 struct NetEntry { ts: String, pid: u32, comm: String, kind: String, addr: String }
 
@@ -102,6 +109,7 @@ struct App_ {
     paused: bool,
     help: bool,
     total: u64, lost: u64, uptime: u64, alert_count: u64,
+    time: f64,
     rx: mpsc::Receiver<Snapshot>,
 }
 
@@ -111,28 +119,23 @@ struct FileRow { name: String, count: u64, ext: String, entropy: f64 }
 impl App_ {
     fn new(rx: mpsc::Receiver<Snapshot>) -> Self {
         let mut log = LogViewer::new(5000);
-        log.push("[halcyon] eBPF monitor started");
-        log.push("[halcyon] press ? for help");
+        log.push("[halcyon] eBPF monitor started — press ? for help");
         Self {
             log, log_st: LogViewerState::default(),
             alerts: LogViewer::new(200), alert_st: LogViewerState::default(),
             net: VecDeque::new(), procs: Vec::new(), files: Vec::new(), exts: Vec::new(),
             rates: VecDeque::new(), focused: 0, paused: false, help: false,
-            total: 0, lost: 0, uptime: 0, alert_count: 0, rx,
+            total: 0, lost: 0, uptime: 0, alert_count: 0, time: 0.0, rx,
         }
     }
 
     fn apply_snapshot(&mut self, s: Snapshot) {
         for e in &s.events {
             let kind_tag = match e.kind.as_str() {
-                "Exec" => "EXEC  ",
-                "Open" => "OPEN  ",
+                "Exec" => "EXEC  ", "Open" => "OPEN  ",
                 "Connect"|"Accept"|"SendTo"|"RecvFrom" => "NET   ",
-                "Mkdir" => "MKDIR ",
-                "Unlink" => "UNLINK",
-                "Kill" => "KILL  ",
-                "Chmod" => "CHMOD ",
-                _ => "EVENT ",
+                "Mkdir" => "MKDIR ", "Unlink" => "UNLINK",
+                "Kill" => "KILL  ", "Chmod" => "CHMOD ", _ => "EVENT ",
             };
             let file_part = e.file.as_deref().unwrap_or("");
             let line = if e.is_alert {
@@ -141,7 +144,6 @@ impl App_ {
                 format!("{} {} [{:>6}] {:<16} {}", e.ts, kind_tag, e.pid, e.comm, file_part)
             };
             self.log.push(line.as_str());
-
             if matches!(e.kind.as_str(), "Connect"|"Accept"|"SendTo"|"RecvFrom") {
                 self.net.push_front(NetEntry {
                     ts: e.ts.clone(), pid: e.pid, comm: e.comm.clone(),
@@ -150,36 +152,26 @@ impl App_ {
                 while self.net.len() > 200 { self.net.pop_back(); }
             }
             self.total += 1;
-            if e.is_alert {
-                self.alert_count += 1;
-                self.alerts.push(line.as_str());
-            }
+            if e.is_alert { self.alert_count += 1; self.alerts.push(line.as_str()); }
         }
-
         self.procs = s.stats.iter().map(|p| ProcRow {
             pid: p.pid, comm: p.comm.clone(), opens: p.window_opens, alerts: p.alerts,
         }).collect();
         self.procs.sort_by(|a,b| b.opens.cmp(&a.opens));
-
         self.files = s.top_files.iter().map(|f| FileRow {
             name: f.path.rsplit('/').next().unwrap_or(&f.path).to_string(),
             count: f.count, ext: f.extension.clone(), entropy: f.entropy,
         }).collect();
-
         let mut ext_vec: Vec<(String,u64)> = s.exts.iter().map(|(k,v)| (k.clone(),*v)).collect();
         ext_vec.sort_by(|a,b| b.1.cmp(&a.1));
         self.exts = ext_vec;
-
         self.rates = s.rates;
-        self.total = s.total;
-        self.lost = s.lost;
-        self.uptime = s.uptime;
+        self.total = s.total; self.lost = s.lost; self.uptime = s.uptime;
     }
 }
 
 impl Model for App_ {
     type Message = Msg;
-
     fn init(&mut self) -> Cmd<Msg> { Cmd::None }
 
     fn update(&mut self, msg: Msg) -> Cmd<Msg> {
@@ -193,9 +185,7 @@ impl Model for App_ {
                     KeyCode::Char('p') => self.paused = !self.paused,
                     KeyCode::Tab => self.focused = (self.focused+1) % 6,
                     KeyCode::BackTab => self.focused = if self.focused==0 {5} else {self.focused-1},
-                    KeyCode::Char(c @ '1'..='6') => {
-                        self.focused = (c as usize) - ('1' as usize);
-                    }
+                    KeyCode::Char(c @ '1'..='6') => self.focused = (c as usize) - ('1' as usize),
                     KeyCode::Up|KeyCode::Char('k') => self.log.scroll_up(1),
                     KeyCode::Down|KeyCode::Char('j') => self.log.scroll_down(1),
                     KeyCode::PageUp => self.log.page_up(&self.log_st),
@@ -206,6 +196,7 @@ impl Model for App_ {
                 }
             }
             Msg::Tick if !self.paused => {
+                self.time += 0.05;
                 while let Ok(s) = self.rx.try_recv() { self.apply_snapshot(s); }
             }
             _ => {}
@@ -218,7 +209,7 @@ impl Model for App_ {
         if self.help { return self.draw_help(frame, area); }
 
         let outer = Flex::vertical().constraints([
-            Constraint::Fixed(1), // header
+            Constraint::Fixed(2), // header with badges + color wave
             Constraint::Min(0),  // body
             Constraint::Fixed(1), // status
         ]).split(area);
@@ -239,57 +230,81 @@ impl App_ {
     fn border(&self, idx: usize) -> PackedRgba { if self.focused==idx { BORDER_HI } else { BORDER } }
 
     fn draw_header(&self, f: &mut Frame, area: Rect) {
-        let ts = chrono::Local::now().format("%H:%M:%S").to_string();
-        let up = fmt_dur(self.uptime);
-        let line = Line::from_spans(vec![
-            Span::styled(" halcyon ", Style::new().fg(BLUE).attrs(StyleFlags::BOLD)),
-            Span::styled(format!("{} ", self.border_char()), Style::new().fg(DIM)),
-            Span::styled("eBPF process monitor", Style::new().fg(DIM)),
-            Span::styled(format!("  {} ", self.border_char()), Style::new().fg(DIM)),
-            Span::styled(format!("{} events", self.total), Style::new().fg(FG)),
-            Span::styled(format!("  {} ", self.border_char()), Style::new().fg(DIM)),
-            Span::styled(format!("{} lost", self.lost), Style::new().fg(if self.lost>0 {RED} else {DIM})),
-            Span::styled(format!("  {} ", self.border_char()), Style::new().fg(DIM)),
-            Span::styled(format!("up {}", up), Style::new().fg(FG)),
-            Span::styled(format!("  {} ", self.border_char()), Style::new().fg(DIM)),
-            Span::styled(ts, Style::new().fg(DIM)),
-        ]);
-        Paragraph::new(line).render(area, f);
+        let row0 = Rect::new(area.x, area.y, area.width, 1);
+        let row1 = Rect::new(area.x, area.y + 1, area.width, 1);
+
+        // Row 0: Animated color wave title + badges
+        let title = format!("halcyon  eBPF process monitor  {} events  {} lost  up {}",
+            self.total, self.lost, fmt_dur(self.uptime));
+        let styled_title = StyledText::new(title)
+            .bold()
+            .effect(TextEffect::ColorWave {
+                color1: BLUE.into(),
+                color2: CYAN.into(),
+                speed: 1.2,
+                wavelength: 8.0,
+            })
+            .base_color(BLUE)
+            .time(self.time);
+        styled_title.render(row0, f);
+
+        // Row 1: Status badges
+        let lost_label = format!("{} LOST", self.lost);
+        let badges_data: [(&str, PackedRgba); 3] = [
+            ("eBPF", GREEN),
+            ("LIVE", if self.alert_count > 0 { RED } else { GREEN }),
+            (&lost_label, if self.lost > 0 { AMBER } else { DIM }),
+        ];
+        let mut x = area.x;
+        for &(label, color) in &badges_data {
+            let style = Style::new().fg(PackedRgba::rgb(10, 12, 20)).bg(color).attrs(StyleFlags::BOLD);
+            let badge = Badge::new(label).with_style(style).with_padding(1, 1);
+            let w = badge.width().min(area.width.saturating_sub(x - area.x));
+            if w == 0 { break; }
+            badge.render(Rect::new(x, area.y + 1, w, 1), f);
+            x += w + 1;
+        }
+
+        // Sparkline of event rate next to badges
+        if self.rates.len() > 2 && x < area.right() {
+            let spark_w = (area.right() - x).saturating_sub(2) as usize;
+            let data: Vec<f64> = self.rates.iter().rev().take(spark_w).rev()
+                .map(|r| r.exec_count as f64).collect();
+            if !data.is_empty() {
+                let spark_area = Rect::new(x, area.y + 1, spark_w as u16, 1);
+                Sparkline::new(&data)
+                    .style(Style::new().fg(BLUE))
+                    .render(spark_area, f);
+            }
+        }
     }
 
     fn draw_body(&self, f: &mut Frame, area: Rect) {
         let cols = Flex::horizontal().constraints([
             Constraint::Percentage(35.0), Constraint::Percentage(35.0), Constraint::Percentage(30.0),
         ]).split(area);
-
         let mid = Flex::vertical().constraints([
             Constraint::Percentage(55.0), Constraint::Percentage(45.0),
         ]).split(cols[1]);
-
         let right = Flex::vertical().constraints([
             Constraint::Percentage(35.0), Constraint::Percentage(35.0), Constraint::Percentage(30.0),
         ]).split(cols[2]);
 
         self.draw_events(f, cols[0]);
         self.draw_procs(f, mid[0]);
-        self.draw_exts(f, mid[1]);
+        self.draw_exts_chart(f, mid[1]);
         self.draw_net(f, right[0]);
         self.draw_files(f, right[1]);
-        self.draw_alerts(f, right[2]);
+        self.draw_heatmap(f, right[2]);
     }
 
-    fn panel_block<'a>(&self, idx: usize, title: &'a str) -> Block<'a> {
-        Block::new().title(title)
-            .borders(Borders::ALL).border_type(BorderType::Rounded)
-            .border_style(Style::new().fg(self.border(idx)))
-    }
-
-    fn waiting(&self) -> Paragraph {
-        Paragraph::new(Line::from_spans(vec![Span::styled("  --", Style::new().fg(DIM))]))
+    fn block<'a>(&self, idx: usize, title: &'a str) -> Block<'a> {
+        Block::new().title(title).borders(Borders::ALL)
+            .border_type(BorderType::Rounded).border_style(Style::new().fg(self.border(idx)))
     }
 
     fn draw_events(&self, f: &mut Frame, area: Rect) {
-        let b = self.panel_block(0, " EVENTS ");
+        let b = self.block(0, " EVENTS ");
         let inner = b.inner(area); b.render(area, f);
         let mut st = self.log_st.clone();
         self.log.render(inner, f, &mut st);
@@ -297,73 +312,71 @@ impl App_ {
 
     fn draw_procs(&self, f: &mut Frame, area: Rect) {
         let title = format!(" PROCESSES ({}) ", self.procs.len());
-        let b = self.panel_block(1, &title);
+        let b = self.block(1, &title);
         let inner = b.inner(area); b.render(area, f);
-        if self.procs.is_empty() { self.waiting().render(inner, f); return; }
+        if self.procs.is_empty() { return; }
 
         let max = self.procs.iter().map(|p| p.opens).max().unwrap_or(1).max(1);
-        let bar_w = ((inner.width as f64 - 34.0) * 0.5) as usize;
+        let bar_w = inner.width.saturating_sub(30) as usize;
+        let colors = MiniBarColors::new(BLUE, GREEN, AMBER, RED);
         let rows = inner.height as usize;
 
-        let lines: Vec<Line> = self.procs.iter().take(rows).map(|p| {
-            let ratio = p.opens as f64 / max as f64;
-            let filled = (ratio * bar_w as f64) as usize;
-            let bar: String = "#".repeat(filled.min(bar_w));
-            let pad: String = " ".repeat(bar_w.saturating_sub(filled));
+        for (i, p) in self.procs.iter().take(rows).enumerate() {
+            let y = inner.y + i as u16;
+            let value = (p.opens as f64 / max as f64).clamp(0.0, 1.0);
 
-            let (pid_c, bar_c) = if p.alerts > 0 { (RED, RED) } else { (DIM, BLUE) };
-            let comm_c = if p.alerts > 0 { RED } else { BRIGHT };
+            // Label area: pid + comm
+            let label_w = 24.min(inner.width);
+            let label = format!("{:>5} {:<16}", p.pid, trunc(&p.comm, 16));
+            let label_c = if p.alerts > 0 { RED } else { BRIGHT };
+            Paragraph::new(Line::from_spans(vec![
+                Span::styled(label, Style::new().fg(label_c)),
+            ])).render(Rect::new(inner.x, y, label_w, 1), f);
 
-            Line::from_spans(vec![
-                Span::styled(format!(" {:>5} ", p.pid), Style::new().fg(pid_c)),
-                Span::styled(format!("{:<16}", trunc(&p.comm, 16)), Style::new().fg(comm_c)),
-                Span::styled(format!("{:>5} ", p.opens), Style::new().fg(CYAN)),
-                Span::styled(bar.to_string(), Style::new().fg(bar_c)),
-                Span::styled(pad.to_string(), Style::new().fg(DIM)),
-                Span::styled(format!(" {:>3}", p.alerts), Style::new().fg(if p.alerts>0 {RED} else {DIM})),
-            ])
-        }).collect();
-        Paragraph::new(ftui_text::Text::from_lines(lines)).render(inner, f);
+            // MiniBar
+            let bar_area = Rect::new(inner.x + label_w + 1, y, bar_w as u16, 1);
+            MiniBar::new(value, bar_w as u16)
+                .colors(colors)
+                .show_percent(true)
+                .render(bar_area, f);
+        }
     }
 
-    fn draw_exts(&self, f: &mut Frame, area: Rect) {
-        let b = self.panel_block(4, " FILE TYPES ");
+    fn draw_exts_chart(&self, f: &mut Frame, area: Rect) {
+        let b = self.block(4, " FILE TYPES ");
         let inner = b.inner(area); b.render(area, f);
-        if self.exts.is_empty() { self.waiting().render(inner, f); return; }
+        if self.exts.is_empty() { return; }
 
-        let max = self.exts.iter().map(|(_,c)| *c).max().unwrap_or(1);
-        let bar_w = ((inner.width as f64 - 22.0) * 0.5) as usize;
-        let rows = inner.height as usize;
-
-        let lines: Vec<Line> = self.exts.iter().take(rows).map(|(ext, cnt)| {
-            let ratio = *cnt as f64 / max as f64;
-            let filled = (ratio * bar_w as f64) as usize;
-            let bar: String = "#".repeat(filled.min(bar_w));
-            let pad: String = " ".repeat(bar_w.saturating_sub(filled));
-            let c = ext_color(ext);
-
-            Line::from_spans(vec![
-                Span::styled(format!(" .{:<10}", ext), Style::new().fg(c)),
-                Span::styled(format!("{:>6} ", cnt), Style::new().fg(FG)),
-                Span::styled(bar.to_string(), Style::new().fg(c)),
-                Span::styled(pad.to_string(), Style::new().fg(DIM)),
-            ])
+        // BarChart from ftui-extras
+        let max_count = self.exts.iter().map(|(_,c)| *c as f64).fold(0.0f64, f64::max).max(1.0);
+        let groups: Vec<BarGroup> = self.exts.iter().take(10).map(|(ext, cnt)| {
+            BarGroup::new(ext.as_str(), vec![*cnt as f64])
         }).collect();
-        Paragraph::new(ftui_text::Text::from_lines(lines)).render(inner, f);
+
+        let palette: Vec<PackedRgba> = self.exts.iter().take(10)
+            .map(|(ext, _)| ext_color(ext)).collect();
+
+        BarChart::new(groups)
+            .direction(BarDirection::Horizontal)
+            .mode(BarMode::Grouped)
+            .bar_width(1)
+            .colors(palette)
+            .style(Style::new().fg(FG))
+            .max(max_count)
+            .render(inner, f);
     }
 
     fn draw_net(&self, f: &mut Frame, area: Rect) {
         let title = format!(" NETWORK ({}) ", self.net.len());
-        let b = self.panel_block(2, &title);
+        let b = self.block(2, &title);
         let inner = b.inner(area); b.render(area, f);
-        if self.net.is_empty() { self.waiting().render(inner, f); return; }
+        if self.net.is_empty() { return; }
 
         let rows = inner.height as usize;
         let lines: Vec<Line> = self.net.iter().rev().take(rows).map(|e| {
             let (arrow, c) = match e.kind.as_str() {
                 "Connect" => (">", BLUE), "Accept" => ("<", GREEN),
-                "SendTo" => (">", AMBER), "RecvFrom" => ("<", PURPLE),
-                _ => ("?", DIM),
+                "SendTo" => (">", AMBER), "RecvFrom" => ("<", PURPLE), _ => ("?", DIM),
             };
             Line::from_spans(vec![
                 Span::styled(format!("{} ", arrow), Style::new().fg(c).attrs(StyleFlags::BOLD)),
@@ -377,47 +390,82 @@ impl App_ {
     }
 
     fn draw_files(&self, f: &mut Frame, area: Rect) {
-        let b = self.panel_block(3, " TOP FILES ");
+        let b = self.block(3, " TOP FILES ");
         let inner = b.inner(area); b.render(area, f);
-        if self.files.is_empty() { self.waiting().render(inner, f); return; }
+        if self.files.is_empty() { return; }
 
-        let max = self.files.iter().map(|r| r.count).max().unwrap_or(1);
-        let bar_w = ((inner.width as f64 - 32.0) * 0.5) as usize;
+        let max = self.files.iter().map(|r| r.count).max().unwrap_or(1).max(1);
         let rows = inner.height as usize;
+        let bar_w = inner.width.saturating_sub(36) as usize;
+        let colors = MiniBarColors::new(BLUE, GREEN, AMBER, RED);
 
-        let lines: Vec<Line> = self.files.iter().take(rows).enumerate().map(|(i, r)| {
-            let ratio = r.count as f64 / max as f64;
-            let filled = (ratio * bar_w as f64) as usize;
-            let bar: String = "#".repeat(filled.min(bar_w));
-            let pad: String = " ".repeat(bar_w.saturating_sub(filled));
+        for (i, r) in self.files.iter().take(rows).enumerate() {
+            let y = inner.y + i as u16;
+            let value = (r.count as f64 / max as f64).clamp(0.0, 1.0);
 
-            let ecol = if r.entropy > 0.7 { RED } else if r.entropy > 0.4 { AMBER } else { GREEN };
             let rank_c = if i < 3 { AMBER } else { DIM };
+            let label = format!("{:>2}. {:<16}", i+1, trunc(&r.name, 16));
+            let ext_c = ext_color(&r.ext);
+            let entropy_c = if r.entropy > 0.7 { RED } else if r.entropy > 0.4 { AMBER } else { GREEN };
 
-            Line::from_spans(vec![
-                Span::styled(format!(" {:>2}.", i+1), Style::new().fg(rank_c)),
-                Span::styled(format!(" {:<16}", trunc(&r.name, 16)), Style::new().fg(BRIGHT)),
-                Span::styled(format!(" {:>5}", r.count), Style::new().fg(CYAN)),
-                Span::styled(bar.to_string(), Style::new().fg(BLUE)),
-                Span::styled(pad.to_string(), Style::new().fg(DIM)),
-                Span::styled(format!(" .{:<6}", r.ext), Style::new().fg(ext_color(&r.ext))),
-                Span::styled(format!(" {:.1}", r.entropy), Style::new().fg(ecol)),
-            ])
-        }).collect();
-        Paragraph::new(ftui_text::Text::from_lines(lines)).render(inner, f);
+            let label_w = 28.min(inner.width);
+            Paragraph::new(Line::from_spans(vec![
+                Span::styled(label, Style::new().fg(rank_c)),
+                Span::styled(format!(" .{:<4}", r.ext), Style::new().fg(ext_c)),
+            ])).render(Rect::new(inner.x, y, label_w, 1), f);
+
+            let bar_area = Rect::new(inner.x + label_w + 1, y, bar_w as u16, 1);
+            MiniBar::new(value, bar_w as u16)
+                .colors(colors)
+                .show_percent(false)
+                .render(bar_area, f);
+
+            // Entropy indicator after bar
+            let entropy_x = inner.x + label_w + 1 + bar_w as u16 + 1;
+            if entropy_x < inner.right() {
+                Paragraph::new(Line::from_spans(vec![
+                    Span::styled(format!("H:{:.1}", r.entropy), Style::new().fg(entropy_c)),
+                ])).render(Rect::new(entropy_x, y, 6, 1), f);
+            }
+        }
     }
 
-    fn draw_alerts(&self, f: &mut Frame, area: Rect) {
-        let title = format!(" ALERTS ({}) ", self.alert_count);
-        let b = self.panel_block(5, &title);
+    fn draw_heatmap(&self, f: &mut Frame, area: Rect) {
+        let b = self.block(5, " HEATMAP ");
         let inner = b.inner(area); b.render(area, f);
-        if self.alert_count == 0 {
-            Paragraph::new(Line::from_spans(vec![
-                Span::styled("  ok", Style::new().fg(GREEN)),
-            ])).render(inner, f);
-        } else {
-            let mut st = self.alert_st.clone();
-            self.alerts.render(inner, f, &mut st);
+        if inner.width < 4 || inner.height < 4 { return; }
+
+        // Live heatmap using Canvas + heatmap_gradient
+        let phase = self.time * 0.5;
+        let w = inner.width as f64;
+        let h = inner.height as f64;
+
+        // Build heatmap data from extension counts (normalized)
+        let max_ext = self.exts.iter().map(|(_,c)| *c).max().unwrap_or(1).max(1) as f64;
+        let ext_data: Vec<f64> = self.exts.iter().take(8).map(|(_,c)| *c as f64 / max_ext).collect();
+
+        for dy in 0..inner.height {
+            for dx in 0..inner.width {
+                let nx = dx as f64 / (w - 1.0).max(1.0);
+                let ny = dy as f64 / (h - 1.0).max(1.0);
+
+                // Combine wave patterns with real data
+                let wave = ((nx * 4.0 + phase).sin() * 0.3
+                    + (ny * 3.0 - phase * 0.7).cos() * 0.3
+                    + 0.5).clamp(0.0, 1.0);
+
+                // Modulate with real extension data if available
+                let data_idx = ((nx * ext_data.len() as f64) as usize).min(ext_data.len().saturating_sub(1));
+                let data_val = ext_data.get(data_idx).copied().unwrap_or(0.5);
+                let value = (wave * 0.6 + data_val * 0.4).clamp(0.0, 1.0);
+
+                let color = heatmap_gradient(value);
+                let mut cell = RenderCell::from_char(' ');
+                cell.bg = color;
+                if let Some(slot) = f.buffer.get_mut(inner.x + dx, inner.y + dy) {
+                    *slot = cell;
+                }
+            }
         }
     }
 
@@ -436,31 +484,27 @@ impl App_ {
         let lines = vec![
             Line::from_spans(vec![Span::styled(" halcyon — keyboard shortcuts", Style::new().fg(BLUE).attrs(StyleFlags::BOLD))]),
             Line::raw(""),
-            Line::from_spans(vec![Span::styled(" NAVIGATION", Style::new().fg(AMBER).attrs(StyleFlags::BOLD))]),
-            Line::raw("   Tab/Shift+Tab  cycle panels"),
-            Line::raw("   1-6            jump to panel"),
-            Line::raw("   j/k or arrows  scroll"),
-            Line::raw("   PgUp/PgDn      page scroll"),
-            Line::raw("   Home/End       top/bottom"),
+            Line::from_spans(vec![Span::styled(" NAV", Style::new().fg(AMBER).attrs(StyleFlags::BOLD))]),
+            Line::raw("   Tab/Shift+Tab   cycle panels"),
+            Line::raw("   1-6             jump to panel"),
+            Line::raw("   j/k or arrows   scroll"),
             Line::raw(""),
-            Line::from_spans(vec![Span::styled(" ACTIONS", Style::new().fg(AMBER).attrs(StyleFlags::BOLD))]),
-            Line::raw("   p              pause/resume"),
-            Line::raw("   q/Esc          quit"),
-            Line::raw("   Ctrl+C         force quit"),
+            Line::from_spans(vec![Span::styled(" ACT", Style::new().fg(AMBER).attrs(StyleFlags::BOLD))]),
+            Line::raw("   p               pause/resume"),
+            Line::raw("   q/Esc           quit"),
+            Line::raw("   Ctrl+C          force quit"),
         ];
         let b = Block::new().title(" help ").borders(Borders::ALL)
             .border_type(BorderType::Rounded).border_style(Style::new().fg(BLUE));
         let inner = b.inner(area); b.render(area, f);
         Paragraph::new(ftui_text::Text::from_lines(lines)).render(inner, f);
     }
-
-    fn border_char(&self) -> &'static str { "|" }
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
 fn trunc(s: &str, max: usize) -> String {
-    if s.len() <= max { s.to_string() } else { format!("{}~", &s[..max-1]) }
+    if s.len() <= max { s.to_string() } else { format!("{}~", &s[..max.saturating_sub(1)]) }
 }
 
 fn fmt_dur(s: u64) -> String {
@@ -475,8 +519,7 @@ fn ext_color(ext: &str) -> PackedRgba {
         "rs"|"py"|"js"|"ts"|"c"|"cpp"|"go"|"java" => GREEN,
         "pdf"|"doc"|"docx"|"txt"|"md" => AMBER,
         "jpg"|"png"|"mp4"|"mp3" => PURPLE,
-        "json"|"toml"|"yaml"|"yml" => CYAN,
-        _ => BLUE,
+        "json"|"toml"|"yaml"|"yml" => CYAN, _ => BLUE,
     }
 }
 
@@ -484,7 +527,6 @@ fn ext_color(ext: &str) -> PackedRgba {
 
 pub fn run(mut monitor: Monitor) -> anyhow::Result<()> {
     let (tx, rx) = mpsc::channel::<Snapshot>();
-
     let mut tick: u64 = 0;
     let h = thread::Builder::new().name("poll".into()).spawn(move || loop {
         let evts: Vec<Evt> = monitor.poll().into_iter().filter_map(|o| match o {
@@ -497,7 +539,6 @@ pub fn run(mut monitor: Monitor) -> anyhow::Result<()> {
                 comm: a.comm, file: None, is_alert: true, opens: a.opens,
             }),
         }).collect();
-
         tick += 1;
         if tick % 6 == 0 || !evts.is_empty() {
             let snap = Snapshot {
@@ -512,7 +553,6 @@ pub fn run(mut monitor: Monitor) -> anyhow::Result<()> {
         }
         thread::sleep(Duration::from_millis(16));
     })?;
-
     let app = App_::new(rx);
     let res = App::new(app).screen_mode(ScreenMode::AltScreen).run();
     let _ = h.join();
