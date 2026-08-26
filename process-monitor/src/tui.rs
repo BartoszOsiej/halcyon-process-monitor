@@ -113,6 +113,10 @@ struct App_ {
     heatmap: Vec<HeatmapRow>,
     heatmap_exts: Vec<String>,
     rates: VecDeque<RateSample>,
+    rate_chart: Vec<(f64, f64)>, // (x, exec_count) for LineChart
+    open_chart: Vec<(f64, f64)>, // (x, open_count)
+    alert_chart: Vec<(f64, f64)>, // (x, alert_count)
+    chart_x: f64,
     focused: usize,
     paused: bool,
     help: bool,
@@ -133,6 +137,7 @@ impl App_ {
             alerts: LogViewer::new(200), alert_st: LogViewerState::default(),
             net: VecDeque::new(), procs: Vec::new(), files: Vec::new(), exts: Vec::new(),
             heatmap: Vec::new(), heatmap_exts: Vec::new(),
+            rate_chart: Vec::new(), open_chart: Vec::new(), alert_chart: Vec::new(), chart_x: 0.0,
             rates: VecDeque::new(), focused: 0, paused: false, help: false,
             total: 0, lost: 0, uptime: 0, alert_count: 0, time: 0.0, rx,
         }
@@ -175,6 +180,21 @@ impl App_ {
         ext_vec.sort_by(|a,b| b.1.cmp(&a.1));
         self.exts = ext_vec;
         self.rates = s.rates;
+
+        // Append to line chart data
+        for r in &self.rates {
+            self.chart_x += 1.0;
+            self.rate_chart.push((self.chart_x, r.exec_count as f64));
+            self.open_chart.push((self.chart_x, r.open_count as f64));
+            self.alert_chart.push((self.chart_x, r.alert_count as f64));
+        }
+        // Keep last 120 data points
+        let max_pts = 120;
+        if self.rate_chart.len() > max_pts {
+            self.rate_chart.drain(..self.rate_chart.len() - max_pts);
+            self.open_chart.drain(..self.open_chart.len() - max_pts);
+            self.alert_chart.drain(..self.alert_chart.len() - max_pts);
+        }
         self.total = s.total; self.lost = s.lost; self.uptime = s.uptime;
 
         // Build real heatmap: top 12 processes × top 8 extensions
@@ -246,14 +266,16 @@ impl Model for App_ {
         if self.help { return self.draw_help(frame, area); }
 
         let outer = Flex::vertical().constraints([
-            Constraint::Fixed(2), // header with badges + color wave
-            Constraint::Min(0),  // body
+            Constraint::Fixed(2),  // header with badges + color wave
+            Constraint::Min(0),   // body
+            Constraint::Fixed(6), // linechart
             Constraint::Fixed(1), // status
         ]).split(area);
 
         self.draw_header(frame, outer[0]);
         self.draw_body(frame, outer[1]);
-        self.draw_status(frame, outer[2]);
+        self.draw_linechart(frame, outer[2]);
+        self.draw_status(frame, outer[3]);
     }
 
     fn subscriptions(&self) -> Vec<Box<dyn Subscription<Msg>>> {
@@ -611,6 +633,30 @@ impl App_ {
         Canvas::from_painter(&painter)
             .style(Style::new().fg(FG))
             .render(canvas_area, f);
+    }
+
+    fn draw_linechart(&self, f: &mut Frame, area: Rect) {
+        let b = self.block(6, " EVENT RATE ");
+        let inner = b.inner(area); b.render(area, f);
+        if inner.width < 10 || inner.height < 3 { return; }
+        if self.rate_chart.len() < 2 { return; }
+
+        let series = vec![
+            Series::new("exec", &self.rate_chart, BLUE).markers(true),
+            Series::new("open", &self.open_chart, GREEN),
+            Series::new("alert", &self.alert_chart, RED),
+        ];
+
+        let max_y = self.rate_chart.iter().chain(&self.open_chart).chain(&self.alert_chart)
+            .map(|&(_, y)| y).fold(0.0f64, f64::max).max(1.0);
+
+        LineChart::new(series)
+            .style(Style::new().fg(FG))
+            .x_labels(vec!["-60", "-30", "now"])
+            .y_labels(vec!["0", &format!("{:.0}", max_y / 2.0), &format!("{:.0}", max_y)])
+            .legend(true)
+            .y_bounds(0.0, max_y)
+            .render(inner, f);
     }
 
     fn draw_status(&self, f: &mut Frame, area: Rect) {
