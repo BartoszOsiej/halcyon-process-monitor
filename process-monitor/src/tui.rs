@@ -115,10 +115,14 @@ struct App_ {
     heatmap: Vec<HeatmapRow>,
     heatmap_exts: Vec<String>,
     rates: VecDeque<RateSample>,
-    rate_chart: Vec<(f64, f64)>, // (x, exec_count) for LineChart
-    open_chart: Vec<(f64, f64)>, // (x, open_count)
-    alert_chart: Vec<(f64, f64)>, // (x, alert_count)
+    rate_chart: Vec<(f64, f64)>, // (x, smoothed_exec) for LineChart
+    open_chart: Vec<(f64, f64)>,
+    alert_chart: Vec<(f64, f64)>,
     chart_x: f64,
+    // EMA smoothing
+    smooth_exec: f64,
+    smooth_open: f64,
+    smooth_alert: f64,
     focused: usize,
     paused: bool,
     help: bool,
@@ -140,6 +144,7 @@ impl App_ {
             net: VecDeque::new(), procs: Vec::new(), tree: Vec::new(), files: Vec::new(), exts: Vec::new(),
             heatmap: Vec::new(), heatmap_exts: Vec::new(),
             rate_chart: Vec::new(), open_chart: Vec::new(), alert_chart: Vec::new(), chart_x: 0.0,
+            smooth_exec: 0.0, smooth_open: 0.0, smooth_alert: 0.0,
             rates: VecDeque::new(), focused: 0, paused: false, help: false,
             total: 0, lost: 0, uptime: 0, alert_count: 0, time: 0.0, rx,
         }
@@ -170,11 +175,17 @@ impl App_ {
             self.total += 1;
             if e.is_alert { self.alert_count += 1; self.alerts.push(line.as_str()); }
         }
-        self.procs = s.stats.iter().map(|p| ProcRow {
-            pid: p.pid, comm: p.comm.clone(), opens: p.window_opens, alerts: p.alerts,
-        }).collect();
+        let system_comms = ["systemd", "kthreadd", "rcu_sched", "ksoftirqd", "migration",
+            "watchdog", "khungtaskd", "kswapd0", "kcompactd0", "jbd2", "init"];
+        self.procs = s.stats.iter()
+            .filter(|p| !system_comms.contains(&p.comm.as_str()))
+            .map(|p| ProcRow {
+                pid: p.pid, comm: p.comm.clone(), opens: p.window_opens, alerts: p.alerts,
+            }).collect();
         self.procs.sort_by(|a,b| b.opens.cmp(&a.opens));
-        self.tree = s.tree;
+        self.tree = s.tree.into_iter()
+            .filter(|(_, _, comm, _, _)| !system_comms.contains(&comm.as_str()))
+            .collect();
         self.files = s.top_files.iter().map(|f| FileRow {
             name: f.path.rsplit('/').next().unwrap_or(&f.path).to_string(),
             count: f.count, ext: f.extension.clone(), entropy: f.entropy,
@@ -184,14 +195,17 @@ impl App_ {
         self.exts = ext_vec;
         self.rates = s.rates;
 
-        // Append to line chart data
+        // EMA smoothing for line chart (alpha = 0.3)
+        let alpha = 0.3;
         for r in &self.rates {
             self.chart_x += 1.0;
-            self.rate_chart.push((self.chart_x, r.exec_count as f64));
-            self.open_chart.push((self.chart_x, r.open_count as f64));
-            self.alert_chart.push((self.chart_x, r.alert_count as f64));
+            self.smooth_exec = self.smooth_exec * (1.0 - alpha) + r.exec_count as f64 * alpha;
+            self.smooth_open = self.smooth_open * (1.0 - alpha) + r.open_count as f64 * alpha;
+            self.smooth_alert = self.smooth_alert * (1.0 - alpha) + r.alert_count as f64 * alpha;
+            self.rate_chart.push((self.chart_x, self.smooth_exec));
+            self.open_chart.push((self.chart_x, self.smooth_open));
+            self.alert_chart.push((self.chart_x, self.smooth_alert));
         }
-        // Keep last 120 data points
         let max_pts = 120;
         if self.rate_chart.len() > max_pts {
             self.rate_chart.drain(..self.rate_chart.len() - max_pts);
@@ -200,22 +214,33 @@ impl App_ {
         }
         self.total = s.total; self.lost = s.lost; self.uptime = s.uptime;
 
-        // Build real heatmap: top 12 processes × top 8 extensions
+        // Build heatmap: top procs × top exts (using global ext counts)
+        // Filter system processes
+        let system_comms = ["systemd", "kthreadd", "rcu_sched", "ksoftirqd", "migration",
+            "watchdog", "khungtaskd", "kswapd0", "kcompactd0", "jbd2"];
+        let mut procs_for_heat: Vec<&ProcStats> = s.stats.iter()
+            .filter(|p| !system_comms.contains(&p.comm.as_str()))
+            .collect();
+        procs_for_heat.sort_by(|a,b| b.total_opens.cmp(&a.total_opens));
+        procs_for_heat.truncate(8);
+
         let mut all_exts: Vec<(String, u64)> = s.exts.iter().map(|(k,v)| (k.clone(),*v)).collect();
         all_exts.sort_by(|a,b| b.1.cmp(&a.1));
-        let top_exts: Vec<String> = all_exts.iter().take(8).map(|(e,_)| e.clone()).collect();
-        let top_procs: Vec<&ProcStats> = s.stats.iter().take(12).collect();
-        self.heatmap = top_procs.iter().map(|p| {
-            let mut ext_counts: Vec<(String, u64)> = top_exts.iter().map(|ext| {
-                (ext.clone(), p.extensions.get(ext).copied().unwrap_or(0))
+        let top_exts: Vec<String> = all_exts.iter().take(6).map(|(e,_)| e.clone()).collect();
+
+        if !procs_for_heat.is_empty() && !top_exts.is_empty() {
+            self.heatmap = procs_for_heat.iter().map(|p| {
+                let ext_counts: Vec<(String, u64)> = top_exts.iter().map(|ext| {
+                    (ext.clone(), p.extensions.get(ext).copied().unwrap_or(0))
+                }).collect();
+                HeatmapRow { label: p.comm.clone(), ext_counts }
             }).collect();
-            ext_counts.sort_by(|a,b| b.1.cmp(&a.1));
-            HeatmapRow {
-                label: p.comm.clone(),
-                ext_counts,
-            }
-        }).collect();
-        self.heatmap_exts = top_exts;
+            self.heatmap_exts = top_exts;
+        } else {
+            // Fallback: use global extension counts as single-row heatmap
+            self.heatmap = vec![];
+            self.heatmap_exts = vec![];
+        }
     }
 }
 
@@ -444,7 +469,13 @@ impl App_ {
         let title = format!(" NETWORK ({}) ", self.net.len());
         let b = self.block(2, &title);
         let inner = b.inner(area); b.render(area, f);
-        if self.net.is_empty() { return; }
+        if self.net.is_empty() {
+            Paragraph::new(Line::from_spans(vec![
+                Span::styled("  no network events captured", Style::new().fg(DIM)),
+                Span::styled("\n  (kernel may lack sockaddr capture)", Style::new().fg(DIM)),
+            ])).render(inner, f);
+            return;
+        }
 
         // Split: top = aggregated per-process, bottom = Canvas traffic flow
         let split = Flex::vertical().constraints([
@@ -574,7 +605,14 @@ impl App_ {
         let title = format!(" HEATMAP ({}x{}) ", self.heatmap.len(), self.heatmap_exts.len());
         let b = self.block(5, &title);
         let inner = b.inner(area); b.render(area, f);
-        if inner.width < 8 || inner.height < 4 || self.heatmap.is_empty() { return; }
+        if inner.width < 8 || inner.height < 4 || self.heatmap.is_empty() {
+            if self.heatmap.is_empty() && inner.height >= 2 {
+                Paragraph::new(Line::from_spans(vec![
+                    Span::styled("  waiting for file open events...", Style::new().fg(DIM)),
+                ])).render(Rect::new(inner.x + 1, inner.y + 1, inner.width - 2, 1), f);
+            }
+            return;
+        }
 
         // Layout: top row = ext labels, left col = proc names, rest = canvas heatmap
         let label_w: u16 = 12;
