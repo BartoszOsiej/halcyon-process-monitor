@@ -381,10 +381,19 @@ fn run_json(monitor: &mut Monitor) -> Result<()> {
 
 fn run_plain(monitor: &mut Monitor) -> Result<()> {
     use colored::Colorize;
+    const NOISY: &[&str] = &[
+        "freebuff", "waybar", "upowerd", "mutter", "Xwayland", "hyprland",
+        "sway", "fuzzel", "wlsunset", "pipewire", "wireplumber",
+        "dbus-daemon", "systemd-resolve", "systemd-network", "dunst", "mako",
+    ];
     loop {
         for output in monitor.poll() {
             match output {
-                Output::Event(ev) => match ev.kind {
+                Output::Event(ev) => {
+                    if NOISY.contains(&ev.comm.as_str()) {
+                        continue;
+                    }
+                    match ev.kind {
                     Kind::Exec => {
                         println!(
                             "{} {} [{}] {} by uid {}",
@@ -442,7 +451,8 @@ fn run_plain(monitor: &mut Monitor) -> Result<()> {
                             details.dimmed()
                         );
                     }
-                },
+                }
+                }
                 Output::Alert(al) => {
                     println!(
                         "{} {} [{}] {} opened {} files in 1s!",

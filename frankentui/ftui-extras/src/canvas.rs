@@ -117,21 +117,25 @@ impl CanvasPixelRect {
     }
 
     #[inline]
+    #[allow(dead_code)]
     pub(crate) const fn contains_y(self, y: usize) -> bool {
         y >= self.y && y < self.bottom()
     }
 
     #[inline]
+    #[allow(dead_code)]
     pub(crate) const fn left(self) -> usize {
         self.x
     }
 
     #[inline]
+    #[allow(dead_code)]
     pub(crate) const fn right(self) -> usize {
         self.x.saturating_add(self.width)
     }
 
     #[inline]
+    #[allow(dead_code)]
     const fn bottom(self) -> usize {
         self.y.saturating_add(self.height)
     }

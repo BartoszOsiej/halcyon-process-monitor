@@ -3483,6 +3483,7 @@ dependencies = [
  "crossterm",
  "ftui",
  "ftui-core",
+ "ftui-extras",
  "ftui-layout",
  "ftui-render",
  "ftui-runtime",
