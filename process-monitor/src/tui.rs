@@ -232,6 +232,17 @@ impl Model for App_ {
 
     fn view(&self, frame: &mut Frame) {
         let area = Rect::from_size(frame.buffer.width(), frame.buffer.height());
+
+        // Fill entire screen with dark background
+        let bg = PackedRgba::rgb(10, 14, 22);
+        for y in 0..area.height {
+            for x in 0..area.width {
+                if let Some(cell) = frame.buffer.get_mut(x, y) {
+                    cell.bg = bg;
+                }
+            }
+        }
+
         if self.help { return self.draw_help(frame, area); }
 
         let outer = Flex::vertical().constraints([
@@ -460,16 +471,19 @@ impl App_ {
         let title = format!(" HEATMAP ({}x{}) ", self.heatmap.len(), self.heatmap_exts.len());
         let b = self.block(5, &title);
         let inner = b.inner(area); b.render(area, f);
-        if inner.width < 6 || inner.height < 3 || self.heatmap.is_empty() { return; }
+        if inner.width < 8 || inner.height < 4 || self.heatmap.is_empty() { return; }
 
-        // Layout: left column = process names, right = heatmap cells
+        // Layout: top row = ext labels, left col = proc names, rest = canvas heatmap
         let label_w: u16 = 12;
-        let cols_w = inner.width.saturating_sub(label_w + 1);
-        let rows_h = inner.height;
-        let cell_w = cols_w / self.heatmap_exts.len().max(1) as u16;
-        let cell_h = rows_h / self.heatmap.len().max(1) as u16;
+        let header_h: u16 = 1;
+        let canvas_area = Rect::new(
+            inner.x + label_w,
+            inner.y + header_h,
+            inner.width.saturating_sub(label_w),
+            inner.height.saturating_sub(header_h),
+        );
 
-        if cell_w < 1 || cell_h < 1 { return; }
+        if canvas_area.width < 2 || canvas_area.height < 2 { return; }
 
         // Find max count for normalization
         let mut max_count: u64 = 1;
@@ -479,64 +493,58 @@ impl App_ {
             }
         }
 
-        // Render extension labels on top
+        // Extension labels on top
+        let ext_cols = self.heatmap_exts.len().max(1) as u16;
+        let col_w = canvas_area.width / ext_cols;
         for (i, ext) in self.heatmap_exts.iter().enumerate() {
-            let x = inner.x + label_w + 1 + i as u16 * cell_w;
-            if x + cell_w > inner.right() { break; }
-            let label = format!(".{:<width$}", ext, width = (cell_w as usize).saturating_sub(1));
+            let x = canvas_area.x + i as u16 * col_w;
+            if x + col_w > canvas_area.right() { break; }
+            let label = format!(".{:<w$}", ext, w = (col_w as usize).saturating_sub(1));
             Paragraph::new(Line::from_spans(vec![Span::styled(label, Style::new().fg(DIM))]))
-                .render(Rect::new(x, inner.y, cell_w, 1), f);
+                .render(Rect::new(x, inner.y, col_w, 1), f);
         }
 
-        // Render process rows
-        for (row_i, row) in self.heatmap.iter().enumerate() {
-            if row_i as u16 >= rows_h { break; }
-            let y = inner.y + 1 + row_i as u16 * cell_h;
-            if y + cell_h > inner.bottom() { break; }
-
-            // Process label
+        // Process names on left
+        let proc_rows = self.heatmap.len().max(1) as u16;
+        let row_h = canvas_area.height / proc_rows;
+        for (i, row) in self.heatmap.iter().enumerate() {
+            let y = canvas_area.y + i as u16 * row_h;
+            if y + row_h > canvas_area.bottom() { break; }
             let label = trunc(&row.label, label_w as usize);
             Paragraph::new(Line::from_spans(vec![Span::styled(label, Style::new().fg(FG))]))
                 .render(Rect::new(inner.x, y, label_w, 1), f);
+        }
 
-            // Extension cells
+        // Canvas heatmap with Mode::Block (2x2 subpixels per cell)
+        let mut painter = Painter::for_area(canvas_area, Mode::Block);
+        let (pw, ph) = painter.size();
+
+        for (row_i, row) in self.heatmap.iter().enumerate() {
             for (col_i, ext) in self.heatmap_exts.iter().enumerate() {
                 let count = row.ext_counts.iter()
                     .find(|(e, _)| e == ext)
                     .map(|(_, c)| *c)
                     .unwrap_or(0);
-                let value = count as f64 / max_count as f64;
-                let color = heatmap_gradient(value.clamp(0.0, 1.0));
+                let value = (count as f64 / max_count as f64).clamp(0.0, 1.0);
+                let color = heatmap_gradient(value);
 
-                let cx = inner.x + label_w + 1 + col_i as u16 * cell_w;
-                if cx + cell_w > inner.right() { break; }
+                // Map to canvas pixel coordinates
+                let px_start = (col_i as f64 / self.heatmap_exts.len().max(1) as f64 * pw as f64) as i32;
+                let px_end = ((col_i + 1) as f64 / self.heatmap_exts.len().max(1) as f64 * pw as f64) as i32;
+                let py_start = (row_i as f64 / self.heatmap.len().max(1) as f64 * ph as f64) as i32;
+                let py_end = ((row_i + 1) as f64 / self.heatmap.len().max(1) as f64 * ph as f64) as i32;
 
-                // Fill cell area with heatmap color
-                for dy in 0..cell_h {
-                    for dx in 0..cell_w {
-                        let px = cx + dx;
-                        let py = y + dy;
-                        if px < inner.right() && py < inner.bottom() {
-                            let mut cell = RenderCell::from_char(' ');
-                            cell.bg = color;
-                            if let Some(slot) = f.buffer.get_mut(px, py) {
-                                *slot = cell;
-                            }
-                        }
+                for py in py_start..py_end {
+                    for px in px_start..px_end {
+                        painter.point_colored(px, py, color);
                     }
-                }
-
-                // Show count in cell center if wide enough
-                if cell_w >= 3 && count > 0 {
-                    let count_str = format!("{}", count);
-                    let text_x = cx + (cell_w - count_str.len() as u16) / 2;
-                    let text_y = y + cell_h / 2;
-                    let fg = if value > 0.6 { PackedRgba::rgb(10, 10, 10) } else { FG };
-                    Paragraph::new(Line::from_spans(vec![Span::styled(count_str, Style::new().fg(fg).attrs(StyleFlags::BOLD))]))
-                        .render(Rect::new(text_x, text_y, cell_w, 1), f);
                 }
             }
         }
+
+        Canvas::from_painter(&painter)
+            .style(Style::new().fg(FG))
+            .render(canvas_area, f);
     }
 
     fn draw_status(&self, f: &mut Frame, area: Rect) {
