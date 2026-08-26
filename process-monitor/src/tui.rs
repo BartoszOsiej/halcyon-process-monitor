@@ -409,21 +409,87 @@ impl App_ {
         let inner = b.inner(area); b.render(area, f);
         if self.net.is_empty() { return; }
 
-        let rows = inner.height as usize;
-        let lines: Vec<Line> = self.net.iter().rev().take(rows).map(|e| {
-            let (arrow, c) = match e.kind.as_str() {
-                "Connect" => (">", BLUE), "Accept" => ("<", GREEN),
-                "SendTo" => (">", AMBER), "RecvFrom" => ("<", PURPLE), _ => ("?", DIM),
-            };
-            Line::from_spans(vec![
-                Span::styled(format!("{} ", arrow), Style::new().fg(c).attrs(StyleFlags::BOLD)),
-                Span::styled(format!("{:<8}", e.kind), Style::new().fg(c)),
-                Span::styled(format!("{:>6} ", e.pid), Style::new().fg(DIM)),
-                Span::styled(format!("{:<12}", trunc(&e.comm, 12)), Style::new().fg(FG)),
-                Span::styled(format!(" {}", e.addr), Style::new().fg(PURPLE)),
-            ])
-        }).collect();
-        Paragraph::new(ftui_text::Text::from_lines(lines)).render(inner, f);
+        // Split: top = aggregated per-process, bottom = Canvas traffic flow
+        let split = Flex::vertical().constraints([
+            Constraint::Percentage(60.0),
+            Constraint::Percentage(40.0),
+        ]).split(inner);
+
+        // --- Top: per-process aggregated connections ---
+        let mut proc_conns: std::collections::HashMap<String, (u64, u64, u64, u64)> =
+            std::collections::HashMap::new(); // (connect, accept, send, recv)
+        for e in self.net.iter() {
+            let entry = proc_conns.entry(e.comm.clone()).or_insert((0,0,0,0));
+            match e.kind.as_str() {
+                "Connect" => entry.0 += 1,
+                "Accept" => entry.1 += 1,
+                "SendTo" => entry.2 += 1,
+                "RecvFrom" => entry.3 += 1,
+                _ => {}
+            }
+        }
+        let mut procs: Vec<_> = proc_conns.into_iter().collect();
+        procs.sort_by(|a,b| {
+            let a_total = a.1.0 + a.1.1 + a.1.2 + a.1.3;
+            let b_total = b.1.0 + b.1.1 + b.1.2 + b.1.3;
+            b_total.cmp(&a_total)
+        });
+        let max_conns = procs.iter().map(|(_,c)| c.0+c.1+c.2+c.3).max().unwrap_or(1).max(1);
+
+        let rows = split[0].height as usize;
+        let bar_w = split[0].width.saturating_sub(38) as usize;
+        for (i, (comm, (conn, acc, send, recv))) in procs.iter().take(rows).enumerate() {
+            let y = split[0].y + i as u16;
+            let total = conn + acc + send + recv;
+            let value = (total as f64 / max_conns as f64).clamp(0.0, 1.0);
+
+            // Label: comm + counts
+            let label = format!(" {:<14}", trunc(comm, 14));
+            Paragraph::new(Line::from_spans(vec![
+                Span::styled(label, Style::new().fg(BRIGHT)),
+                Span::styled(format!(" >{:<4} <{:<4} ", conn, acc), Style::new().fg(CYAN)),
+                Span::styled(format!(" {:>4}  {:>4} ", send, recv), Style::new().fg(PURPLE)),
+            ])).render(Rect::new(split[0].x, y, 38.min(split[0].width), 1), f);
+
+            // Bar: stacked direction
+            let bar_area = Rect::new(split[0].x + 38, y, bar_w as u16, 1);
+            let colors = MiniBarColors::new(BLUE, GREEN, AMBER, PURPLE);
+            MiniBar::new(value, bar_w as u16).colors(colors).show_percent(false).render(bar_area, f);
+        }
+
+        // --- Bottom: Canvas traffic flow visualization ---
+        if split[1].height >= 3 {
+            let canvas_area = Rect::new(split[1].x + 1, split[1].y + 1,
+                split[1].width.saturating_sub(2), split[1].height.saturating_sub(2));
+            if canvas_area.width >= 4 && canvas_area.height >= 2 {
+                let mut painter = Painter::for_area(canvas_area, Mode::Block);
+                let (pw, ph) = painter.size();
+                let t = self.time;
+
+                // Draw traffic flow: each recent event becomes a colored dot
+                // moving right (out) or left (in)
+                for (i, e) in self.net.iter().rev().take((pw * ph) as usize).enumerate() {
+                    let frac = i as f64 / (pw * ph).max(1) as f64;
+                    let px = if matches!(e.kind.as_str(), "Connect"|"SendTo") {
+                        // Outgoing: left to right
+                        (frac * pw as f64) as i32
+                    } else {
+                        // Incoming: right to left
+                        ((1.0 - frac) * pw as f64) as i32
+                    };
+                    let py = ((i as f64 / pw as f64).fract() * ph as f64) as i32;
+                    let c = match e.kind.as_str() {
+                        "Connect" => BLUE, "Accept" => GREEN,
+                        "SendTo" => AMBER, "RecvFrom" => PURPLE, _ => CYAN,
+                    };
+                    painter.point_colored(px, py, c);
+                }
+
+                Canvas::from_painter(&painter)
+                    .style(Style::new().fg(FG))
+                    .render(canvas_area, f);
+            }
+        }
     }
 
     fn draw_files(&self, f: &mut Frame, area: Rect) {
