@@ -242,11 +242,22 @@ impl Monitor {
         ] {
             if let Some(prog) = bpf.program_mut(name) {
                 let tp: Result<&mut TracePoint, _> = prog.try_into();
-                if let Ok(tp) = tp {
-                    if tp.load().is_ok() && tp.attach("syscalls", name).is_ok() {
-                        eprintln!("[halcyon] attached tracepoint syscalls/{name} ({label})");
+                match tp {
+                    Ok(tp) => {
+                        match tp.load() {
+                            Ok(()) => {
+                                match tp.attach("syscalls", name) {
+                                    Ok(_) => eprintln!("[halcyon] attached tracepoint syscalls/{name} ({label})"),
+                                    Err(e) => eprintln!("[halcyon] WARN: loaded {name} but attach failed: {e}"),
+                                }
+                            }
+                            Err(e) => eprintln!("[halcyon] WARN: failed to load {name}: {e}"),
+                        }
                     }
+                    Err(e) => eprintln!("[halcyon] WARN: {name} is not a TracePoint: {e}"),
                 }
+            } else {
+                eprintln!("[halcyon] WARN: program {name} not found in eBPF object");
             }
         }
 

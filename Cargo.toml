@@ -37,6 +37,6 @@ panic = "abort"
 inherits = "release"
 lto = false
 opt-level = 2
-codegen-units = 4
+codegen-units = 1
 strip = "symbols"
 panic = "abort"
