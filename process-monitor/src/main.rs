@@ -117,7 +117,7 @@ fn main() -> Result<()> {
         }
     } else if use_tui {
         eprintln!("[halcyon] TUI mode (q quit, p pause, c clear, arrows scroll, Tab switch panel)");
-        tui::run(&mut monitor)?;
+        tui::run(monitor)?;
     } else if args.json {
         run_json(&mut monitor)?;
     } else {
