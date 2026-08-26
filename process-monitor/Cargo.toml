@@ -26,7 +26,7 @@ serde = { version = "1", features = ["derive"] }
 ftui = { path = "../frankentui/ftui" }
 ftui-core = { path = "../frankentui/ftui-core" }
 ftui-render = { path = "../frankentui/ftui-render" }
-ftui-runtime = { path = "../frankentui/ftui-runtime" }
+ftui-runtime = { path = "../frankentui/ftui-runtime", features = ["crossterm-compat"] }
 ftui-layout = { path = "../frankentui/ftui-layout" }
 ftui-style = { path = "../frankentui/ftui-style" }
 ftui-text = { path = "../frankentui/ftui-text" }
