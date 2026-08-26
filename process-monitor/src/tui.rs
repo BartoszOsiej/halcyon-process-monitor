@@ -33,7 +33,7 @@ use ftui_widgets::progress::{MiniBar, MiniBarColors};
 use ftui_widgets::status_line::{StatusItem, StatusLine};
 use ftui_widgets::{StatefulWidget, Widget};
 
-use crate::monitor::{FileRank, Monitor, Output, ProcStats, RateSample};
+use crate::monitor::{FileRank, Monitor, Output, ProcStats, ProcessNode, RateSample};
 
 // ── Palette — cohesive cyberpunk ─────────────────────────────────────────
 
@@ -81,6 +81,7 @@ impl From<Event> for Msg {
 struct Snapshot {
     events: Vec<Evt>,
     stats: Vec<ProcStats>,
+    tree: Vec<(usize, u32, String, u64, u64)>, // (depth, pid, comm, opens, alerts)
     top_files: Vec<FileRank>,
     exts: std::collections::HashMap<String, u64>,
     rates: VecDeque<RateSample>,
@@ -108,6 +109,7 @@ struct App_ {
     alerts: LogViewer, alert_st: LogViewerState,
     net: VecDeque<NetEntry>,
     procs: Vec<ProcRow>,
+    tree: Vec<(usize, u32, String, u64, u64)>,
     files: Vec<FileRow>,
     exts: Vec<(String, u64)>,
     heatmap: Vec<HeatmapRow>,
@@ -135,7 +137,7 @@ impl App_ {
         Self {
             log, log_st: LogViewerState::default(),
             alerts: LogViewer::new(200), alert_st: LogViewerState::default(),
-            net: VecDeque::new(), procs: Vec::new(), files: Vec::new(), exts: Vec::new(),
+            net: VecDeque::new(), procs: Vec::new(), tree: Vec::new(), files: Vec::new(), exts: Vec::new(),
             heatmap: Vec::new(), heatmap_exts: Vec::new(),
             rate_chart: Vec::new(), open_chart: Vec::new(), alert_chart: Vec::new(), chart_x: 0.0,
             rates: VecDeque::new(), focused: 0, paused: false, help: false,
@@ -172,6 +174,7 @@ impl App_ {
             pid: p.pid, comm: p.comm.clone(), opens: p.window_opens, alerts: p.alerts,
         }).collect();
         self.procs.sort_by(|a,b| b.opens.cmp(&a.opens));
+        self.tree = s.tree;
         self.files = s.top_files.iter().map(|f| FileRow {
             name: f.path.rsplit('/').next().unwrap_or(&f.path).to_string(),
             count: f.count, ext: f.extension.clone(), entropy: f.entropy,
@@ -370,30 +373,42 @@ impl App_ {
     }
 
     fn draw_procs(&self, f: &mut Frame, area: Rect) {
-        let title = format!(" PROCESSES ({}) ", self.procs.len());
+        let title = format!(" PROCESSES ({}) ", self.tree.len());
         let b = self.block(1, &title);
         let inner = b.inner(area); b.render(area, f);
-        if self.procs.is_empty() { return; }
+        if self.tree.is_empty() { return; }
 
-        let max = self.procs.iter().map(|p| p.opens).max().unwrap_or(1).max(1);
-        let bar_w = inner.width.saturating_sub(30) as usize;
+        let max = self.tree.iter().map(|&(_, _, _, opens, _)| opens).max().unwrap_or(1).max(1);
+        let bar_w = inner.width.saturating_sub(38) as usize;
         let colors = MiniBarColors::new(BLUE, GREEN, AMBER, RED);
         let rows = inner.height as usize;
 
-        for (i, p) in self.procs.iter().take(rows).enumerate() {
+        for (i, &(depth, pid, ref comm, opens, alerts)) in self.tree.iter().take(rows).enumerate() {
             let y = inner.y + i as u16;
-            let value = (p.opens as f64 / max as f64).clamp(0.0, 1.0);
+            let value = (opens as f64 / max as f64).clamp(0.0, 1.0);
 
-            // Label area: pid + comm
-            let label_w = 24.min(inner.width);
-            let label = format!("{:>5} {:<16}", p.pid, trunc(&p.comm, 16));
-            let label_c = if p.alerts > 0 { RED } else { BRIGHT };
+            // Tree connector prefix
+            let indent = "│   ".repeat(depth);
+            let connector = if i + 1 < self.tree.len() && self.tree.get(i + 1).map_or(false, |&(d, _, _, _, _)| d > depth) {
+                "├── "
+            } else if depth > 0 {
+                "└── "
+            } else {
+                "    "
+            };
+
+            let prefix = format!("{}{}", indent, connector);
+            let label = format!("{} {:>5} {:<16}", prefix, pid, trunc(comm, 16));
+            let label_c = if alerts > 0 { RED } else if opens > 10 { AMBER } else { BRIGHT };
+
+            let text_w = inner.width.saturating_sub(bar_w as u16 + 1);
             Paragraph::new(Line::from_spans(vec![
                 Span::styled(label, Style::new().fg(label_c)),
-            ])).render(Rect::new(inner.x, y, label_w, 1), f);
+            ])).render(Rect::new(inner.x, y, text_w, 1), f);
 
             // MiniBar
-            let bar_area = Rect::new(inner.x + label_w + 1, y, bar_w as u16, 1);
+            let bar_x = inner.x + text_w;
+            let bar_area = Rect::new(bar_x, y, bar_w as u16, 1);
             MiniBar::new(value, bar_w as u16)
                 .colors(colors)
                 .show_percent(true)
@@ -731,8 +746,15 @@ pub fn run(mut monitor: Monitor) -> anyhow::Result<()> {
         }).collect();
         tick += 1;
         if tick % 6 == 0 || !evts.is_empty() {
+            let tree_raw = {
+                let tree = monitor.build_process_tree();
+                Monitor::flatten_tree(&tree).into_iter().map(|(depth, node)| {
+                    (depth, node.pid, node.comm.clone(), node.total_opens, node.alerts)
+                }).collect::<Vec<_>>()
+            };
             let snap = Snapshot {
                 events: evts, stats: monitor.stats_sorted(),
+                tree: tree_raw,
                 top_files: monitor.top_files(20),
                 exts: monitor.extension_counts().clone(),
                 rates: monitor.rate_history().clone(),
