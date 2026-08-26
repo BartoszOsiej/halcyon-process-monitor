@@ -35,21 +35,21 @@ use ftui_widgets::{StatefulWidget, Widget};
 
 use crate::monitor::{FileRank, Monitor, Output, ProcStats, RateSample};
 
-// ── Palette ───────────────────────────────────────────────────────────────
+// ── Palette — cohesive cyberpunk ─────────────────────────────────────────
 
 const BLUE: PackedRgba = PackedRgba::rgb(88, 166, 255);
-const GREEN: PackedRgba = PackedRgba::rgb(63, 185, 80);
+const TEAL: PackedRgba = PackedRgba::rgb(56, 189, 215);
+const GREEN: PackedRgba = PackedRgba::rgb(80, 200, 120);
 const RED: PackedRgba = PackedRgba::rgb(248, 81, 73);
-const AMBER: PackedRgba = PackedRgba::rgb(210, 153, 34);
-const PURPLE: PackedRgba = PackedRgba::rgb(188, 140, 255);
-const CYAN: PackedRgba = PackedRgba::rgb(56, 189, 248);
-const DIM: PackedRgba = PackedRgba::rgb(80, 90, 110);
-const FG: PackedRgba = PackedRgba::rgb(180, 190, 210);
-const BRIGHT: PackedRgba = PackedRgba::rgb(220, 230, 245);
-const BORDER: PackedRgba = PackedRgba::rgb(50, 56, 72);
+const AMBER: PackedRgba = PackedRgba::rgb(250, 180, 50);
+const PURPLE: PackedRgba = PackedRgba::rgb(160, 120, 240);
+const PINK: PackedRgba = PackedRgba::rgb(240, 100, 170);
+const CYAN: PackedRgba = PackedRgba::rgb(100, 210, 245);
+const DIM: PackedRgba = PackedRgba::rgb(65, 72, 88);
+const FG: PackedRgba = PackedRgba::rgb(170, 180, 200);
+const BRIGHT: PackedRgba = PackedRgba::rgb(230, 235, 248);
+const BORDER: PackedRgba = PackedRgba::rgb(40, 46, 62);
 const BORDER_HI: PackedRgba = PackedRgba::rgb(88, 166, 255);
-
-const CHART_PALETTE: [PackedRgba; 5] = [BLUE, GREEN, AMBER, PURPLE, CYAN];
 
 // ── Panels ────────────────────────────────────────────────────────────────
 
@@ -89,6 +89,12 @@ struct Snapshot {
     uptime: u64,
 }
 
+/// Row in the heatmap: process name + per-extension counts.
+struct HeatmapRow {
+    label: String,
+    ext_counts: Vec<(String, u64)>,
+}
+
 #[derive(Clone)]
 struct Evt { ts: String, kind: String, pid: u32, comm: String, file: Option<String>, is_alert: bool, opens: u64 }
 
@@ -104,6 +110,8 @@ struct App_ {
     procs: Vec<ProcRow>,
     files: Vec<FileRow>,
     exts: Vec<(String, u64)>,
+    heatmap: Vec<HeatmapRow>,
+    heatmap_exts: Vec<String>,
     rates: VecDeque<RateSample>,
     focused: usize,
     paused: bool,
@@ -124,6 +132,7 @@ impl App_ {
             log, log_st: LogViewerState::default(),
             alerts: LogViewer::new(200), alert_st: LogViewerState::default(),
             net: VecDeque::new(), procs: Vec::new(), files: Vec::new(), exts: Vec::new(),
+            heatmap: Vec::new(), heatmap_exts: Vec::new(),
             rates: VecDeque::new(), focused: 0, paused: false, help: false,
             total: 0, lost: 0, uptime: 0, alert_count: 0, time: 0.0, rx,
         }
@@ -167,6 +176,23 @@ impl App_ {
         self.exts = ext_vec;
         self.rates = s.rates;
         self.total = s.total; self.lost = s.lost; self.uptime = s.uptime;
+
+        // Build real heatmap: top 12 processes × top 8 extensions
+        let mut all_exts: Vec<(String, u64)> = s.exts.iter().map(|(k,v)| (k.clone(),*v)).collect();
+        all_exts.sort_by(|a,b| b.1.cmp(&a.1));
+        let top_exts: Vec<String> = all_exts.iter().take(8).map(|(e,_)| e.clone()).collect();
+        let top_procs: Vec<&ProcStats> = s.stats.iter().take(12).collect();
+        self.heatmap = top_procs.iter().map(|p| {
+            let mut ext_counts: Vec<(String, u64)> = top_exts.iter().map(|ext| {
+                (ext.clone(), p.extensions.get(ext).copied().unwrap_or(0))
+            }).collect();
+            ext_counts.sort_by(|a,b| b.1.cmp(&a.1));
+            HeatmapRow {
+                label: p.comm.clone(),
+                ext_counts,
+            }
+        }).collect();
+        self.heatmap_exts = top_exts;
     }
 }
 
@@ -431,39 +457,83 @@ impl App_ {
     }
 
     fn draw_heatmap(&self, f: &mut Frame, area: Rect) {
-        let b = self.block(5, " HEATMAP ");
+        let title = format!(" HEATMAP ({}x{}) ", self.heatmap.len(), self.heatmap_exts.len());
+        let b = self.block(5, &title);
         let inner = b.inner(area); b.render(area, f);
-        if inner.width < 4 || inner.height < 4 { return; }
+        if inner.width < 6 || inner.height < 3 || self.heatmap.is_empty() { return; }
 
-        // Live heatmap using Canvas + heatmap_gradient
-        let phase = self.time * 0.5;
-        let w = inner.width as f64;
-        let h = inner.height as f64;
+        // Layout: left column = process names, right = heatmap cells
+        let label_w: u16 = 12;
+        let cols_w = inner.width.saturating_sub(label_w + 1);
+        let rows_h = inner.height;
+        let cell_w = cols_w / self.heatmap_exts.len().max(1) as u16;
+        let cell_h = rows_h / self.heatmap.len().max(1) as u16;
 
-        // Build heatmap data from extension counts (normalized)
-        let max_ext = self.exts.iter().map(|(_,c)| *c).max().unwrap_or(1).max(1) as f64;
-        let ext_data: Vec<f64> = self.exts.iter().take(8).map(|(_,c)| *c as f64 / max_ext).collect();
+        if cell_w < 1 || cell_h < 1 { return; }
 
-        for dy in 0..inner.height {
-            for dx in 0..inner.width {
-                let nx = dx as f64 / (w - 1.0).max(1.0);
-                let ny = dy as f64 / (h - 1.0).max(1.0);
+        // Find max count for normalization
+        let mut max_count: u64 = 1;
+        for row in &self.heatmap {
+            for &(_, cnt) in &row.ext_counts {
+                if cnt > max_count { max_count = cnt; }
+            }
+        }
 
-                // Combine wave patterns with real data
-                let wave = ((nx * 4.0 + phase).sin() * 0.3
-                    + (ny * 3.0 - phase * 0.7).cos() * 0.3
-                    + 0.5).clamp(0.0, 1.0);
+        // Render extension labels on top
+        for (i, ext) in self.heatmap_exts.iter().enumerate() {
+            let x = inner.x + label_w + 1 + i as u16 * cell_w;
+            if x + cell_w > inner.right() { break; }
+            let label = format!(".{:<width$}", ext, width = (cell_w as usize).saturating_sub(1));
+            Paragraph::new(Line::from_spans(vec![Span::styled(label, Style::new().fg(DIM))]))
+                .render(Rect::new(x, inner.y, cell_w, 1), f);
+        }
 
-                // Modulate with real extension data if available
-                let data_idx = ((nx * ext_data.len() as f64) as usize).min(ext_data.len().saturating_sub(1));
-                let data_val = ext_data.get(data_idx).copied().unwrap_or(0.5);
-                let value = (wave * 0.6 + data_val * 0.4).clamp(0.0, 1.0);
+        // Render process rows
+        for (row_i, row) in self.heatmap.iter().enumerate() {
+            if row_i as u16 >= rows_h { break; }
+            let y = inner.y + 1 + row_i as u16 * cell_h;
+            if y + cell_h > inner.bottom() { break; }
 
-                let color = heatmap_gradient(value);
-                let mut cell = RenderCell::from_char(' ');
-                cell.bg = color;
-                if let Some(slot) = f.buffer.get_mut(inner.x + dx, inner.y + dy) {
-                    *slot = cell;
+            // Process label
+            let label = trunc(&row.label, label_w as usize);
+            Paragraph::new(Line::from_spans(vec![Span::styled(label, Style::new().fg(FG))]))
+                .render(Rect::new(inner.x, y, label_w, 1), f);
+
+            // Extension cells
+            for (col_i, ext) in self.heatmap_exts.iter().enumerate() {
+                let count = row.ext_counts.iter()
+                    .find(|(e, _)| e == ext)
+                    .map(|(_, c)| *c)
+                    .unwrap_or(0);
+                let value = count as f64 / max_count as f64;
+                let color = heatmap_gradient(value.clamp(0.0, 1.0));
+
+                let cx = inner.x + label_w + 1 + col_i as u16 * cell_w;
+                if cx + cell_w > inner.right() { break; }
+
+                // Fill cell area with heatmap color
+                for dy in 0..cell_h {
+                    for dx in 0..cell_w {
+                        let px = cx + dx;
+                        let py = y + dy;
+                        if px < inner.right() && py < inner.bottom() {
+                            let mut cell = RenderCell::from_char(' ');
+                            cell.bg = color;
+                            if let Some(slot) = f.buffer.get_mut(px, py) {
+                                *slot = cell;
+                            }
+                        }
+                    }
+                }
+
+                // Show count in cell center if wide enough
+                if cell_w >= 3 && count > 0 {
+                    let count_str = format!("{}", count);
+                    let text_x = cx + (cell_w - count_str.len() as u16) / 2;
+                    let text_y = y + cell_h / 2;
+                    let fg = if value > 0.6 { PackedRgba::rgb(10, 10, 10) } else { FG };
+                    Paragraph::new(Line::from_spans(vec![Span::styled(count_str, Style::new().fg(fg).attrs(StyleFlags::BOLD))]))
+                        .render(Rect::new(text_x, text_y, cell_w, 1), f);
                 }
             }
         }
