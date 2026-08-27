@@ -420,14 +420,15 @@ sudo process-monitor --web 0.0.0.0:8080
 
 ---
 
-## Operator View (TUI + Web)
+## Operator View (TUI + Web + Desktop)
 
-Halcyon provides two operator interfaces:
+Halcyon provides three operator interfaces:
 
 - **TUI** — 7-panel terminal interface for local investigation. Cyberpunk aesthetic, process trees, heatmaps, sparklines. Runs anywhere, no browser needed.
 - **Web Dashboard** — browser-based UI with WebSocket live stream, REST API for integration, and Prometheus metrics for Grafana/monitoring stacks.
+- **Desktop App (Tauri + React)** — native desktop GUI built with Tauri 2 + React 19 + Recharts. Connects to the halcyon backend via WebSocket and REST API. See [`halcyon-tauri/`](halcyon-tauri/) for source.
 
-Both consume the same detection engine — the agent is **headless-capable** and can run as a background daemon with JSON output piped to external SIEM/storage.
+All three consume the same detection engine — the agent is **headless-capable** and can run as a background daemon with JSON output piped to external SIEM/storage.
 
 ---
 
@@ -448,6 +449,7 @@ halcyon-process-monitor/
 │       ├── network.rs        # connect/accept/sendto/recvfrom + sockaddr
 │       └── fs.rs             # mkdir/unlink/kill/chmod tracepoints
 ├── go-agent/                 # Go CLI agent (HTTP/WebSocket client)
+├── halcyon-tauri/            # Tauri desktop dashboard (React + Rust)
 ├── c-api/                    # C header for libhalcyon
 ├── k8s/                      # Kubernetes manifests (DaemonSet, Service)
 ├── proto/                    # Protobuf schema (gRPC)
