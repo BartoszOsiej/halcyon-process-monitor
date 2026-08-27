@@ -7,8 +7,11 @@ description = "eBPF-based real-time process and file operation monitor with TUI"
 license = "MIT"
 
 [features]
-default = []  # TUI is always included, web is opt-in
+default = []
 web = ["dep:axum", "dep:tokio", "dep:tower-http", "dep:prometheus-client", "dep:futures", "dep:tokio-util", "dep:parking_lot"]
+kafka = ["dep:rdkafka", "dep:tokio"]
+clickhouse = ["dep:clickhouse-rs", "dep:tokio", "dep:futures"]
+memgraph = ["dep:reqwest", "dep:tokio"]
 
 [dependencies]
 anyhow = "1"
@@ -21,6 +24,7 @@ crossterm = "0.29.0"
 libc = "0.2"
 serde_json = "1"
 serde = { version = "1", features = ["derive"] }
+urlencoding = "2"
 
 # FrankenTUI (path dependencies — full kernel)
 ftui = { path = "../frankentui/ftui" }
@@ -41,6 +45,15 @@ prometheus-client = { version = "0.22", optional = true }
 futures = { version = "0.3", optional = true }
 tokio-util = { version = "0.7", optional = true }
 parking_lot = { version = "0.12", optional = true }
+
+# Kafka producer (optional, enabled with --features kafka)
+rdkafka = { version = "0.36", features = ["cmake-build"], optional = true }
+
+# ClickHouse storage (optional, enabled with --features clickhouse)
+clickhouse-rs = { version = "1.0.0-alpha.1", optional = true }
+
+# MemGraph client (optional, enabled with --features memgraph)
+reqwest = { version = "0.12", features = ["json"], optional = true }
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
