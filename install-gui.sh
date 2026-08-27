@@ -364,8 +364,8 @@ SVGEOF
     fi
 
     # Create .desktop file
-    echo "$SUDO_PW" | sudo -S tee "$DESKTOP_FILE" >/dev/null 2>&1 << DESKTOPEOF
-[Desktop Entry]
+    local DESKTOP_CONTENT
+    DESKTOP_CONTENT="[Desktop Entry]
 Name=Halcyon
 Comment=eBPF Endpoint Security Agent
 Exec=sudo $INSTALL_DIR/$BINARY_NAME
@@ -374,9 +374,9 @@ Terminal=true
 Type=Application
 Categories=System;Security;Monitor;
 Keywords=ebpf;security;monitor;edr;
-StartupNotify=false
-DESKTOP_FILE
+StartupNotify=false"
 
+    echo "$SUDO_PW" | sudo -S tee "$DESKTOP_FILE" >/dev/null 2>&1 <<< "$DESKTOP_CONTENT"
     echo "$SUDO_PW" | sudo -S chmod +x "$DESKTOP_FILE" 2>/dev/null || true
     echo "$SUDO_PW" | sudo -S update-desktop-database /usr/share/applications/ 2>/dev/null || true
 }
