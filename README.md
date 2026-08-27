@@ -29,6 +29,7 @@ Halcyon is not a passive monitor. It is a **detect-and-respond** agent that hook
 - [Architecture / Data Flow](#architecture--data-flow)
 - [Network Visibility](#network-visibility)
 - [Detection & Response](#detection--response)
+- [Storage & Pipeline](#storage--pipeline)
 - [Requirements](#requirements)
 - [Quick Start](#quick-start)
 - [Usage](#usage)
@@ -55,6 +56,9 @@ Halcyon is not a passive monitor. It is a **detect-and-respond** agent that hook
 | **Process tree** | Resolves PPID from `/proc`, builds hierarchical view with per-process alert counts |
 | **File ranking** | Most-opened files with Shannon entropy scoring (detects encrypted/randomised filenames) |
 | **Single binary** | Full LTO, `panic = "abort"`, symbol-stripped — 1.7 MB TUI, 2.5 MB with web |
+| **Kafka streaming** | Events → Kafka topics with lz4 compression, partitioned by PID |
+| **ClickHouse storage** | Batch inserts into MergeTree for analytics retention |
+| **MemGraph graph** | Process trees + file access as a graph (Cypher queries) |
 
 ---
 
@@ -116,6 +120,72 @@ Halcyon follows a **pipeline architecture** — kernel ingestion → userspace d
 | **5. Persist** | TUI / JSON / WebSocket | live stream | REST API + Prometheus for retention |
 
 This maps directly to a **Kafka-style** event pipeline: kernel perf buffer = topic, reader thread = consumer, detection engine = stream processor, TUI/API = sink.
+
+---
+
+## Storage & Pipeline
+
+Halcyon supports pluggable storage backends for event persistence and downstream analytics:
+
+```bash
+# Stream events to Kafka
+sudo halcyon --kafka-brokers localhost:9092 --kafka-topic halcyon-events
+
+# Store events in ClickHouse for analytics
+sudo halcyon --clickhouse http://localhost:8123
+
+# Build process relationship graph in MemGraph
+sudo halcyon --memgraph http://localhost:7474
+
+# Combine all backends
+sudo halcyon \
+  --kafka-brokers localhost:9092 --kafka-topic halcyon-events \
+  --clickhouse http://localhost:8123 \
+  --memgraph http://localhost:7474
+```
+
+### Kafka
+
+Events are sent to a configurable topic with `lz4` compression and partitioned by PID for ordering per-process:
+
+| Config | Default | Description |
+|---|---|---|
+| `--kafka-brokers` | — | Broker address (e.g. `localhost:9092`) |
+| `--kafka-topic` | `halcyon-events` | Topic name |
+
+### ClickHouse
+
+Events are batch-inserted into a `MergeTree` table partitioned by date:
+
+```sql
+CREATE TABLE halcyon.events (
+    ts DateTime64(3),
+    kind LowCardinality(String),
+    pid UInt32, uid UInt32,
+    comm LowCardinality(String),
+    file Nullable(String),
+    extension LowCardinality(Nullable(String))
+) ENGINE = MergeTree()
+PARTITION BY toYYYYMMDD(ts)
+ORDER BY (ts, kind, pid)
+```
+
+### MemGraph
+
+Process trees and file access patterns are stored as a graph:
+
+```cypher
+// Find all processes that opened .enc files
+MATCH (p:Process)-[r:OPENED]->(f:File)
+WHERE f.path ENDS WITH '.enc'
+RETURN p.pid, p.comm, f.path, r.count
+ORDER BY r.count DESC
+
+// Find exfiltration candidates (file opens + external network)
+MATCH (p:Process)-[:OPENED]->(f:File), (p)-[:CONNECTED_TO]->(n:NetworkTarget)
+WHERE NOT n.addr STARTS WITH '10.'
+RETURN p.pid, p.comm, collect(f.path), collect(n.addr)
+```
 
 ---
 
