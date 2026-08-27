@@ -67,6 +67,10 @@ struct Args {
     /// Start web server with REST API, WebSocket, and dashboard (requires feature "web")
     #[arg(long, value_name = "ADDR", default_value = None)]
     web: Option<String>,
+
+    /// Automatically kill processes that trigger alerts (EDR response mode)
+    #[arg(long)]
+    auto_kill: bool,
 }
 
 fn main() -> Result<()> {
@@ -80,7 +84,7 @@ fn main() -> Result<()> {
     }
 
     let bpf_path = resolve_bpf_path(args.bpf.as_ref())?;
-    let mut monitor = Monitor::start(&bpf_path, args.alert_threshold).with_context(|| {
+    let mut monitor = Monitor::start(&bpf_path, args.alert_threshold, args.auto_kill).with_context(|| {
         format!(
             "failed to initialize the eBPF monitor using '{}'",
             bpf_path.display()
@@ -91,11 +95,10 @@ fn main() -> Result<()> {
 
     let use_tui = args.tui || (!args.json && !args.plain && io::stdout().is_terminal());
 
-    eprintln!("[halcyon] eBPF program: {}", bpf_path.display());
-    eprintln!(
-        "[halcyon] alert threshold: {} file opens/s",
-        args.alert_threshold
-    );
+    eprintln!("[halcyon] eBPF program: {}", bpf_path.display());    eprintln!("[halcyon] alert threshold: {} file opens/s", args.alert_threshold);
+    if args.auto_kill {
+        eprintln!("[halcyon] AUTO-KILL: enabled (SIGKILL on alert)");
+    }
     if let Some(ref ext) = args.filter_ext {
         eprintln!("[halcyon] extension filter: .{ext}");
     }
@@ -286,6 +289,7 @@ fn run_diagnose(monitor: &mut Monitor) -> Result<()> {
                     | Kind::Chmod => {}
                 },
                 Output::Alert(_) => alerts += 1,
+                Output::Action(_) => {}
             }
         }
         if last_report.elapsed() >= Duration::from_secs(1) {
@@ -365,6 +369,17 @@ fn run_json(monitor: &mut Monitor) -> Result<()> {
                         "uid": al.uid,
                         "comm": al.comm,
                         "opens_in_1s": al.opens,
+                    });
+                    writeln!(out, "{value}")?;
+                }
+                Output::Action(act) => {
+                    let value = json!({
+                        "ts": act.ts,
+                        "type": "response",
+                        "pid": act.pid,
+                        "comm": act.comm,
+                        "action": act.action,
+                        "success": act.success,
                     });
                     writeln!(out, "{value}")?;
                 }
@@ -461,6 +476,17 @@ fn run_plain(monitor: &mut Monitor) -> Result<()> {
                         al.pid,
                         al.comm.bold(),
                         al.opens
+                    );
+                }
+                Output::Action(act) => {
+                    let status = if act.success { "OK".green() } else { "FAILED".red() };
+                    println!(
+                        "{} {} [{}] {} — {}",
+                        act.ts,
+                        "RESPONSE".red().bold(),
+                        act.pid,
+                        act.comm.bold(),
+                        status
                     );
                 }
             }

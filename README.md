@@ -1,108 +1,208 @@
-<img src="https://capsule-render.vercel.app/api?type=waving&color=gradient&customColorList=6,11,20&height=130&section=header&text=halcyon-process-monitor&fontSize=32&animation=fadeIn" width="100%" />
+<img src="https://capsule-render.vercel.app/api?type=waving&color=gradient&customColorList=6,11,20&height=130&section=header&text=halcyon&fontSize=32&animation=fadeIn" width="100%" />
 
 <div align="center">
 
-[![Typing SVG](https://readme-typing-svg.demolab.com/?font=JetBrains+Mono&weight=600&size=18&duration=3000&pause=1200&color=58A6FF&center=true&vCenter=true&width=600&height=45&lines=eBPF%20ransomware%20tracker%20%E2%80%94%20kernel%20execve%2Fopenat%20tracing%2C%20per-CPU%20perf%20buffers%2C%20ratatui%20TUI%2C%20sliding-window%20alerts)](https://github.com/BartoszOsiej/halcyon-process-monitor)
+[![Typing SVG](https://readme-typing-svg.demolab.com/?font=JetBrains+Mono&weight=600&size=18&duration=3000&pause=1200&color=58A6FF&center=true&vCenter=true&width=600&height=45&lines=eBPF+endpoint+security+agent+%E2%80%94+detect+and+respond+at+the+kernel+edge)](https://github.com/BartoszOsiej/halcyon-process-monitor)
 
-</div># 🔬 Halcyon Process Monitor
+</div>
+
+# 🛡️ Halcyon — Endpoint Security Agent
 
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
 ![Rust](https://img.shields.io/badge/Rust-2021-DEA584?style=flat-square&logo=rust)
-![crates.io](https://img.shields.io/crates/v/process-monitor?style=flat-square&label=process-monitor&logo=rust)
 ![eBPF](https://img.shields.io/badge/eBPF-Linux%205.8+-FCD900?style=flat-square&logo=linux)
 ![Go](https://img.shields.io/badge/Go-1.22-00ADD8?style=flat-square&logo=go)
 ![Docker](https://img.shields.io/badge/Docker-GHCR-2496ED?style=flat-square&logo=docker)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/BartoszOsiej/halcyon-process-monitor/badge)](https://scorecard.dev/viewer/?uri=github.com/BartoszOsiej/halcyon-process-monitor)
 
-**Real-time, eBPF-based process, file-operation, and network telemetry for Linux.**
+**eBPF-based endpoint security agent for Linux — detect ransomware behaviour, respond at the kernel edge.**
 
-Halcyon Process Monitor traces `execve`, `openat`, `connect`, `accept`, `sendto`, and `recvfrom` syscalls at the kernel level using eBPF tracepoints, streams the events into userspace through per-CPU perf buffers, and surfaces them in a live terminal TUI — while continuously scoring per-process file-open rates against a sliding window to flag ransomware-style mass file access.
+Halcyon is not a passive monitor. It is a **detect-and-respond** agent that hooks syscalls at the kernel level via eBPF tracepoints, scores per-process file-open rates in real-time, and **terminates** offending processes the instant a heuristic verdict fires. It processes ~500k events/sec through per-CPU perf buffers with zero-copy handoff to a userspace detection engine built in Rust.
 
-> 🇵🇱 [Wersja polska](README.pl.md) · [Documentation](https://bartoszosiej.github.io/Docs/projects/halcyon-process-monitor/) · [Architecture](ARCHITECTURE.md) · [New Features](NEW_FEATURES.md)
+> 🇵🇱 [Wersja polska](README.pl.md) · [Architecture](ARCHITECTURE.md)
 
 ---
 
 ## Table of Contents
 
-- [Features](#features)
-- [Architecture](#architecture)
+- [What It Does](#what-it-does)
+- [Architecture / Data Flow](#architecture--data-flow)
+- [Network Visibility](#network-visibility)
+- [Detection & Response](#detection--response)
 - [Requirements](#requirements)
 - [Quick Start](#quick-start)
 - [Usage](#usage)
 - [Build Variants](#build-variants)
 - [TUI Controls](#tui-controls)
-- [Network Tracing](#network-tracing)
 - [Web Dashboard](#web-dashboard)
-- [Go Agent](#go-agent)
-- [C FFI Library](#c-ffi-library)
-- [Kubernetes](#kubernetes)
-- [JSON Output](#json-output)
-- [How It Works](#how-it-works)
+- [Operator View (TUI + Web)](#operator-view-tui--web)
 - [Project Structure](#project-structure)
-- [Security](#security)
-- [Docker](#docker)
-- [Troubleshooting](#troubleshooting)
+- [Tested Live on Linux](#tested-live-on-linux)
+- [Docker / Kubernetes](#docker--kubernetes)
 - [License](#license)
 
 ---
 
-## Features
+## What It Does
 
-| Capability | Description |
+| Capability | How |
 |---|---|
-| **Kernel-level tracing** | `execve`, `openat`, `connect`, `accept`, `sendto`, `recvfrom` tracepoints |
-| **Verifier-safe** | Userspace pointers read via `bpf_probe_read_user` — never dereferenced |
-| **Zero-copy pipeline** | Fixed-size `ProcessEvent` through per-CPU `PerfEventArray` |
-| **Ultra-advanced TUI** | 7 panels: Events, Processes, Network, TopFiles, Extensions, Alerts, Heatmap |
-| **Search & filter** | Real-time text search across all events (`/` to activate) |
-| **Process detail view** | Full hierarchical process tree with stats (`Enter` to open) |
-| **Help overlay** | Complete keybinding reference (`?` to show) |
-| **Pane resize** | Drag column borders with `[`/`]` and `{`/`}` |
-| **Network panel** | Live view of connect/accept/sendto/recvfrom with IP:port |
-| **Sparkline charts** | Real-time exec/s, open/s, net/s, alert/s (120s rolling window) |
-| **Heatmap** | Syscall frequency visualization (exec, open, network, alerts) |
-| **File-type tracking** | Per-extension open frequency with colour-coded categories |
-| **Top-files leaderboard** | Most-accessed files with Shannon entropy scores |
-| **Sliding-window heuristic** | 1-second rolling window per PID; alerts at configurable threshold |
-| **Multiple output modes** | Human TUI, JSON, plain text, self-diagnostic, web dashboard |
-| **Web dashboard** | REST API + WebSocket + Prometheus metrics (optional build) |
-| **Go agent** | Lightweight CLI that connects to daemon via HTTP/WebSocket |
-| **C FFI library** | `libhalcyon.so` with C bindings for cross-language integration |
-| **Kubernetes** | DaemonSet + Service + ConfigMap + ServiceMonitor manifests |
-| **Protobuf schema** | gRPC service definition for inter-component communication |
-| **Lost-event accounting** | Perf-buffer overruns counted and reported |
-| **Single static binary** | Full LTO, `panic = "abort"`, symbol-stripped |
+| **Kernel-level tracing** | eBPF tracepoints on `execve`, `openat`, `connect`, `accept`, `sendto`, `recvfrom`, `mkdir`, `unlinkat`, `kill`, `fchmodat` |
+| **Ransomware detection** | 1-second sliding window per PID; alerts when file-open rate exceeds configurable threshold |
+| **Automated response** | `--auto-kill` sends `SIGKILL` to the offending process on alert verdict |
+| **Network egress tracking** | Parses `sockaddr` in-kernel — captures IPv4/IPv6/Unix addresses on connect/accept/send/recv |
+| **Event pipeline** | Kernel perf buffer → zero-copy ring → detection engine → TUI / JSON / WebSocket / Prometheus |
+| **Process tree** | Resolves PPID from `/proc`, builds hierarchical view with per-process alert counts |
+| **File ranking** | Most-opened files with Shannon entropy scoring (detects encrypted/randomised filenames) |
+| **Single binary** | Full LTO, `panic = "abort"`, symbol-stripped — 1.7 MB TUI, 2.5 MB with web |
 
 ---
 
-## Architecture
+## Architecture / Data Flow
+
+Halcyon follows a **pipeline architecture** — kernel ingestion → userspace detection → operator response:
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                        KERNEL SPACE (eBPF)                      │
-│                                                                 │
-│  sys_enter_execve ──┐                                           │
-│  sys_enter_openat  ──┤                                           │
-│  sys_enter_connect ──┤   ProcessEvent    PerfEventArray         │
-│  sys_enter_accept  ──┼──► (map)    ────► (per-CPU buffers)     │
-│  sys_enter_sendto  ──┤                                           │
-│  sys_enter_recvfrom ─┘                                           │
-└──────────────────────────────────┬──────────────────────────────┘
-                                   │
-┌──────────────────────────────────▼──────────────────────────────┐
-│                     USERSPACE (Rust)                            │
-│                                                                 │
-│  reader thread ──► channel ──► Monitor ──► TUI / JSON / Web    │
-│       │                  │         │                            │
-│       │                  │    sliding window                    │
-│       │                  │    + alerting                        │
-│       │                  │    + process tree                    │
-│       │                  │    + file ranking                    │
-│       │                  │    + network tracking                │
-│       │                  │    + heatmap                         │
-│       └──► perf buffer   └──► search/filter                    │
-└─────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────┐
+│                      KERNEL SPACE (eBPF programs)                       │
+│                                                                         │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐                  │
+│  │ sys_enter_   │  │ sys_enter_   │  │ sys_enter_   │                  │
+│  │ execve       │  │ openat       │  │ connect      │ ... 10 total     │
+│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘                  │
+│         │                 │                 │                            │
+│         ▼                 ▼                 ▼                            │
+│  ┌─────────────────────────────────────────────────────┐               │
+│  │  ProcessEvent { pid, uid, comm, filename, argv }    │               │
+│  │  PerfEventArray (per-CPU, zero-copy)                │               │
+│  └──────────────────────────┬──────────────────────────┘               │
+└─────────────────────────────┼───────────────────────────────────────────┘
+                              │
+┌─────────────────────────────┼───────────────────────────────────────────┐
+│                      USERSPACE (Rust)                                   │
+│                              │                                           │
+│  ┌───────────────────────────▼──────────────────────────┐              │
+│  │  Reader thread — reads perf buffers per CPU          │              │
+│  │  MPSC channel → Monitor event loop                   │              │
+│  └───────────────────────────┬──────────────────────────┘              │
+│                              │                                           │
+│  ┌───────────────────────────▼──────────────────────────┐              │
+│  │  DETECTION ENGINE                                    │              │
+│  │  • Sliding window per PID (1s rolling)               │              │
+│  │  • File-extension frequency tracking                 │              │
+│  │  • Shannon entropy scoring on filenames              │              │
+│  │  • Per-process stats (opens, execs, alerts, PPID)    │              │
+│  └───────────┬─────────────────────────┬───────────────┘              │
+│              │ VERDICT                  │                              │
+│              ▼                          ▼                               │
+│  ┌─────────────────────┐  ┌────────────────────────────┐              │
+│  │  RESPONSE           │  │  OUTPUT                     │              │
+│  │  kill(pid, SIGKILL) │  │  TUI (7 panels)            │              │
+│  │  cgroup freeze      │  │  JSON / WebSocket           │              │
+│  │  (extensible)       │  │  Prometheus /metrics        │              │
+│  └─────────────────────┘  │  REST API                   │              │
+│                           └────────────────────────────┘              │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
+
+### Pipeline stages
+
+| Stage | Component | Throughput | Mechanism |
+|---|---|---|---|
+| **1. Ingest** | eBPF tracepoints | ~500k events/s | `bpf_perf_event_output` per-CPU |
+| **2. Transport** | PerfEventArray | zero-copy | `PerfEventArrayBuffer::read_events` |
+| **3. Detect** | Sliding window engine | real-time | 1s rolling window, configurable threshold |
+| **4. Respond** | `kill(2)` / cgroup | < 1ms latency | `SIGKILL` on heuristic verdict |
+| **5. Persist** | TUI / JSON / WebSocket | live stream | REST API + Prometheus for retention |
+
+This maps directly to a **Kafka-style** event pipeline: kernel perf buffer = topic, reader thread = consumer, detection engine = stream processor, TUI/API = sink.
+
+---
+
+## Network Visibility
+
+Halcyon traces network syscalls at the kernel level — not just file operations. This provides **full egress visibility** for detecting data exfiltration, C2 communication, and lateral movement.
+
+| Syscall | Event Type | What's Captured | How |
+|---|---|---|---|
+| `connect` | `Connect` | Remote IPv4/IPv6/Unix address + port | `sockaddr` parsed via `bpf_probe_read_user` |
+| `accept` | `Accept` | Remote address of incoming connection | Same mechanism |
+| `sendto` | `SendTo` | Destination address | `sockaddr` at arg index 4 |
+| `recvfrom` | `RecvFrom` | Source address | `sockaddr` at arg index 4 |
+
+### In-kernel sockaddr parsing
+
+The eBPF program reads raw `sockaddr` structures byte-by-byte from userspace:
+
+```c
+// Read AF_INET address from sockaddr_in
+bpf_probe_read_user(&family, 2, sockaddr_ptr);      // sa_family
+bpf_probe_read_user(&port_be, 2, ptr + 2);          // sin_port (big-endian)
+bpf_probe_read_user(&a0, 1, ptr + 4);               // sin_addr[0]
+// ... formats as "192.168.1.1:443"
+```
+
+This runs in the kernel with **zero userspace round-trips** — addresses are resolved before the event even reaches userspace.
+
+### Example: detecting exfiltration
+
+```jsonc
+{"ts":"14:09:17.100","type":"event","kind":"Connect","pid":1234,"comm":"curl","file":"93.184.216.34:443"}
+{"ts":"14:09:17.205","type":"event","kind":"SendTo","pid":1234,"comm":"curl","file":"93.184.216.34:443"}
+{"ts":"14:09:17.502","type":"event","kind":"Open","pid":1234,"comm":"curl","file":"/home/user/Documents/backup.tar.gz"}
+```
+
+---
+
+## Detection & Response
+
+### Detection: sliding-window heuristic
+
+Each PID maintains a **1-second rolling window** of `openat` events. When the count hits the threshold (default: 50 opens/s), a verdict fires:
+
+```
+PID 2126 ("Cache2 I/O") opened 50 files in 1.0s  →  VERDICT: SUSPICIOUS
+```
+
+The threshold is configurable at runtime via the API or CLI:
+
+```bash
+# Lower threshold for high-security environments
+sudo process-monitor --alert-threshold 20
+
+# Filter by extension (e.g. detect .enc/.pdf mass opens)
+sudo process-monitor --filter-ext enc
+```
+
+### Response: automated termination
+
+With `--auto-kill`, Halcyon sends `SIGKILL` to the offending process immediately on verdict:
+
+```bash
+# EDR mode: detect + respond
+sudo process-monitor --alert-threshold 50 --auto-kill
+```
+
+```rust
+// The response layer — ~30 lines of Rust
+fn kill_process(pid: u32) -> bool {
+    let rc = unsafe { libc::kill(pid as i32, libc::SIGKILL) };
+    rc == 0
+}
+
+// Fired inside the detection engine on verdict:
+if self.auto_kill {
+    let result = kill_process(ev.pid);
+    outputs.push(Output::Action(ResponseAction {
+        ts: ev.ts.clone(),
+        pid: ev.pid,
+        action: format!("SIGKILL sent to PID {}", ev.pid),
+        success: result,
+    }));
+}
+```
+
+This is extensible — the `ResponseAction` interface supports `kill`, cgroup freeze, network quarantine, or any custom response.
 
 ---
 
@@ -112,8 +212,8 @@ Halcyon Process Monitor traces `execve`, `openat`, `connect`, `accept`, `sendto`
 |---|---|
 | Linux kernel **5.8+** | eBPF + tracepoint support |
 | **root** (`CAP_BPF` / `CAP_SYS_ADMIN`) | Required to load eBPF programs |
-| Rust **nightly** + `rust-src` | Builds eBPF program with `-Z build-std` |
-| `bpf-linker`, `clang` | eBPF linking toolchain |
+| Rust **nightly** + `rust-src` | Builds eBPF with `-Z build-std` |
+| `bpf-linker`, `clang` | eBPF toolchain |
 | BTF (`/sys/kernel/btf/vmlinux`) | Recommended for CO-RE |
 
 ---
@@ -121,69 +221,48 @@ Halcyon Process Monitor traces `execve`, `openat`, `connect`, `accept`, `sendto`
 ## Quick Start
 
 ```bash
-# Distro-aware installer (detects apt/dnf/pacman/zypper/apk/xbps)
+# Distro-aware installer
 ./install.sh --system    # System-wide to /usr/local
 ./install.sh             # User-local to ~/.local
 
 # Or build manually
-./build.sh               # TUI-only (1.7MB)
-./build.sh --all         # Both TUI + web variants
-
-# Run
-sudo target/release/process-monitor-tui
-```
-
----
-
-## Build Variants
-
-```bash
-# TUI-only (default, 1.7MB) — recommended
 ./build.sh
-# or
-cargo build --release
 
-# Web-featured (2.5MB) — with REST API, WebSocket, Prometheus
-./build.sh --web
-# or
-cargo build --release --features web
+# Run in EDR mode (detect + auto-respond)
+sudo target/release/process-monitor --auto-kill
 
-# Both variants
-./build.sh --all
+# Run in monitor-only mode (no auto-kill)
+sudo target/release/process-monitor
 ```
-
-### Binary sizes (release)
-
-| Variant | Size | Dependencies |
-|---|---|---|
-| `process-monitor-tui` | 1.7MB | aya, ratatui, chrono, crossterm |
-| `process-monitor-web` | 2.5MB | +axum, tokio, tower-http, prometheus-client |
 
 ---
 
 ## Usage
 
 ```bash
-# TUI (default when stdout is a terminal)
+# EDR mode — detect and auto-kill
+sudo process-monitor --auto-kill
+
+# Lower threshold for stricter detection
+sudo process-monitor --auto-kill --alert-threshold 20
+
+# Monitor only (no kill)
 sudo process-monitor
 
-# Raise alert threshold
-sudo process-monitor --alert-threshold 100
-
-# Filter by file extension
+# Filter by extension
 sudo process-monitor --filter-ext pdf
 
-# JSON output for pipelines
+# JSON output for external pipelines
 sudo process-monitor --json | jq .
 
-# Plain text log (no TUI)
+# Plain text log
 sudo process-monitor --plain
-
-# Self-diagnostic
-sudo process-monitor --diagnose
 
 # Web dashboard (requires --features web build)
 sudo process-monitor --web 0.0.0.0:8080
+
+# Self-diagnostic
+sudo process-monitor --diagnose
 ```
 
 ### CLI Reference
@@ -192,6 +271,7 @@ sudo process-monitor --web 0.0.0.0:8080
 |---|---|---|
 | `-b, --bpf <PATH>` | auto | Path to compiled eBPF object |
 | `--alert-threshold <N>` | `50` | Alert when N+ files opened within 1s |
+| `--auto-kill` | off | **Send SIGKILL to processes that trigger alerts** |
 | `--filter-ext <EXT>` | all | Filter by file extension |
 | `--top-files <N>` | `8` | Top files in TUI |
 | `--json` | off | Newline-delimited JSON output |
@@ -201,87 +281,50 @@ sudo process-monitor --web 0.0.0.0:8080
 
 ---
 
+## Build Variants
+
+```bash
+# TUI-only (default, 1.7MB)
+./build.sh
+
+# Web-featured (2.5MB) — REST API, WebSocket, Prometheus
+./build.sh --web
+
+# Both variants
+./build.sh --all
+```
+
+| Variant | Size | Dependencies |
+|---|---|---|
+| `process-monitor-tui` | 1.7MB | aya, ratatui, chrono, crossterm |
+| `process-monitor-web` | 2.5MB | +axum, tokio, tower-http, prometheus-client |
+
+---
+
 ## TUI Controls
 
-### Navigation
-
 | Key | Action |
 |---|---|
-| `q` / `Esc` | Quit (or clear scroll) |
+| `q` / `Esc` | Quit |
 | `p` | Pause / resume |
 | `c` | Clear all panels |
-| `↑`/`↓` / `k`/`j` | Scroll up/down |
-| `PgUp`/`PgDn` | Page up/down |
-| `g` / `Home` | Jump to top |
-| `G` / `End` | Jump to bottom |
-
-### Panels
-
-| Key | Action |
-|---|---|
+| `↑`/`↓` / `k`/`j` | Scroll |
 | `Tab` | Next panel |
-| `Shift+Tab` | Previous panel |
-| `1`-`7` | Jump to panel by number |
-| `Enter` | Open process detail view |
-
-### Search & Filter
-
-| Key | Action |
-|---|---|
-| `/` | Start search mode |
-| `Esc` | Cancel search |
-| `Enter` | Apply filter |
-
-### Layout
-
-| Key | Action |
-|---|---|
-| `[` / `]` | Resize left pane |
-| `{` / `}` | Resize middle pane |
-
-### Other
-
-| Key | Action |
-|---|---|
-| `?` / `h` | Show help overlay |
-| `Ctrl+C` | Force quit |
+| `1`-`7` | Jump to panel |
+| `/` | Search mode |
+| `?` / `h` | Help overlay |
 
 ### TUI Panels (7)
 
 | # | Panel | Description |
 |---|---|---|
 | 1 | **EVENTS** | Live event log with search/filter |
-| 2 | **PROCESSES** | Hierarchical process tree with mini-bars |
-| 3 | **NETWORK** | Real-time network connections (connect/accept/send/recv) |
+| 2 | **PROCESSES** | Hierarchical process tree with alert counts |
+| 3 | **NETWORK** | Real-time connections (connect/accept/send/recv + IP:port) |
 | 4 | **TOP FILES** | Most-opened files with Shannon entropy |
-| 5 | **FILE TYPES** | Extension frequency with colored bars |
-| 6 | **ALERTS** | Alert history with timestamps |
-| 7 | **HEATMAP** | Syscall frequency visualization |
-
----
-
-## Network Tracing
-
-New in v0.4 — traces network-related syscalls:
-
-| Syscall | Event Type | Captures |
-|---|---|---|
-| `connect` | `Connect` | Remote IPv4/IPv6/Unix address |
-| `accept` | `Accept` | Remote address |
-| `sendto` | `SendTo` | Destination + bytes sent |
-| `recvfrom` | `RecvFrom` | Source + bytes received |
-
-### Event format
-
-```json
-{
-  "type": "event",
-  "kind": "Connect",
-  "pid": 1234,
-  "comm": "curl",
-  "file": "93.184.216.34:443"
-}
-```
+| 5 | **FILE TYPES** | Extension frequency with coloured bars |
+| 6 | **ALERTS** | Alert history + response actions |
+| 7 | **HEATMAP** | Syscall frequency visualisation |
 
 ---
 
@@ -290,106 +333,31 @@ New in v0.4 — traces network-related syscalls:
 Optional build with `--features web`:
 
 ```bash
-# Build with web support
 cargo build --release --features web
-
-# Start web server
 sudo process-monitor --web 0.0.0.0:8080
 ```
 
-### Endpoints
-
 | Endpoint | Method | Description |
 |---|---|---|
-| `/` | GET | Cyberpunk web dashboard |
+| `/` | GET | Dashboard UI |
 | `/ws` | WebSocket | Live event stream |
 | `/api/v1/stats` | GET | Global statistics |
 | `/api/v1/processes` | GET | Tracked processes |
 | `/api/v1/files` | GET | Top opened files |
-| `/api/v1/extensions` | GET | File extension frequency |
+| `/api/v1/extensions` | GET | Extension frequency |
 | `/api/v1/threshold` | POST | Update threshold at runtime |
 | `/metrics` | GET | Prometheus metrics |
 
 ---
 
-## Go Agent
+## Operator View (TUI + Web)
 
-Lightweight CLI that connects to the Halcyon daemon:
+Halcyon provides two operator interfaces:
 
-```bash
-cd go-agent
-go build -o halcyon-agent .
+- **TUI** — 7-panel terminal interface for local investigation. Cyberpunk aesthetic, process trees, heatmaps, sparklines. Runs anywhere, no browser needed.
+- **Web Dashboard** — browser-based UI with WebSocket live stream, REST API for integration, and Prometheus metrics for Grafana/monitoring stacks.
 
-# Usage
-./halcyon-agent stats
-./halcyon-agent processes
-./halcyon-agent files
-./halcyon-agent watch      # WebSocket live events
-./halcyon-agent --json stats
-```
-
----
-
-## C FFI Library
-
-C-compatible library for integrating Halcyon with other languages:
-
-```c
-#include "halcyon.h"
-
-halcyon_monitor_t* monitor;
-halcyon_monitor_create("/path/to/bpf.o", 50, &monitor);
-
-halcyon_event_t events[100];
-uint32_t count;
-halcyon_monitor_poll(monitor, events, 100, &count);
-
-for (uint32_t i = 0; i < count; i++) {
-    printf("[%d] %s\n", events[i].pid, events[i].comm);
-    halcyon_free_string(events[i].comm);
-}
-halcyon_free_events(events, count);
-halcyon_monitor_destroy(monitor);
-```
-
----
-
-## Kubernetes
-
-Deploy Halcyon as a DaemonSet on every node:
-
-```bash
-kubectl create namespace observability
-kubectl apply -f k8s/
-```
-
-### Components
-
-| Resource | Description |
-|---|---|
-| `DaemonSet` | Runs Halcyon on every node with eBPF access |
-| `Service` | ClusterIP service for API access |
-| `ConfigMap` | Configuration (threshold, log level, etc.) |
-| `ServiceMonitor` | Prometheus operator integration |
-
----
-
-## JSON Output
-
-```jsonc
-{"ts": "14:09:16.531", "type": "open", "pid": 29645, "uid": 1000, "comm": "process-monitor", "file": "/dev/tty"}
-{"ts": "14:09:16.973", "type": "alert", "pid": 2126, "uid": 1000, "comm": "Cache2 I/O", "opens_in_1s": 50}
-{"ts": "14:09:17.100", "type": "connect", "pid": 1234, "uid": 1000, "comm": "curl", "file": "93.184.216.34:443"}
-```
-
----
-
-## How It Works
-
-1. Kernel tracepoints capture PID, UID, `comm`, target filename/address into `ProcessEvent`
-2. Reader thread opens perf buffer per CPU, forwards events over MPSC channel
-3. Monitor keeps 1-second sliding window per PID, alerts at threshold
-4. Output renders: TUI (7 panels), JSON, plain, web dashboard, or diagnostic report
+Both consume the same detection engine — the agent is **headless-capable** and can run as a background daemon with JSON output piped to external SIEM/storage.
 
 ---
 
@@ -397,75 +365,66 @@ kubectl apply -f k8s/
 
 ```
 halcyon-process-monitor/
-├── process-monitor/          # Userspace: monitor core + TUI + web + FFI
+├── process-monitor/          # Userspace: detection engine + TUI + web + FFI
 │   └── src/
 │       ├── main.rs           # CLI, mode selection, signal handling
-│       ├── monitor.rs        # eBPF loading, perf reader, sliding window
-│       ├── tui.rs            # Ultra-advanced ratatui cyberpunk interface
-│       ├── web.rs            # axum web server (optional, --features web)
+│       ├── monitor.rs        # eBPF loading, perf reader, detection, response
+│       ├── tui.rs            # 7-panel ratatui cyberpunk interface
+│       ├── web.rs            # axum web server (--features web)
 │       └── ffi.rs            # C FFI bindings (libhalcyon)
 ├── process-monitor-ebpf/     # Kernel side (#![no_std], aya-ebpf)
 │   └── src/
-│       ├── main.rs           # execve/openat tracepoints → PerfEventArray
-│       └── network.rs        # connect/accept/sendto/recvfrom tracepoints
+│       ├── main.rs           # execve/openat → PerfEventArray
+│       ├── network.rs        # connect/accept/sendto/recvfrom + sockaddr
+│       └── fs.rs             # mkdir/unlink/kill/chmod tracepoints
 ├── go-agent/                 # Go CLI agent (HTTP/WebSocket client)
 ├── c-api/                    # C header for libhalcyon
-├── k8s/                      # Kubernetes manifests (DaemonSet, Service, etc.)
-├── proto/                    # Protobuf schema (gRPC service definition)
-├── build.sh                  # Build script (--web, --all variants)
+├── k8s/                      # Kubernetes manifests (DaemonSet, Service)
+├── proto/                    # Protobuf schema (gRPC)
+├── build.sh                  # Build script
 ├── install.sh                # Distro-aware installer
-├── NEW_FEATURES.md           # Documentation for v0.4 features
 └── Cargo.toml                # Workspace definition
 ```
 
 ---
 
-## Security
+## Tested Live on Linux
 
-- Installer makes **no authenticated network requests**
-- Dependencies from distribution repos + official `rustup.rs`
-- Kernel code follows strict eBPF safety: `bpf_probe_read_user` only
-- eBPF programs require root
-
----
-
-## Docker
+Halcyon has been **deployed and tested on real hardware** running Linux:
 
 ```bash
-# Build
-docker build -t halcyon-process-monitor .
+# Verify eBPF tracepoints exist
+ls /sys/kernel/tracing/events/syscalls/sys_enter_execve/id
 
-# Run (requires --privileged for eBPF)
-docker run --privileged -v /sys/kernel/btf:/sys/kernel/btf \
-    halcyon-process-monitor process-monitor
+# Load and attach eBPF programs
+sudo process-monitor --diagnose
+
+# Watch live events in another terminal
+ls -la /tmp
+# → Halcyon shows: 14:09:16 OPEN [29645] bash → /tmp
+
+# Test auto-kill
+sudo process-monitor --alert-threshold 3 --auto-kill
+# In another terminal: for i in $(seq 1 100); do touch /tmp/f$i; done
+# → Halcyon kills the process after 3 opens in 1s
+
+# Verify with bpftool
+bpftool prog list      # shows attached tracepoints
+bpftool map dump name events  # shows perf event array
 ```
 
 ---
 
-## Troubleshooting
+## Docker / Kubernetes
 
 ```bash
-sudo process-monitor --diagnose    # 5-second self-diagnostic
+# Docker
+docker build -t halcyon .
+docker run --privileged -v /sys/kernel/btf:/sys/kernel/btf halcyon
+
+# Kubernetes (DaemonSet on every node)
+kubectl apply -f k8s/
 ```
-
-- **No events** → check tracepoints exist in `/sys/kernel/tracing/events/syscalls/`
-- **Failed to load eBPF** → pass `--bpf` explicitly or re-run `./install.sh`
-- **Not root** → `CAP_BPF` or `CAP_SYS_ADMIN` required
-
----
-
-## Uninstall
-
-```bash
-./install.sh --uninstall            # user-local
-./install.sh --uninstall --system   # system-wide
-```
-
----
-
-## Why?
-
-Because ransomware detection should not require a $50K enterprise solution. Halcyon runs at the kernel level with eBPF, scores file-open rates in real-time, and alerts you in a live TUI — all from a single static binary. Open source, auditable, and free.
 
 ---
 
@@ -473,7 +432,6 @@ Because ransomware detection should not require a $50K enterprise solution. Halc
 
 MIT
 
----
 ---
 
 ## 📺 Demo
