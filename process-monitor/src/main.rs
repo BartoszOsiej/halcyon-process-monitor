@@ -1,5 +1,6 @@
 mod ffi;
 mod monitor;
+mod storage;
 mod tui;
 #[cfg(feature = "web")]
 mod web;
@@ -71,6 +72,22 @@ struct Args {
     /// Automatically kill processes that trigger alerts (EDR response mode)
     #[arg(long)]
     auto_kill: bool,
+
+    /// Kafka broker address (e.g. localhost:9092) — enables Kafka producer
+    #[arg(long, value_name = "BROKERS", requires = "kafka_topic")]
+    kafka_brokers: Option<String>,
+
+    /// Kafka topic name (requires --kafka-brokers)
+    #[arg(long, value_name = "TOPIC")]
+    kafka_topic: Option<String>,
+
+    /// ClickHouse URL (e.g. http://localhost:8123) — enables ClickHouse storage
+    #[arg(long, value_name = "URL")]
+    clickhouse: Option<String>,
+
+    /// MemGraph URL (e.g. http://localhost:7474) — enables process graph
+    #[arg(long, value_name = "URL")]
+    memgraph: Option<String>,
 }
 
 fn main() -> Result<()> {
@@ -95,12 +112,54 @@ fn main() -> Result<()> {
 
     let use_tui = args.tui || (!args.json && !args.plain && io::stdout().is_terminal());
 
-    eprintln!("[halcyon] eBPF program: {}", bpf_path.display());    eprintln!("[halcyon] alert threshold: {} file opens/s", args.alert_threshold);
+    eprintln!("[halcyon] eBPF program: {}", bpf_path.display());
+    eprintln!("[halcyon] alert threshold: {} file opens/s", args.alert_threshold);
     if args.auto_kill {
         eprintln!("[halcyon] AUTO-KILL: enabled (SIGKILL on alert)");
     }
     if let Some(ref ext) = args.filter_ext {
         eprintln!("[halcyon] extension filter: .{ext}");
+    }
+
+    // ── Storage pipeline ──────────────────────────────────────────────
+    #[allow(unused_mut)]
+    let mut pipeline = storage::StoragePipeline::new();
+
+    #[cfg(feature = "kafka")]
+    if let (Some(brokers), Some(topic)) = (&args.kafka_brokers, &args.kafka_topic) {
+        let cfg = storage::kafka::KafkaConfig {
+            brokers: brokers.clone(),
+            topic: topic.clone(),
+            ..Default::default()
+        };
+        match storage::kafka::KafkaProducer::start(cfg) {
+            Ok(p) => { eprintln!("[halcyon] Kafka producer → {brokers} topic={topic}"); pipeline.kafka = Some(p); }
+            Err(e) => eprintln!("[halcyon] WARN: Kafka init failed: {e}"),
+        }
+    }
+
+    #[cfg(feature = "clickhouse")]
+    if let Some(ref url) = args.clickhouse {
+        let cfg = storage::clickhouse::ClickHouseConfig {
+            url: url.clone(),
+            ..Default::default()
+        };
+        match storage::clickhouse::ClickHouseStore::start(cfg) {
+            Ok(s) => { eprintln!("[halcyon] ClickHouse → {url}"); pipeline.clickhouse = Some(s); }
+            Err(e) => eprintln!("[halcyon] WARN: ClickHouse init failed: {e}"),
+        }
+    }
+
+    #[cfg(feature = "memgraph")]
+    if let Some(ref url) = args.memgraph {
+        let cfg = storage::memgraph::MemGraphConfig {
+            url: url.clone(),
+            ..Default::default()
+        };
+        match storage::memgraph::MemGraphStore::start(cfg) {
+            Ok(s) => { eprintln!("[halcyon] MemGraph → {url}"); pipeline.memgraph = Some(s); }
+            Err(e) => eprintln!("[halcyon] WARN: MemGraph init failed: {e}"),
+        }
     }
 
     if args.diagnose {
@@ -122,9 +181,9 @@ fn main() -> Result<()> {
         eprintln!("[halcyon] TUI mode (q quit, p pause, c clear, arrows scroll, Tab switch panel)");
         tui::run(monitor)?;
     } else if args.json {
-        run_json(&mut monitor)?;
+        run_json(&mut monitor, &pipeline)?;
     } else {
-        run_plain(&mut monitor)?;
+        run_plain(&mut monitor, &pipeline)?;
     }
 
     eprintln!("[halcyon] shutdown complete");
@@ -332,11 +391,14 @@ extern "C" fn handle_signal(_: libc::c_int) {
     QUIT.store(true, Ordering::SeqCst);
 }
 
-fn run_json(monitor: &mut Monitor) -> Result<()> {
+
+
+fn run_json(monitor: &mut Monitor, pipeline: &storage::StoragePipeline) -> Result<()> {
     let stdout = io::stdout();
     let mut out = io::BufWriter::new(stdout.lock());
     loop {
-        for output in monitor.poll() {
+        let outputs: Vec<Output> = monitor.poll().into_iter().collect();
+        for output in &outputs {
             match output {
                 Output::Event(ev) => {
                     let kind = match ev.kind {
@@ -385,6 +447,7 @@ fn run_json(monitor: &mut Monitor) -> Result<()> {
                 }
             }
         }
+        pipeline.forward_outputs(&outputs);
         out.flush()?;
         if QUIT.load(Ordering::SeqCst) {
             break;
@@ -394,7 +457,7 @@ fn run_json(monitor: &mut Monitor) -> Result<()> {
     Ok(())
 }
 
-fn run_plain(monitor: &mut Monitor) -> Result<()> {
+fn run_plain(monitor: &mut Monitor, pipeline: &storage::StoragePipeline) -> Result<()> {
     use colored::Colorize;
     const NOISY: &[&str] = &[
         "freebuff", "waybar", "upowerd", "mutter", "Xwayland", "hyprland",
@@ -402,7 +465,9 @@ fn run_plain(monitor: &mut Monitor) -> Result<()> {
         "dbus-daemon", "systemd-resolve", "systemd-network", "dunst", "mako",
     ];
     loop {
-        for output in monitor.poll() {
+        let outputs: Vec<Output> = monitor.poll().into_iter().collect();
+        pipeline.forward_outputs(&outputs);
+        for output in outputs {
             match output {
                 Output::Event(ev) => {
                     if NOISY.contains(&ev.comm.as_str()) {
