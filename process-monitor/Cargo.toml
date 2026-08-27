@@ -19,7 +19,7 @@ aya = "0.13.1"
 bytes = "1"
 chrono = "0.4"
 clap = { version = "4", features = ["derive"] }
-colored = "2"
+colored = "3"
 crossterm = "0.29.0"
 libc = "0.2"
 serde_json = "1"
