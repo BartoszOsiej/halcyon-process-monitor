@@ -1053,15 +1053,16 @@ pub fn run(mut monitor: Monitor) -> anyhow::Result<()> {
     let (tx, rx) = mpsc::channel::<Snapshot>();
     let mut tick: u64 = 0;
     let h = thread::Builder::new().name("poll".into()).spawn(move || loop {
-        let evts: Vec<Evt> = monitor.poll().into_iter().map(|o| match o {
-            Output::Event(ev) => Evt {
+        let evts: Vec<Evt> = monitor.poll().into_iter().filter_map(|o| match o {
+            Output::Event(ev) => Some(Evt {
                 ts: ev.ts, kind: format!("{:?}", ev.kind), pid: ev.pid,
                 comm: ev.comm, file: ev.file, is_alert: false, opens: 0,
-            },
-            Output::Alert(a) => Evt {
+            }),
+            Output::Alert(a) => Some(Evt {
                 ts: a.ts, kind: "Alert".into(), pid: a.pid,
                 comm: a.comm, file: None, is_alert: true, opens: a.opens,
-            },
+            }),
+            Output::Action(_) => None,
         }).collect();
         tick += 1;
         if tick.is_multiple_of(6) || !evts.is_empty() {

@@ -134,7 +134,7 @@ pub unsafe extern "C" fn halcyon_monitor_create(
     };
 
     let path = std::path::Path::new(path_str);
-    let monitor = match Monitor::start(path, threshold) {
+    let monitor = match Monitor::start(path, threshold, false) {
         Ok(m) => m,
         Err(e) => {
             set_last_error(&format!("failed to create monitor: {e}"));
@@ -233,6 +233,16 @@ pub unsafe extern "C" fn halcyon_monitor_poll(
                 event.file = ptr::null_mut();
                 event.argv = ptr::null_mut();
                 event.timestamp = CString::new(al.ts).unwrap_or_default().into_raw();
+            }
+            crate::monitor::Output::Action(_) => {
+                // Response actions are logged but not exposed via FFI polling
+                event.kind = -2; // Action marker
+                event.pid = 0;
+                event.uid = 0;
+                event.comm = ptr::null_mut();
+                event.file = ptr::null_mut();
+                event.argv = ptr::null_mut();
+                event.timestamp = ptr::null_mut();
             }
         }
     }

@@ -147,6 +147,17 @@ pub struct ProcessNode {
 pub enum Output {
     Event(RecordedEvent),
     Alert(Alert),
+    Action(ResponseAction),
+}
+
+/// Response action taken by the agent.
+#[derive(Debug, Clone)]
+pub struct ResponseAction {
+    pub ts: String,
+    pub pid: u32,
+    pub comm: String,
+    pub action: String,
+    pub success: bool,
 }
 
 enum Msg {
@@ -159,6 +170,7 @@ enum Msg {
 pub struct Monitor {
     rx: Receiver<Msg>,
     pub threshold: u64,
+    pub auto_kill: bool,
     stats: HashMap<u32, ProcStats>,
     windows: HashMap<u32, VecDeque<Instant>>,
     /// PID → PPID mapping (resolved from /proc/<pid>/status).
@@ -181,8 +193,16 @@ pub struct Monitor {
     _bpf: Option<Ebpf>,
 }
 
+// ── Response: process termination ────────────────────────────────────────
+
+/// Send SIGKILL to a process. Returns true on success.
+fn kill_process(pid: u32) -> bool {
+    let rc = unsafe { libc::kill(pid as i32, libc::SIGKILL) };
+    rc == 0
+}
+
 impl Monitor {
-    pub fn start(bpf_path: &Path, threshold: u64) -> Result<Self> {
+    pub fn start(bpf_path: &Path, threshold: u64, auto_kill: bool) -> Result<Self> {
         if unsafe { libc::geteuid() } != 0 {
             bail!("must be run as root: loading eBPF programs requires CAP_BPF / CAP_SYS_ADMIN");
         }
@@ -274,6 +294,7 @@ impl Monitor {
         Ok(Self {
             rx,
             threshold,
+            auto_kill,
             stats: HashMap::new(),
             windows: HashMap::new(),
             pid_to_ppid: HashMap::new(),
@@ -381,6 +402,17 @@ impl Monitor {
                         comm: ev.comm.clone(),
                         opens: stats.window_opens,
                     }));
+                    // ── Response: terminate the offending process ──────────
+                    if self.auto_kill {
+                        let result = kill_process(ev.pid);
+                        outputs.push(Output::Action(ResponseAction {
+                            ts: ev.ts.clone(),
+                            pid: ev.pid,
+                            comm: ev.comm.clone(),
+                            action: format!("SIGKILL sent to PID {} ({})", ev.pid, ev.comm),
+                            success: result,
+                        }));
+                    }
                 }
             }
             Kind::Mkdir | Kind::Unlink | Kind::Kill | Kind::Chmod => {
@@ -806,6 +838,7 @@ impl Monitor {
         Self {
             rx,
             threshold: 3,
+            auto_kill: false,
             stats: HashMap::new(),
             windows: HashMap::new(),
             pid_to_ppid: HashMap::new(),
