@@ -90,7 +90,7 @@ impl StoragePipeline {
     }
 
     /// Forward an event to all active storage backends.
-    pub fn forward_event(&self, event: &StorageEvent) {
+    pub fn forward_event(&self, _event: &StorageEvent) {
         #[cfg(feature = "kafka")]
         if let Some(ref p) = self.kafka {
             p.send(event.clone());
