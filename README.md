@@ -366,7 +366,7 @@ sudo process-monitor --diagnose
 
 | Variant | Size | Dependencies |
 |---|---|---|
-| `process-monitor-tui` | 1.7MB | aya, ratatui, chrono, crossterm |
+| `process-monitor-tui` | 1.7MB | aya, frankentui (ftui), chrono, crossterm |
 | `process-monitor-web` | 2.5MB | +axum, tokio, tower-http, prometheus-client |
 
 ---
@@ -440,21 +440,33 @@ halcyon-process-monitor/
 │   └── src/
 │       ├── main.rs           # CLI, mode selection, signal handling
 │       ├── monitor.rs        # eBPF loading, perf reader, detection, response
-│       ├── tui.rs            # 7-panel ratatui cyberpunk interface
+│       ├── tui.rs            # 7-panel frankentui (ftui) cyberpunk interface
 │       ├── web.rs            # axum web server (--features web)
-│       └── ffi.rs            # C FFI bindings (libhalcyon)
+│       ├── ffi.rs            # C FFI bindings (libhalcyon)
+│       └── storage/          # Kafka / ClickHouse / MemGraph backends
 ├── process-monitor-ebpf/     # Kernel side (#![no_std], aya-ebpf)
 │   └── src/
 │       ├── main.rs           # execve/openat → PerfEventArray
 │       ├── network.rs        # connect/accept/sendto/recvfrom + sockaddr
 │       └── fs.rs             # mkdir/unlink/kill/chmod tracepoints
+├── frankentui/               # FrankenTUI — self-hosted terminal UI kernel
+│   └── ftui-*/               # ftui-core, ftui-render, ftui-runtime, ... (crates)
+├── c-ebpf/                   # Standalone C eBPF programs (ebpf.c, process_monitor.bpf.c)
 ├── go-agent/                 # Go CLI agent (HTTP/WebSocket client)
-├── halcyon-tauri/            # Tauri desktop dashboard (React + Rust)
+├── go-web/                   # Go web frontend (main.go)
 ├── c-api/                    # C header for libhalcyon
+├── halcyon-tauri/            # Tauri desktop dashboard (React + Rust)
 ├── k8s/                      # Kubernetes manifests (DaemonSet, Service)
 ├── proto/                    # Protobuf schema (gRPC)
-├── build.sh                  # Build script
+├── fuzz/                     # Fuzzing harness
+├── demos/                    # Recorded demo tape
+├── docs/                     # Additional documentation
+├── screenshots/              # TUI screenshots
+├── build.sh                  # Build script (--web / --all / --check)
+├── build-c.sh                # Build C eBPF variant
 ├── install.sh                # Distro-aware installer
+├── install-gui.sh            # Graphical (zenity) installer
+├── Makefile                  # Task runner
 └── Cargo.toml                # Workspace definition
 ```
 
