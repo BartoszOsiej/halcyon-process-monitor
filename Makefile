@@ -1,4 +1,4 @@
-# Halcyon Process Monitor — C + Go rewrite
+# Talus Process Monitor — C + Go rewrite
 #
 # Components:
 #   c-ebpf/       eBPF kernel programs (libbpf)
@@ -14,14 +14,14 @@ BPF_CFLAGS = -O2 -g -Wall -target bpf -D__TARGET_ARCH_x86
 
 PREFIX   ?= /usr/local
 BINDIR   = $(PREFIX)/bin
-LIBDIR   = $(PREFIX)/lib/halcyon
+LIBDIR   = $(PREFIX)/lib/talus
 
 .PHONY: all clean install uninstall ebpf monitor tui web help
 
 all: ebpf monitor tui
 
 help:
-	@echo "Halcyon Process Monitor (C + Go)"
+	@echo "Talus Process Monitor (C + Go)"
 	@echo ""
 	@echo "Targets:"
 	@echo "  all       Build everything (ebpf + monitor + tui)"
@@ -50,50 +50,50 @@ MONITOR_OBJ = $(MONITOR_SRC:.c=.o)
 
 monitor: $(MONITOR_OBJ)
 
-$(MONITOR_OBJ): c-monitor/src/monitor.c c-monitor/include/halcyon.h
+$(MONITOR_OBJ): c-monitor/src/monitor.c c-monitor/include/talus.h
 	$(CC) $(CFLAGS) -Ic-monitor/include -c $< -o $@
 
 # ── TUI ───────────────────────────────────────────────────────────────────
 
 TUI_SRC = c-tui/src/tui.c
 TUI_OBJ = $(TUI_SRC:.c=.o)
-TUI_BIN = halcyon-tui
+TUI_BIN = talus-tui
 
 tui: $(TUI_BIN)
 
 $(TUI_BIN): $(TUI_OBJ) $(MONITOR_OBJ)
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS) -lbpf -lelf -lz
 
-$(TUI_OBJ): c-tui/src/tui.c c-monitor/include/halcyon.h
+$(TUI_OBJ): c-tui/src/tui.c c-monitor/include/talus.h
 	$(CC) $(CFLAGS) -Ic-monitor/include -c $< -o $@
 
 # ── Web dashboard (Go) ────────────────────────────────────────────────────
 
 web:
-	cd go-web && go build -o halcyon-web .
+	cd go-web && go build -o talus-web .
 
 # ── Install ───────────────────────────────────────────────────────────────
 
 install: all
 	install -d $(DESTDIR)$(BINDIR)
 	install -d $(DESTDIR)$(LIBDIR)
-	install -m 755 $(TUI_BIN) $(DESTDIR)$(BINDIR)/halcyon
+	install -m 755 $(TUI_BIN) $(DESTDIR)$(BINDIR)/talus
 	install -m 644 c-ebpf/process_monitor.bpf.o $(DESTDIR)$(LIBDIR)/
-	install -m 644 c-monitor/include/halcyon.h $(DESTDIR)$(LIBDIR)/
-	@if [ -f go-web/halcyon-web ]; then \
-		install -m 755 go-web/halcyon-web $(DESTDIR)$(BINDIR)/halcyon-web; \
+	install -m 644 c-monitor/include/talus.h $(DESTDIR)$(LIBDIR)/
+	@if [ -f go-web/talus-web ]; then \
+		install -m 755 go-web/talus-web $(DESTDIR)$(BINDIR)/talus-web; \
 	fi
 	@echo ""
 	@echo "Installed to $(DESTDIR)$(PREFIX)"
-	@echo "  $(BINDIR)/halcyon       — TUI monitor"
+	@echo "  $(BINDIR)/talus       — TUI monitor"
 	@echo "  $(LIBDIR)/process_monitor.bpf.o — eBPF program"
-	@echo "  $(LIBDIR)/halcyon.h     — C API header"
+	@echo "  $(LIBDIR)/talus.h     — C API header"
 
 uninstall:
-	rm -f $(DESTDIR)$(BINDIR)/halcyon
-	rm -f $(DESTDIR)$(BINDIR)/halcyon-web
+	rm -f $(DESTDIR)$(BINDIR)/talus
+	rm -f $(DESTDIR)$(BINDIR)/talus-web
 	rm -rf $(DESTDIR)$(LIBDIR)
 
 clean:
 	rm -f c-ebpf/*.o c-monitor/src/*.o c-tui/src/*.o $(TUI_BIN)
-	rm -f go-web/halcyon-web
+	rm -f go-web/talus-web

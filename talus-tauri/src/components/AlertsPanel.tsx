@@ -1,10 +1,10 @@
 import { memo } from "react";
-import type { HalcyonEvent } from "../types";
+import type { TalusEvent } from "../types";
 
 export const AlertsPanel = memo(function AlertsPanel({
   alerts,
 }: {
-  alerts: HalcyonEvent[];
+  alerts: TalusEvent[];
 }) {
   return (
     <div className="panel">

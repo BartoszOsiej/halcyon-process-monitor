@@ -1,6 +1,6 @@
-# Halcyon — Tauri Desktop Dashboard
+# Talus — Tauri Desktop Dashboard
 
-Native desktop GUI for the Halcyon Endpoint Security Agent.  
+Native desktop GUI for the Talus Endpoint Security Agent.  
 Built with **Tauri 2** (Rust backend) + **React 19** (TypeScript frontend) + **Recharts**.
 
 ## Architecture
@@ -13,7 +13,7 @@ Built with **Tauri 2** (Rust backend) + **React 19** (TypeScript frontend) + **R
 │  │  (Tauri 2)       │   │  (Vite + TypeScript)   │  │
 │  │                  │   │                        │  │
 │  │  - Spawns        │   │  - Events panel        │  │
-│  │    halcyon       │◄──│  - Processes panel     │  │
+│  │    talus       │◄──│  - Processes panel     │  │
 │  │    --json        │   │  - Network panel       │  │
 │  │  - Emits events  │   │  - Files panel         │  │
 │  │    to frontend   │   │  - Extensions panel    │  │
@@ -24,13 +24,13 @@ Built with **Tauri 2** (Rust backend) + **React 19** (TypeScript frontend) + **R
                        │
                        ▼
             ┌─────────────────────┐
-            │  halcyon binary     │
+            │  talus binary     │
             │  (eBPF kernel prog) │
             │  --json mode        │
             └─────────────────────┘
 ```
 
-The Tauri backend spawns `sudo halcyon --json` as a child process, reads its stdout line by line, and emits each JSON event to the React frontend via Tauri's event system. The frontend also polls the REST API (`/api/v1/stats`, `/api/v1/processes`, etc.) for aggregate data.
+The Tauri backend spawns `sudo talus --json` as a child process, reads its stdout line by line, and emits each JSON event to the React frontend via Tauri's event system. The frontend also polls the REST API (`/api/v1/stats`, `/api/v1/processes`, etc.) for aggregate data.
 
 ## Prerequisites
 
@@ -53,12 +53,12 @@ sudo dnf install webkit2gtk4.1-devel javascriptcoregtk4.1-devel \
 
 - Rust (stable, 1.77+)
 - Node.js 22+
-- halcyon binary installed at `/usr/local/bin/halcyon`
+- talus binary installed at `/usr/local/bin/talus`
 
 ## Quick Start
 
 ```bash
-cd halcyon-tauri
+cd talus-tauri
 
 # Install JS deps
 npm install
@@ -72,7 +72,7 @@ npm run tauri build
 
 ## Frontend Dev (without Tauri)
 
-If halcyon web server is running on port 3080:
+If talus web server is running on port 3080:
 
 ```bash
 npm run dev
@@ -87,11 +87,11 @@ The Tauri backend (`src-tauri/src/lib.rs`) provides 3 IPC commands:
 
 | Command | Description |
 |---------|-------------|
-| `start_monitor` | Spawns `sudo halcyon --json` with optional flags (`--auto-kill`, `--kafka-brokers`, etc.) |
-| `stop_monitor` | Sends SIGTERM to the halcyon process |
+| `start_monitor` | Spawns `sudo talus --json` with optional flags (`--auto-kill`, `--kafka-brokers`, etc.) |
+| `stop_monitor` | Sends SIGTERM to the talus process |
 | `get_status` | Returns `{ running, pid }` |
 
-Events flow: `halcyon stdout → Rust thread → Tauri emit → React state update`
+Events flow: `talus stdout → Rust thread → Tauri emit → React state update`
 
 ## Dashboard Panels
 

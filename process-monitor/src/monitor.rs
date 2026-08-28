@@ -226,10 +226,10 @@ impl Monitor {
             bail!("must be run as root: loading eBPF programs requires CAP_BPF / CAP_SYS_ADMIN");
         }
 
-        eprintln!("[halcyon] loading eBPF object: {}", bpf_path.display());
+        eprintln!("[talus] loading eBPF object: {}", bpf_path.display());
         let mut bpf = Ebpf::load_file(bpf_path).context("failed to load eBPF program")?;
         eprintln!(
-            "[halcyon] object parsed OK; programs: {:?}",
+            "[talus] object parsed OK; programs: {:?}",
             bpf.programs().map(|(n, _)| n).collect::<Vec<_>>()
         );
 
@@ -242,7 +242,7 @@ impl Monitor {
         program
             .attach("syscalls", "sys_enter_execve")
             .context("failed to attach execve tracepoint")?;
-        eprintln!("[halcyon] attached tracepoint syscalls/sys_enter_execve");
+        eprintln!("[talus] attached tracepoint syscalls/sys_enter_execve");
 
         let program: &mut TracePoint = bpf
             .program_mut("sys_enter_openat")
@@ -253,7 +253,7 @@ impl Monitor {
         program
             .attach("syscalls", "sys_enter_openat")
             .context("failed to attach openat tracepoint")?;
-        eprintln!("[halcyon] attached tracepoint syscalls/sys_enter_openat");
+        eprintln!("[talus] attached tracepoint syscalls/sys_enter_openat");
 
         // Attach filesystem and signal tracepoints (best-effort: kernel may lack some).
         for (name, category, label) in [
@@ -266,7 +266,7 @@ impl Monitor {
                 let tp: Result<&mut TracePoint, _> = prog.try_into();
                 if let Ok(tp) = tp {
                     if tp.load().is_ok() && tp.attach(category, name).is_ok() {
-                        eprintln!("[halcyon] attached tracepoint {category}/{name} ({label})");
+                        eprintln!("[talus] attached tracepoint {category}/{name} ({label})");
                     }
                 }
             }
@@ -286,17 +286,17 @@ impl Monitor {
                         match tp.load() {
                             Ok(()) => {
                                 match tp.attach("syscalls", name) {
-                                    Ok(_) => eprintln!("[halcyon] attached tracepoint syscalls/{name} ({label})"),
-                                    Err(e) => eprintln!("[halcyon] WARN: loaded {name} but attach failed: {e}"),
+                                    Ok(_) => eprintln!("[talus] attached tracepoint syscalls/{name} ({label})"),
+                                    Err(e) => eprintln!("[talus] WARN: loaded {name} but attach failed: {e}"),
                                 }
                             }
-                            Err(e) => eprintln!("[halcyon] WARN: failed to load {name}: {e}"),
+                            Err(e) => eprintln!("[talus] WARN: failed to load {name}: {e}"),
                         }
                     }
-                    Err(e) => eprintln!("[halcyon] WARN: {name} is not a TracePoint: {e}"),
+                    Err(e) => eprintln!("[talus] WARN: {name} is not a TracePoint: {e}"),
                 }
             } else {
-                eprintln!("[halcyon] WARN: program {name} not found in eBPF object");
+                eprintln!("[talus] WARN: program {name} not found in eBPF object");
             }
         }
 
@@ -642,10 +642,10 @@ fn spawn_reader(
         buffers.push(buf);
     }
 
-    eprintln!("[halcyon] opening perf buffers on {} CPUs", buffers.len());
+    eprintln!("[talus] opening perf buffers on {} CPUs", buffers.len());
 
     thread::Builder::new()
-        .name("halcyon-reader".into())
+        .name("talus-reader".into())
         .spawn(move || {
             let mut out = vec![BytesMut::with_capacity(OUT_BUF_CAP); OUT_BUFS];
             loop {
@@ -674,7 +674,7 @@ fn spawn_reader(
                             }
                         }
                         Err(e) => {
-                            eprintln!("[halcyon] perf buffer error: {e}");
+                            eprintln!("[talus] perf buffer error: {e}");
                             idle = true;
                         }
                     }

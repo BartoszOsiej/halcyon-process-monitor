@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
-// ebpf.c — C library wrapping libbpf for Halcyon eBPF Process Monitor
+// ebpf.c — C library wrapping libbpf for Talus eBPF Process Monitor
 //
 // Handles eBPF object loading, tracepoint attachment, and perf buffer reading.
 // Go calls this via CGo — all high-level monitoring logic lives in Go.
 
-#include "halcyon.h"
+#include "talus.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -28,7 +28,7 @@
 
 static __thread char tls_error[256];
 
-const char *halcyon_last_error(void)
+const char *talus_last_error(void)
 {
     return tls_error[0] ? tls_error : NULL;
 }
@@ -41,33 +41,33 @@ static void set_error(const char *fmt, ...)
     va_end(ap);
 }
 
-const char *halcyon_strerror(halcyon_err_t err)
+const char *talus_strerror(talus_err_t err)
 {
     switch (err) {
-    case HALCYON_OK:            return "success";
-    case HALCYON_ERR_NOMEM:     return "out of memory";
-    case HALCYON_ERR_INVAL:     return "invalid argument";
-    case HALCYON_ERR_PERM:      return "permission denied";
-    case HALCYON_ERR_IO:        return "I/O error";
-    case HALCYON_ERR_NOT_FOUND: return "not found";
+    case TALUS_OK:            return "success";
+    case TALUS_ERR_NOMEM:     return "out of memory";
+    case TALUS_ERR_INVAL:     return "invalid argument";
+    case TALUS_ERR_PERM:      return "permission denied";
+    case TALUS_ERR_IO:        return "I/O error";
+    case TALUS_ERR_NOT_FOUND: return "not found";
     default:                    return "unknown error";
     }
 }
 
-const char *halcyon_version(void)
+const char *talus_version(void)
 {
     return "0.6.0";
 }
 
 // ── Monitor structure ────────────────────────────────────────────────────
 
-struct halcyon_monitor {
+struct talus_monitor {
     struct bpf_object *obj;
     struct perf_buffer *pb;
 
     // Lock-free raw ring buffer for perf callback → poll()
     struct {
-        halcyon_raw_event_t ring[RAW_RING_SIZE];
+        talus_raw_event_t ring[RAW_RING_SIZE];
         volatile int head; // written by perf callback
         volatile int tail; // read by poll()
     } raw_ring;
@@ -80,16 +80,16 @@ struct halcyon_monitor {
 static void perf_event_handler(void *ctx, int cpu, void *data, uint32_t size)
 {
     (void)cpu;
-    halcyon_monitor_t *m = (halcyon_monitor_t *)ctx;
-    if (size < sizeof(halcyon_raw_event_t)) return;
+    talus_monitor_t *m = (talus_monitor_t *)ctx;
+    if (size < sizeof(talus_raw_event_t)) return;
 
-    const halcyon_raw_event_t *raw = (const halcyon_raw_event_t *)data;
+    const talus_raw_event_t *raw = (const talus_raw_event_t *)data;
 
     // Lock-free single-producer ring buffer
     int h = m->raw_ring.head;
     int next = (h + 1) % RAW_RING_SIZE;
     if (next == m->raw_ring.tail) return; // full, drop event
-    memcpy((void *)&m->raw_ring.ring[h], raw, sizeof(halcyon_raw_event_t));
+    memcpy((void *)&m->raw_ring.ring[h], raw, sizeof(talus_raw_event_t));
     __sync_synchronize(); // memory barrier
     m->raw_ring.head = next;
 }
@@ -97,51 +97,51 @@ static void perf_event_handler(void *ctx, int cpu, void *data, uint32_t size)
 static void perf_event_lost_handler(void *ctx, int cpu, __u64 cnt)
 {
     (void)cpu;
-    halcyon_monitor_t *m = (halcyon_monitor_t *)ctx;
+    talus_monitor_t *m = (talus_monitor_t *)ctx;
     __sync_fetch_and_add(&m->total_lost, cnt);
 }
 
 // ── Monitor creation ─────────────────────────────────────────────────────
 
-halcyon_err_t halcyon_monitor_create(const char *bpf_path,
-                                     halcyon_monitor_t **out)
+talus_err_t talus_monitor_create(const char *bpf_path,
+                                     talus_monitor_t **out)
 {
     if (!bpf_path || !out) {
         set_error("null pointer argument");
-        return HALCYON_ERR_INVAL;
+        return TALUS_ERR_INVAL;
     }
 
     if (access(bpf_path, R_OK) != 0) {
         set_error("eBPF object not found: %s", bpf_path);
-        return HALCYON_ERR_NOT_FOUND;
+        return TALUS_ERR_NOT_FOUND;
     }
 
-    halcyon_monitor_t *m = calloc(1, sizeof(*m));
+    talus_monitor_t *m = calloc(1, sizeof(*m));
     if (!m) {
         set_error("out of memory");
-        return HALCYON_ERR_NOMEM;
+        return TALUS_ERR_NOMEM;
     }
 
     m->raw_ring.head = 0;
     m->raw_ring.tail = 0;
 
     // Load eBPF object
-    fprintf(stderr, "[halcyon] loading eBPF object: %s\n", bpf_path);
+    fprintf(stderr, "[talus] loading eBPF object: %s\n", bpf_path);
     m->obj = bpf_object__open(bpf_path);
     if (!m->obj) {
         set_error("failed to open eBPF object: %s", strerror(errno));
         free(m);
-        return HALCYON_ERR_IO;
+        return TALUS_ERR_IO;
     }
 
     if (bpf_object__load(m->obj) != 0) {
         set_error("failed to load eBPF object: %s", strerror(errno));
         bpf_object__close(m->obj);
         free(m);
-        return HALCYON_ERR_IO;
+        return TALUS_ERR_IO;
     }
 
-    fprintf(stderr, "[halcyon] eBPF object loaded OK\n");
+    fprintf(stderr, "[talus] eBPF object loaded OK\n");
 
     // Attach tracepoints (required: execve + openat, optional: the rest)
     static const char *required_tps[] = {
@@ -162,15 +162,15 @@ halcyon_err_t halcyon_monitor_create(const char *bpf_path,
             set_error("program not found: %s", required_tps[i]);
             bpf_object__close(m->obj);
             free(m);
-            return HALCYON_ERR_NOT_FOUND;
+            return TALUS_ERR_NOT_FOUND;
         }
         if (bpf_program__attach(prog) == NULL) {
             set_error("failed to attach: %s", required_tps[i]);
             bpf_object__close(m->obj);
             free(m);
-            return HALCYON_ERR_IO;
+            return TALUS_ERR_IO;
         }
-        fprintf(stderr, "[halcyon] attached tracepoint syscalls/%s\n",
+        fprintf(stderr, "[talus] attached tracepoint syscalls/%s\n",
                 required_tps[i]);
     }
 
@@ -179,14 +179,14 @@ halcyon_err_t halcyon_monitor_create(const char *bpf_path,
             m->obj, optional_tps[i]);
         if (prog) {
             if (bpf_program__attach(prog)) {
-                fprintf(stderr, "[halcyon] attached tracepoint syscalls/%s\n",
+                fprintf(stderr, "[talus] attached tracepoint syscalls/%s\n",
                         optional_tps[i]);
             } else {
-                fprintf(stderr, "[halcyon] WARN: failed to attach %s\n",
+                fprintf(stderr, "[talus] WARN: failed to attach %s\n",
                         optional_tps[i]);
             }
         } else {
-            fprintf(stderr, "[halcyon] WARN: program %s not found\n",
+            fprintf(stderr, "[talus] WARN: program %s not found\n",
                     optional_tps[i]);
         }
     }
@@ -197,7 +197,7 @@ halcyon_err_t halcyon_monitor_create(const char *bpf_path,
         set_error("'events' map not found");
         bpf_object__close(m->obj);
         free(m);
-        return HALCYON_ERR_NOT_FOUND;
+        return TALUS_ERR_NOT_FOUND;
     }
 
     m->pb = perf_buffer__new(bpf_map__fd(events_map), PERF_BUF_PAGES,
@@ -207,19 +207,19 @@ halcyon_err_t halcyon_monitor_create(const char *bpf_path,
         set_error("failed to create perf buffer: %s", strerror(errno));
         bpf_object__close(m->obj);
         free(m);
-        return HALCYON_ERR_IO;
+        return TALUS_ERR_IO;
     }
 
-    fprintf(stderr, "[halcyon] perf buffer opened on %d CPUs\n",
+    fprintf(stderr, "[talus] perf buffer opened on %d CPUs\n",
             libbpf_num_possible_cpus());
 
     *out = m;
-    return HALCYON_OK;
+    return TALUS_OK;
 }
 
 // ── Monitor destruction ──────────────────────────────────────────────────
 
-void halcyon_monitor_destroy(halcyon_monitor_t *m)
+void talus_monitor_destroy(talus_monitor_t *m)
 {
     if (!m) return;
     if (m->pb) perf_buffer__free(m->pb);
@@ -229,14 +229,14 @@ void halcyon_monitor_destroy(halcyon_monitor_t *m)
 
 // ── Event polling ────────────────────────────────────────────────────────
 
-halcyon_err_t halcyon_monitor_poll(halcyon_monitor_t *m,
-                                   halcyon_raw_event_t *events,
+talus_err_t talus_monitor_poll(talus_monitor_t *m,
+                                   talus_raw_event_t *events,
                                    uint32_t max_events,
                                    uint32_t *count)
 {
     if (!m || !events || !count) {
         set_error("null pointer argument");
-        return HALCYON_ERR_INVAL;
+        return TALUS_ERR_INVAL;
     }
 
     // Drain the perf buffer — this fills raw_ring via the callback
@@ -249,18 +249,18 @@ halcyon_err_t halcyon_monitor_poll(halcyon_monitor_t *m,
     while (m->raw_ring.tail != m->raw_ring.head && n < max_events) {
         __sync_synchronize();
         memcpy(&events[n], &m->raw_ring.ring[m->raw_ring.tail],
-               sizeof(halcyon_raw_event_t));
+               sizeof(talus_raw_event_t));
         m->raw_ring.tail = (m->raw_ring.tail + 1) % RAW_RING_SIZE;
         n++;
     }
 
     *count = n;
-    return HALCYON_OK;
+    return TALUS_OK;
 }
 
 // ── Lost events counter ──────────────────────────────────────────────────
 
-uint64_t halcyon_monitor_get_lost(halcyon_monitor_t *m)
+uint64_t talus_monitor_get_lost(talus_monitor_t *m)
 {
     if (!m) return 0;
     return m->total_lost;

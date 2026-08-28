@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// process_monitor.bpf.c — eBPF kernel programs for Halcyon Process Monitor
+// process_monitor.bpf.c — eBPF kernel programs for Talus Process Monitor
 //
 // Ported from the Rust/Aya implementation to C/libbpf.
 // Traces execve, openat, connect, accept, sendto, recvfrom, mkdir,

@@ -1,4 +1,4 @@
-# Halcyon Process Monitor — Test Report & QA
+# Talus Process Monitor — Test Report & QA
 
 > Generated: 2026-08-26 · Rust `cargo 1.97.1` · Linux
 > Re-run: `cargo test`

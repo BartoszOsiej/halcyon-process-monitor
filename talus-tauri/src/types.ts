@@ -1,4 +1,4 @@
-// ── Halcyon monitor event types ─────────────────────────────────────────
+// ── Talus monitor event types ─────────────────────────────────────────
 
 export type EventKind =
   | "exec"
@@ -12,7 +12,7 @@ export type EventKind =
   | "chmod"
   | "kill";
 
-export interface HalcyonEvent {
+export interface TalusEvent {
   ts: string;
   type: "event" | "alert" | "response";
   kind?: EventKind;

@@ -1,8 +1,8 @@
-# Halcyon Process Monitor
+# Talus Process Monitor
 
 > **Telemetria procesów, operacji plikowych i sieci w czasie rzeczywistym dla Linuksa, oparta na eBPF.**
 
-Halcyon Process Monitor śledzi syscalle `execve`, `openat`, `connect`, `accept`, `sendto` i `recvfrom` na poziomie jądra przez tracepointy eBPF, strumieniuje zdarzenia do przestrzeni użytkownika przez bufor per-CPU perf, i prezentuje je w zaawansowanym terminalowym TUI na żywo — jednocześnie oceniając tempo otwierania plików przez każdy proces w ruchomym oknie, aby wykrywać masowy dostęp do plików w stylu ransomware.
+Talus Process Monitor śledzi syscalle `execve`, `openat`, `connect`, `accept`, `sendto` i `recvfrom` na poziomie jądra przez tracepointy eBPF, strumieniuje zdarzenia do przestrzeni użytkownika przez bufor per-CPU perf, i prezentuje je w zaawansowanym terminalowym TUI na żywo — jednocześnie oceniając tempo otwierania plików przez każdy proces w ruchomym oknie, aby wykrywać masowy dostęp do plików w stylu ransomware.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -56,7 +56,7 @@ Halcyon Process Monitor śledzi syscalle `execve`, `openat`, `connect`, `accept`
 | **Wiele trybów wyjścia** | TUI, JSON, plain text, autodiagnostyka, dashboard webowy |
 | **Dashboard webowy** | REST API + WebSocket + metryki Prometheus (opcjonalny build) |
 | **Agent Go** | Lekki CLI łączący się z daemonem przez HTTP/WebSocket |
-| **Biblioteka C FFI** | `libhalcyon.so` z C bindings dla integracji międzyjęzykowej |
+| **Biblioteka C FFI** | `libtalus.so` z C bindings dla integracji międzyjęzykowej |
 | **Kubernetes** | Manifesty DaemonSet + Service + ConfigMap + ServiceMonitor |
 | **Schemat Protobuf** | Definicja usługi gRPC dla komunikacji między komponentami |
 | **Liczenie utraconych zdarzeń** | Przepełnienia bufora perf liczone i raportowane |
@@ -224,10 +224,10 @@ sudo process-monitor --web 0.0.0.0:8080
 Lekki CLI łączący się z daemonem:
 
 ```bash
-cd go-agent && go build -o halcyon-agent .
-./halcyon-agent stats
-./halcyon-agent processes
-./halcyon-agent watch    # WebSocket na żywo
+cd go-agent && go build -o talus-agent .
+./talus-agent stats
+./talus-agent processes
+./talus-agent watch    # WebSocket na żywo
 ```
 
 ## Biblioteka C FFI
@@ -235,26 +235,26 @@ cd go-agent && go build -o halcyon-agent .
 C-compatible library do integracji z innymi językami:
 
 ```c
-#include "halcyon.h"
+#include "talus.h"
 
-halcyon_monitor_t* monitor;
-halcyon_monitor_create("/path/to/bpf.o", 50, &monitor);
+talus_monitor_t* monitor;
+talus_monitor_create("/path/to/bpf.o", 50, &monitor);
 
-halcyon_event_t events[100];
+talus_event_t events[100];
 uint32_t count;
-halcyon_monitor_poll(monitor, events, 100, &count);
+talus_monitor_poll(monitor, events, 100, &count);
 
 for (uint32_t i = 0; i < count; i++) {
     printf("[%d] %s\n", events[i].pid, events[i].comm);
-    halcyon_free_string(events[i].comm);
+    talus_free_string(events[i].comm);
 }
-halcyon_free_events(events, count);
-halcyon_monitor_destroy(monitor);
+talus_free_events(events, count);
+talus_monitor_destroy(monitor);
 ```
 
 ## Kubernetes
 
-Wdróż Halcyon jako DaemonSet na każdym węźle:
+Wdróż Talus jako DaemonSet na każdym węźle:
 
 ```bash
 kubectl create namespace observability
@@ -265,7 +265,7 @@ kubectl apply -f k8s/
 
 | Zasób | Opis |
 |---|---|
-| `DaemonSet` | Uruchamia Halcyon na każdym węźle z dostępem do eBPF |
+| `DaemonSet` | Uruchamia Talus na każdym węźle z dostępem do eBPF |
 | `Service` | Serwis ClusterIP dla dostępu do API |
 | `ConfigMap` | Konfiguracja (próg, poziom logowania, etc.) |
 | `ServiceMonitor` | Integracja z operatorem Prometheus |
@@ -281,20 +281,20 @@ kubectl apply -f k8s/
 ## Struktura projektu
 
 ```
-halcyon-process-monitor/
+talus-process-monitor/
 ├── process-monitor/          # Przestrzeń użytkownika: rdzeń + TUI + web + FFI
 │   └── src/
 │       ├── main.rs           # CLI, wybór trybu, obsługa sygnałów
 │       ├── monitor.rs        # Ładowanie eBPF, czytnik perf, ruchome okno
 │       ├── tui.rs            # Ultra-zaawansowany interfejs ratatui
 │       ├── web.rs            # Serwer axum (opcjonalny, --features web)
-│       └── ffi.md            # C FFI bindings (libhalcyon)
+│       └── ffi.md            # C FFI bindings (libtalus)
 ├── process-monitor-ebpf/     # Strona jądra (#![no_std], aya-ebpf)
 │   └── src/
 │       ├── main.rs           # Tracepointy execve/openat → PerfEventArray
 │       └── network.rs        # Tracepointy connect/accept/sendto/recvfrom
 ├── go-agent/                 # Agent Go (klient HTTP/WebSocket)
-├── c-api/                    # Nagłówek C dla libhalcyon
+├── c-api/                    # Nagłówek C dla libtalus
 ├── k8s/                      # Manifesty Kubernetes
 ├── proto/                    # Schemat Protobuf (definicja usługi gRPC)
 ├── build.sh                  # Skrypt budowania (--web, --all)
@@ -313,9 +313,9 @@ halcyon-process-monitor/
 ## Docker
 
 ```bash
-docker build -t halcyon-process-monitor .
+docker build -t talus-process-monitor .
 docker run --privileged -v /sys/kernel/btf:/sys/kernel/btf \
-    halcyon-process-monitor process-monitor
+    talus-process-monitor process-monitor
 ```
 
 ## Rozwiązywanie problemów

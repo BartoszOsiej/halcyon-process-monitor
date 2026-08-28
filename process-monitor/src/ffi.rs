@@ -1,6 +1,6 @@
-//! C FFI bindings for libhalcyon.
+//! C FFI bindings for libtalus.
 //!
-//! This module exposes the Halcyon eBPF process monitor as a C-compatible library,
+//! This module exposes the Talus eBPF process monitor as a C-compatible library,
 //! allowing integration with C, C++, Python (via cffi/ctypes), and other languages.
 
 use std::ffi::{CStr, CString};
@@ -14,14 +14,14 @@ use crate::monitor::{Kind, Monitor};
 // ── C types ───────────────────────────────────────────────────────────────
 
 #[repr(C)]
-pub struct HalcyonMonitor {
+pub struct TalusMonitor {
     inner: Mutex<Monitor>,
     threshold: u64,
     started: Instant,
 }
 
 #[repr(C)]
-pub struct HalcyonEvent {
+pub struct TalusEvent {
     pub kind: c_int, // 0 = EXEC, 1 = OPEN
     pub pid: u32,
     pub uid: u32,
@@ -32,7 +32,7 @@ pub struct HalcyonEvent {
 }
 
 #[repr(C)]
-pub struct HalcyonProcessStats {
+pub struct TalusProcessStats {
     pub pid: u32,
     pub ppid: u32,
     pub comm: *mut c_char,
@@ -43,7 +43,7 @@ pub struct HalcyonProcessStats {
 }
 
 #[repr(C)]
-pub struct HalcyonFileRank {
+pub struct TalusFileRank {
     pub path: *mut c_char,
     pub count: u64,
     pub extension: *mut c_char,
@@ -51,7 +51,7 @@ pub struct HalcyonFileRank {
 }
 
 #[repr(C)]
-pub struct HalcyonStats {
+pub struct TalusStats {
     pub total_events: u64,
     pub total_lost: u64,
     pub uptime_secs: u64,
@@ -61,12 +61,12 @@ pub struct HalcyonStats {
 
 // ── Error codes ───────────────────────────────────────────────────────────
 
-pub const HALCYON_OK: c_int = 0;
-pub const HALCYON_ERR_NOMEM: c_int = -1;
-pub const HALCYON_ERR_INVAL: c_int = -2;
-pub const HALCYON_ERR_PERM: c_int = -3;
-pub const HALCYON_ERR_IO: c_int = -4;
-pub const HALCYON_ERR_NOT_FOUND: c_int = -5;
+pub const TALUS_OK: c_int = 0;
+pub const TALUS_ERR_NOMEM: c_int = -1;
+pub const TALUS_ERR_INVAL: c_int = -2;
+pub const TALUS_ERR_PERM: c_int = -3;
+pub const TALUS_ERR_IO: c_int = -4;
+pub const TALUS_ERR_NOT_FOUND: c_int = -5;
 
 thread_local! {
     static LAST_ERROR: std::cell::RefCell<Option<CString>> = const { std::cell::RefCell::new(None) };
@@ -82,27 +82,27 @@ fn set_last_error(msg: &str) {
 
 /// Returns the library version string.
 #[unsafe(no_mangle)]
-pub extern "C" fn halcyon_version() -> *const c_char {
+pub extern "C" fn talus_version() -> *const c_char {
     c"0.3.0".as_ptr()
 }
 
 /// Returns a human-readable error message.
 #[unsafe(no_mangle)]
-pub extern "C" fn halcyon_strerror(err: c_int) -> *const c_char {
+pub extern "C" fn talus_strerror(err: c_int) -> *const c_char {
     match err {
-        HALCYON_OK => c"success".as_ptr(),
-        HALCYON_ERR_NOMEM => c"out of memory".as_ptr(),
-        HALCYON_ERR_INVAL => c"invalid argument".as_ptr(),
-        HALCYON_ERR_PERM => c"permission denied".as_ptr(),
-        HALCYON_ERR_IO => c"I/O error".as_ptr(),
-        HALCYON_ERR_NOT_FOUND => c"not found".as_ptr(),
+        TALUS_OK => c"success".as_ptr(),
+        TALUS_ERR_NOMEM => c"out of memory".as_ptr(),
+        TALUS_ERR_INVAL => c"invalid argument".as_ptr(),
+        TALUS_ERR_PERM => c"permission denied".as_ptr(),
+        TALUS_ERR_IO => c"I/O error".as_ptr(),
+        TALUS_ERR_NOT_FOUND => c"not found".as_ptr(),
         _ => c"unknown error".as_ptr(),
     }
 }
 
 /// Returns the last error message (thread-local).
 #[unsafe(no_mangle)]
-pub extern "C" fn halcyon_last_error() -> *const c_char {
+pub extern "C" fn talus_last_error() -> *const c_char {
     LAST_ERROR.with(|e| match e.borrow().as_ref() {
         Some(s) => s.as_ptr(),
         None => ptr::null(),
@@ -113,23 +113,23 @@ pub extern "C" fn halcyon_last_error() -> *const c_char {
 ///
 /// # Safety
 /// `bpf_path` must be a valid null-terminated C string.
-/// `out` must be a valid pointer to a `*mut HalcyonMonitor`.
+/// `out` must be a valid pointer to a `*mut TalusMonitor`.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn halcyon_monitor_create(
+pub unsafe extern "C" fn talus_monitor_create(
     bpf_path: *const c_char,
     threshold: u64,
-    out: *mut *mut HalcyonMonitor,
+    out: *mut *mut TalusMonitor,
 ) -> c_int {
     if bpf_path.is_null() || out.is_null() {
         set_last_error("null pointer argument");
-        return HALCYON_ERR_INVAL;
+        return TALUS_ERR_INVAL;
     }
 
     let path_str = match unsafe { CStr::from_ptr(bpf_path) }.to_str() {
         Ok(s) => s,
         Err(_) => {
             set_last_error("invalid UTF-8 in bpf_path");
-            return HALCYON_ERR_INVAL;
+            return TALUS_ERR_INVAL;
         }
     };
 
@@ -138,28 +138,28 @@ pub unsafe extern "C" fn halcyon_monitor_create(
         Ok(m) => m,
         Err(e) => {
             set_last_error(&format!("failed to create monitor: {e}"));
-            return HALCYON_ERR_IO;
+            return TALUS_ERR_IO;
         }
     };
 
-    let halcyon = Box::new(HalcyonMonitor {
+    let talus = Box::new(TalusMonitor {
         inner: Mutex::new(monitor),
         threshold,
         started: Instant::now(),
     });
 
     unsafe {
-        *out = Box::into_raw(halcyon);
+        *out = Box::into_raw(talus);
     }
-    HALCYON_OK
+    TALUS_OK
 }
 
 /// Destroys a monitor instance.
 ///
 /// # Safety
-/// `monitor` must have been created with `halcyon_monitor_create`.
+/// `monitor` must have been created with `talus_monitor_create`.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn halcyon_monitor_destroy(monitor: *mut HalcyonMonitor) {
+pub unsafe extern "C" fn talus_monitor_destroy(monitor: *mut TalusMonitor) {
     if !monitor.is_null() {
         unsafe {
             drop(Box::from_raw(monitor));
@@ -170,18 +170,18 @@ pub unsafe extern "C" fn halcyon_monitor_destroy(monitor: *mut HalcyonMonitor) {
 /// Polls for new events.
 ///
 /// # Safety
-/// `events` must point to an array of `max_events` `HalcyonEvent` structs.
+/// `events` must point to an array of `max_events` `TalusEvent` structs.
 /// `count` must be a valid pointer.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn halcyon_monitor_poll(
-    monitor: *mut HalcyonMonitor,
-    events: *mut HalcyonEvent,
+pub unsafe extern "C" fn talus_monitor_poll(
+    monitor: *mut TalusMonitor,
+    events: *mut TalusEvent,
     max_events: u32,
     count: *mut u32,
 ) -> c_int {
     if monitor.is_null() || events.is_null() || count.is_null() {
         set_last_error("null pointer argument");
-        return HALCYON_ERR_INVAL;
+        return TALUS_ERR_INVAL;
     }
 
     let monitor = unsafe { &mut *monitor };
@@ -189,7 +189,7 @@ pub unsafe extern "C" fn halcyon_monitor_poll(
         Ok(m) => m,
         Err(_) => {
             set_last_error("monitor lock poisoned");
-            return HALCYON_ERR_IO;
+            return TALUS_ERR_IO;
         }
     };
 
@@ -250,18 +250,18 @@ pub unsafe extern "C" fn halcyon_monitor_poll(
     unsafe {
         *count = n as u32;
     }
-    HALCYON_OK
+    TALUS_OK
 }
 
 /// Returns monitor statistics.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn halcyon_monitor_stats(
-    monitor: *mut HalcyonMonitor,
-    stats: *mut HalcyonStats,
+pub unsafe extern "C" fn talus_monitor_stats(
+    monitor: *mut TalusMonitor,
+    stats: *mut TalusStats,
 ) -> c_int {
     if monitor.is_null() || stats.is_null() {
         set_last_error("null pointer argument");
-        return HALCYON_ERR_INVAL;
+        return TALUS_ERR_INVAL;
     }
 
     let monitor = unsafe { &*monitor };
@@ -269,7 +269,7 @@ pub unsafe extern "C" fn halcyon_monitor_stats(
         Ok(m) => m,
         Err(_) => {
             set_last_error("monitor lock poisoned");
-            return HALCYON_ERR_IO;
+            return TALUS_ERR_IO;
         }
     };
 
@@ -280,18 +280,18 @@ pub unsafe extern "C" fn halcyon_monitor_stats(
     out.active_pids = mon.stats_sorted().len() as u64;
     out.threshold = mon.threshold;
 
-    HALCYON_OK
+    TALUS_OK
 }
 
 /// Updates the alert threshold at runtime.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn halcyon_monitor_set_threshold(
-    monitor: *mut HalcyonMonitor,
+pub unsafe extern "C" fn talus_monitor_set_threshold(
+    monitor: *mut TalusMonitor,
     threshold: u64,
 ) -> c_int {
     if monitor.is_null() {
         set_last_error("null pointer argument");
-        return HALCYON_ERR_INVAL;
+        return TALUS_ERR_INVAL;
     }
 
     let monitor = unsafe { &mut *monitor };
@@ -302,24 +302,24 @@ pub unsafe extern "C" fn halcyon_monitor_set_threshold(
         }
         Err(_) => {
             set_last_error("monitor lock poisoned");
-            return HALCYON_ERR_IO;
+            return TALUS_ERR_IO;
         }
     }
 
-    HALCYON_OK
+    TALUS_OK
 }
 
 /// Returns tracked processes sorted by window opens.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn halcyon_monitor_processes(
-    monitor: *mut HalcyonMonitor,
-    stats: *mut HalcyonProcessStats,
+pub unsafe extern "C" fn talus_monitor_processes(
+    monitor: *mut TalusMonitor,
+    stats: *mut TalusProcessStats,
     max_stats: u32,
     count: *mut u32,
 ) -> c_int {
     if monitor.is_null() || stats.is_null() || count.is_null() {
         set_last_error("null pointer argument");
-        return HALCYON_ERR_INVAL;
+        return TALUS_ERR_INVAL;
     }
 
     let monitor = unsafe { &*monitor };
@@ -327,7 +327,7 @@ pub unsafe extern "C" fn halcyon_monitor_processes(
         Ok(m) => m,
         Err(_) => {
             set_last_error("monitor lock poisoned");
-            return HALCYON_ERR_IO;
+            return TALUS_ERR_IO;
         }
     };
 
@@ -348,20 +348,20 @@ pub unsafe extern "C" fn halcyon_monitor_processes(
     unsafe {
         *count = n as u32;
     }
-    HALCYON_OK
+    TALUS_OK
 }
 
 /// Returns top-N most-opened files.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn halcyon_monitor_top_files(
-    monitor: *mut HalcyonMonitor,
-    files: *mut HalcyonFileRank,
+pub unsafe extern "C" fn talus_monitor_top_files(
+    monitor: *mut TalusMonitor,
+    files: *mut TalusFileRank,
     n: u32,
     count: *mut u32,
 ) -> c_int {
     if monitor.is_null() || files.is_null() || count.is_null() {
         set_last_error("null pointer argument");
-        return HALCYON_ERR_INVAL;
+        return TALUS_ERR_INVAL;
     }
 
     let monitor = unsafe { &*monitor };
@@ -369,7 +369,7 @@ pub unsafe extern "C" fn halcyon_monitor_top_files(
         Ok(m) => m,
         Err(_) => {
             set_last_error("monitor lock poisoned");
-            return HALCYON_ERR_IO;
+            return TALUS_ERR_IO;
         }
     };
 
@@ -387,15 +387,15 @@ pub unsafe extern "C" fn halcyon_monitor_top_files(
     unsafe {
         *count = len as u32;
     }
-    HALCYON_OK
+    TALUS_OK
 }
 
 /// Frees a C string returned by the API.
 ///
 /// # Safety
-/// `s` must have been returned by a halcyon function, or NULL.
+/// `s` must have been returned by a talus function, or NULL.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn halcyon_free_string(s: *mut c_char) {
+pub unsafe extern "C" fn talus_free_string(s: *mut c_char) {
     if !s.is_null() {
         unsafe {
             drop(CString::from_raw(s));
@@ -406,9 +406,9 @@ pub unsafe extern "C" fn halcyon_free_string(s: *mut c_char) {
 /// Frees an array of events.
 ///
 /// # Safety
-/// `events` must have been returned by `halcyon_monitor_poll`.
+/// `events` must have been returned by `talus_monitor_poll`.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn halcyon_free_events(events: *mut HalcyonEvent, count: u32) {
+pub unsafe extern "C" fn talus_free_events(events: *mut TalusEvent, count: u32) {
     if events.is_null() {
         return;
     }
@@ -416,22 +416,22 @@ pub unsafe extern "C" fn halcyon_free_events(events: *mut HalcyonEvent, count: u
         let event = unsafe { &*events.add(i) };
         if !event.comm.is_null() {
             unsafe {
-                halcyon_free_string(event.comm);
+                talus_free_string(event.comm);
             }
         }
         if !event.file.is_null() {
             unsafe {
-                halcyon_free_string(event.file);
+                talus_free_string(event.file);
             }
         }
         if !event.argv.is_null() {
             unsafe {
-                halcyon_free_string(event.argv);
+                talus_free_string(event.argv);
             }
         }
         if !event.timestamp.is_null() {
             unsafe {
-                halcyon_free_string(event.timestamp);
+                talus_free_string(event.timestamp);
             }
         }
     }
@@ -443,9 +443,9 @@ pub unsafe extern "C" fn halcyon_free_events(events: *mut HalcyonEvent, count: u
 /// Frees an array of process stats.
 ///
 /// # Safety
-/// `stats` must have been returned by `halcyon_monitor_processes`.
+/// `stats` must have been returned by `talus_monitor_processes`.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn halcyon_free_processes(stats: *mut HalcyonProcessStats, count: u32) {
+pub unsafe extern "C" fn talus_free_processes(stats: *mut TalusProcessStats, count: u32) {
     if stats.is_null() {
         return;
     }
@@ -453,7 +453,7 @@ pub unsafe extern "C" fn halcyon_free_processes(stats: *mut HalcyonProcessStats,
         let s = unsafe { &*stats.add(i) };
         if !s.comm.is_null() {
             unsafe {
-                halcyon_free_string(s.comm);
+                talus_free_string(s.comm);
             }
         }
     }
@@ -465,9 +465,9 @@ pub unsafe extern "C" fn halcyon_free_processes(stats: *mut HalcyonProcessStats,
 /// Frees an array of file ranks.
 ///
 /// # Safety
-/// `files` must have been returned by `halcyon_monitor_top_files`.
+/// `files` must have been returned by `talus_monitor_top_files`.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn halcyon_free_files(files: *mut HalcyonFileRank, count: u32) {
+pub unsafe extern "C" fn talus_free_files(files: *mut TalusFileRank, count: u32) {
     if files.is_null() {
         return;
     }
@@ -475,12 +475,12 @@ pub unsafe extern "C" fn halcyon_free_files(files: *mut HalcyonFileRank, count: 
         let f = unsafe { &*files.add(i) };
         if !f.path.is_null() {
             unsafe {
-                halcyon_free_string(f.path);
+                talus_free_string(f.path);
             }
         }
         if !f.extension.is_null() {
             unsafe {
-                halcyon_free_string(f.extension);
+                talus_free_string(f.extension);
             }
         }
     }

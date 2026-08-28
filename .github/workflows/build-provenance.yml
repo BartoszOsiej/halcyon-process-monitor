@@ -41,13 +41,13 @@ jobs:
       - name: Build TUI binary
         run: |
           cargo build --release
-          cp target/release/process-monitor halcyon-tui
+          cp target/release/process-monitor talus-tui
 
       # ── Build Web variant ──────────────────────────────────────────────
       - name: Build Web binary
         run: |
           cargo build --release --features web
-          cp target/release/process-monitor halcyon-web
+          cp target/release/process-monitor talus-web
 
       # ── Build eBPF object ─────────────────────────────────────────────
       - name: Build eBPF program (nightly)
@@ -64,19 +64,19 @@ jobs:
           done
           cargo +nightly build --profile bpf --target bpfel-unknown-none \
             --manifest-path process-monitor-ebpf/Cargo.toml
-          cp target/bpfel-unknown-none/release/process-monitor-ebpf halcyon-ebpf.o
+          cp target/bpfel-unknown-none/release/process-monitor-ebpf talus-ebpf.o
 
       # ── Generate checksums ─────────────────────────────────────────────
       - name: Generate SHA-256 and SHA-512 checksums
         id: hash
         run: |
-          SHA256SUM=$(sha256sum halcyon-tui halcyon-web halcyon-ebpf.o | base64 -w0)
-          SHA512SUM=$(sha512sum halcyon-tui halcyon-web halcyon-ebpf.o | base64 -w0)
+          SHA256SUM=$(sha256sum talus-tui talus-web talus-ebpf.o | base64 -w0)
+          SHA512SUM=$(sha512sum talus-tui talus-web talus-ebpf.o | base64 -w0)
           echo "hashes=${SHA256SUM}" >> "$GITHUB_OUTPUT"
 
           # Generate checksum files
-          sha256sum halcyon-tui halcyon-web halcyon-ebpf.o > checksums-sha256.txt
-          sha512sum halcyon-tui halcyon-web halcyon-ebpf.o > checksums-sha512.txt
+          sha256sum talus-tui talus-web talus-ebpf.o > checksums-sha256.txt
+          sha512sum talus-tui talus-web talus-ebpf.o > checksums-sha512.txt
 
           echo "=== SHA-256 Checksums ==="
           cat checksums-sha256.txt
@@ -89,7 +89,7 @@ jobs:
         run: |
           cargo install cargo-cyclonedx
           cargo cyclonedx --format json --output-dir sbom-release/
-          cp sbom-release/*.json halcyon-sbom-cyclonedx.json 2>/dev/null || true
+          cp sbom-release/*.json talus-sbom-cyclonedx.json 2>/dev/null || true
 
       # ── Upload artifacts ───────────────────────────────────────────────
       - name: Upload build artifacts
@@ -97,12 +97,12 @@ jobs:
         with:
           name: release-artifacts
           path: |
-            halcyon-tui
-            halcyon-web
-            halcyon-ebpf.o
+            talus-tui
+            talus-web
+            talus-ebpf.o
             checksums-sha256.txt
             checksums-sha512.txt
-            halcyon-sbom-cyclonedx.json
+            talus-sbom-cyclonedx.json
 
   # ── Sigstore Cosign — Keyless Binary Signing ───────────────────────────
   sign:
@@ -129,21 +129,21 @@ jobs:
         env:
           COSIGN_EXPERIMENTAL: "1"
         run: |
-          echo "Signing halcyon-tui..."
-          cosign sign-blob halcyon-tui --output-signature halcyon-tui.sig \
+          echo "Signing talus-tui..."
+          cosign sign-blob talus-tui --output-signature talus-tui.sig \
             --yes 2>/dev/null || echo "⚠️  Cosign signing skipped (no OIDC token)"
 
-          echo "Signing halcyon-web..."
-          cosign sign-blob halcyon-web --output-signature halcyon-web.sig \
+          echo "Signing talus-web..."
+          cosign sign-blob talus-web --output-signature talus-web.sig \
             --yes 2>/dev/null || echo "⚠️  Cosign signing skipped (no OIDC token)"
 
           echo "Signing eBPF object..."
-          cosign sign-blob halcyon-ebpf.o --output-signature halcyon-ebpf.o.sig \
+          cosign sign-blob talus-ebpf.o --output-signature talus-ebpf.o.sig \
             --yes 2>/dev/null || echo "⚠️  Cosign signing skipped (no OIDC token)"
 
           echo "Signing SBOM..."
-          cosign sign-blob halcyon-sbom-cyclonedx.json \
-            --output-signature halcyon-sbom-cyclonedx.json.sig \
+          cosign sign-blob talus-sbom-cyclonedx.json \
+            --output-signature talus-sbom-cyclonedx.json.sig \
             --yes 2>/dev/null || echo "⚠️  Cosign signing skipped (no OIDC token)"
 
       - name: Upload signed artifacts
@@ -163,7 +163,7 @@ jobs:
       contents: write
     uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.1.0
     with:
-      base-name: "halcyon-process-monitor"
+      base-name: "talus-process-monitor"
       upload-assets: true
       compile: false
 
@@ -190,11 +190,11 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh attestation verify halcyon-tui --owner ${{ github.repository_owner }} \
+          gh attestation verify talus-tui --owner ${{ github.repository_owner }} \
             || echo "⚠️  Attestation verification skipped (first run)"
 
-          gh attestation write halcyon-tui \
-            --bundle halcyon-tui.attestation.bundle \
+          gh attestation write talus-tui \
+            --bundle talus-tui.attestation.bundle \
             --predicate-type https://slsa.dev/provenance/v1 \
             || echo "⚠️  Attestation write skipped (first run)"
 
@@ -256,10 +256,10 @@ jobs:
           echo "sha256sum -c checksums-sha256.txt" >> release-notes.md
           echo "" >> release-notes.md
           echo "# Verify Cosign signature (requires cosign)" >> release-notes.md
-          echo 'COSIGN_EXPERIMENTAL=1 cosign verify-blob halcyon-tui --signature halcyon-tui.sig' >> release-notes.md
+          echo 'COSIGN_EXPERIMENTAL=1 cosign verify-blob talus-tui --signature talus-tui.sig' >> release-notes.md
           echo "" >> release-notes.md
           echo "# Verify SLSA provenance (requires slsa-verifier)" >> release-notes.md
-          echo 'slsa-verifier verify-artifact halcyon-tui --provenance-path multiple.intoto.jsonl' >> release-notes.md
+          echo 'slsa-verifier verify-artifact talus-tui --provenance-path multiple.intoto.jsonl' >> release-notes.md
           echo '```' >> release-notes.md
 
       - name: Create GitHub Release

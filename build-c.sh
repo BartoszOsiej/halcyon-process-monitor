@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# build-c.sh — Build script for Halcyon Process Monitor (C + Go version)
+# build-c.sh — Build script for Talus Process Monitor (C + Go version)
 #
 # Components:
 #   1. eBPF kernel programs → process_monitor.bpf.o
-#   2. Core monitor library → libhalcyon_monitor (static)
-#   3. TUI frontend → halcyon (ncurses)
-#   4. Web dashboard → halcyon-web (Go)
+#   2. Core monitor library → libtalus_monitor (static)
+#   3. TUI frontend → talus (ncurses)
+#   4. Web dashboard → talus-web (Go)
 
 set -euo pipefail
 
@@ -90,13 +90,13 @@ gcc -Wall -Wextra -O2 -std=c11 -D_GNU_SOURCE -fPIC \
     -o build/lib/monitor.o
 
 # Create static library
-ar rcs build/lib/libhalcyon_monitor.a build/lib/monitor.o
+ar rcs build/lib/libtalus_monitor.a build/lib/monitor.o
 
 # Create shared library for Go CGO linking
-gcc -shared -o build/lib/libhalcyon_monitor.so build/lib/monitor.o \
+gcc -shared -o build/lib/libtalus_monitor.so build/lib/monitor.o \
     -lpthread -lelf -lz -lbpf -lm
 
-ok "Monitor library: build/lib/libhalcyon_monitor.a"
+ok "Monitor library: build/lib/libtalus_monitor.a"
 
 # ── Build TUI ────────────────────────────────────────────────────────────
 
@@ -107,17 +107,17 @@ gcc -Wall -Wextra -O2 -std=c11 -D_GNU_SOURCE \
     -c c-tui/src/tui.c \
     -o build/lib/tui.o
 
-gcc -o halcyon build/lib/tui.o build/lib/monitor.o \
+gcc -o talus build/lib/tui.o build/lib/monitor.o \
     -lpthread -lncurses -lelf -lz -lbpf -lm
 
-ok "TUI binary: halcyon"
+ok "TUI binary: talus"
 
 # ── Build web dashboard (Go) ─────────────────────────────────────────────
 
 if [ "$HAS_GO" = true ] && [ -d "go-web" ]; then
     info "Building Go web dashboard..."
-    (cd go-web && CGO_CFLAGS="-I$(pwd)/../c-monitor/include" CGO_LDFLAGS="-L$(pwd)/../build/lib -lhalcyon_monitor -lpthread -lelf -lz -lbpf -lm" go build -o ../halcyon-web .)
-    ok "Web dashboard: halcyon-web"
+    (cd go-web && CGO_CFLAGS="-I$(pwd)/../c-monitor/include" CGO_LDFLAGS="-L$(pwd)/../build/lib -ltalus_monitor -lpthread -lelf -lz -lbpf -lm" go build -o ../talus-web .)
+    ok "Web dashboard: talus-web"
 else
     if [ "$HAS_GO" = false ]; then
         warn "Go not installed, skipping web dashboard"
@@ -129,14 +129,14 @@ fi
 echo ""
 ok "Build complete!"
 echo ""
-echo "  halcyon          — TUI monitor (ncurses)"
-if [ -f halcyon-web ]; then
-    echo "  halcyon-web      — Web dashboard (Go)"
+echo "  talus          — TUI monitor (ncurses)"
+if [ -f talus-web ]; then
+    echo "  talus-web      — Web dashboard (Go)"
 fi
 echo "  c-ebpf/*.bpf.o   — eBPF kernel program"
 echo ""
 echo "Run with:"
-echo "  sudo ./halcyon [--bpf c-ebpf/process_monitor.bpf.o]"
-if [ -f halcyon-web ]; then
-    echo "  sudo ./halcyon-web [--bpf c-ebpf/process_monitor.bpf.o]"
+echo "  sudo ./talus [--bpf c-ebpf/process_monitor.bpf.o]"
+if [ -f talus-web ]; then
+    echo "  sudo ./talus-web [--bpf c-ebpf/process_monitor.bpf.o]"
 fi

@@ -2,7 +2,7 @@
 name = "process-monitor-ebpf"
 version = "0.3.0"
 edition = "2021"
-description = "eBPF programs for Halcyon Process Monitor"
+description = "eBPF programs for Talus Process Monitor"
 license = "MIT"
 
 [dependencies]

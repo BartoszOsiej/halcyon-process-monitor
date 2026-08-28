@@ -6,10 +6,10 @@
     </linearGradient>
   </defs>
   <rect width="1200" height="630" fill="url(#bg)"/>
-  <text x="600" y="200" font-family="system-ui, -apple-system, sans-serif" font-size="72" font-weight="bold" fill="#58a6ff" text-anchor="middle">🔬 Halcyon</text>
+  <text x="600" y="200" font-family="system-ui, -apple-system, sans-serif" font-size="72" font-weight="bold" fill="#58a6ff" text-anchor="middle">🔬 Talus</text>
   <text x="600" y="280" font-family="system-ui, -apple-system, sans-serif" font-size="28" fill="#8b949e" text-anchor="middle">eBPF ransomware behavior tracker for Linux</text>
   <text x="600" y="360" font-family="monospace" font-size="20" fill="#7ee787" text-anchor="middle">kernel tracepoints → perf buffers → sliding window → TUI alerts</text>
   <rect x="200" y="420" width="800" height="1" fill="#30363d"/>
   <text x="600" y="480" font-family="system-ui, -apple-system, sans-serif" font-size="22" fill="#f0883e" text-anchor="middle">Rust · eBPF · Aya · ratatui · crates.io</text>
-  <text x="600" y="550" font-family="system-ui, -apple-system, sans-serif" font-size="18" fill="#8b949e" text-anchor="middle">github.com/BartoszOsiej/halcyon-process-monitor</text>
+  <text x="600" y="550" font-family="system-ui, -apple-system, sans-serif" font-size="18" fill="#8b949e" text-anchor="middle">github.com/BartoszOsiej/talus-process-monitor</text>
 </svg>

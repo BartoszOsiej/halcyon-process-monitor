@@ -1,4 +1,4 @@
-// halcyon-web — Go web dashboard for Halcyon eBPF Process Monitor
+// talus-web — Go web dashboard for Talus eBPF Process Monitor
 //
 // Replaces the Rust axum web server. Connects to the C monitor library
 // via CGO FFI, serves REST API + WebSocket + Prometheus metrics + dashboard.
@@ -7,8 +7,8 @@ package main
 
 /*
 #cgo CFLAGS: -I../c-monitor/include
-#cgo LDFLAGS: -L../c-monitor -lhalcyon_monitor -lpthread -lelf -lz -lbpf
-#include "halcyon.h"
+#cgo LDFLAGS: -L../c-monitor -ltalus_monitor -lpthread -lelf -lz -lbpf
+#include "talus.h"
 #include <stdlib.h>
 #include <string.h>
 */
@@ -101,7 +101,7 @@ type WsEvent struct {
 // ── Global monitor ───────────────────────────────────────────────────────
 
 var (
-	monitor *C.halcyon_monitor_t
+	monitor *C.talus_monitor_t
 	mu      sync.Mutex
 
 	// WebSocket subscribers
@@ -128,14 +128,14 @@ func createMonitor(path string, thresh uint64) error {
 	cPath := C.CString(path)
 	defer C.free(unsafe.Pointer(cPath))
 
-	var mon *C.halcyon_monitor_t
-	rc := C.halcyon_monitor_create(cPath, C.uint64_t(thresh), &mon)
-	if rc != C.HALCYON_OK {
-		errMsg := C.halcyon_last_error()
+	var mon *C.talus_monitor_t
+	rc := C.talus_monitor_create(cPath, C.uint64_t(thresh), &mon)
+	if rc != C.TALUS_OK {
+		errMsg := C.talus_last_error()
 		if errMsg != nil {
 			return fmt.Errorf("failed to create monitor: %s", C.GoString(errMsg))
 		}
-		return fmt.Errorf("failed to create monitor: %s", C.halcyon_strerror(rc))
+		return fmt.Errorf("failed to create monitor: %s", C.talus_strerror(rc))
 	}
 	monitor = mon
 	return nil
@@ -143,7 +143,7 @@ func createMonitor(path string, thresh uint64) error {
 
 func destroyMonitor() {
 	if monitor != nil {
-		C.halcyon_monitor_destroy(monitor)
+		C.talus_monitor_destroy(monitor)
 		monitor = nil
 	}
 }
@@ -153,14 +153,14 @@ func pollEvents() []WsEvent {
 		return nil
 	}
 
-	events := make([]C.halcyon_event_t, 64)
+	events := make([]C.talus_event_t, 64)
 	var count C.uint32_t
 
 	mu.Lock()
-	rc := C.halcyon_monitor_poll(monitor, &events[0], 64, &count)
+	rc := C.talus_monitor_poll(monitor, &events[0], 64, &count)
 	mu.Unlock()
 
-	if rc != C.HALCYON_OK {
+	if rc != C.TALUS_OK {
 		return nil
 	}
 
@@ -190,9 +190,9 @@ func pollEvents() []WsEvent {
 				File: cStrToString(ev.file),
 			})
 			switch int32(ev.kind) {
-			case C.HALCYON_EVENT_EXECVE:
+			case C.TALUS_EVENT_EXECVE:
 				metricsExec++
-			case C.HALCYON_EVENT_OPENAT:
+			case C.TALUS_EVENT_OPENAT:
 				metricsOpen++
 			}
 			metricsEvents++
@@ -200,7 +200,7 @@ func pollEvents() []WsEvent {
 	}
 
 	if int(count) > 0 {
-		C.halcyon_free_events(&events[0], count)
+		C.talus_free_events(&events[0], count)
 	}
 
 	return wsEvents
@@ -215,25 +215,25 @@ func cStrToString(s *C.char) string {
 
 func eventKindStr(kind int32) string {
 	switch kind {
-	case C.HALCYON_EVENT_EXECVE:
+	case C.TALUS_EVENT_EXECVE:
 		return "Exec"
-	case C.HALCYON_EVENT_OPENAT:
+	case C.TALUS_EVENT_OPENAT:
 		return "Open"
-	case C.HALCYON_EVENT_CONNECT:
+	case C.TALUS_EVENT_CONNECT:
 		return "Connect"
-	case C.HALCYON_EVENT_ACCEPT:
+	case C.TALUS_EVENT_ACCEPT:
 		return "Accept"
-	case C.HALCYON_EVENT_SENDTO:
+	case C.TALUS_EVENT_SENDTO:
 		return "SendTo"
-	case C.HALCYON_EVENT_RECVFROM:
+	case C.TALUS_EVENT_RECVFROM:
 		return "RecvFrom"
-	case C.HALCYON_EVENT_MKDIR:
+	case C.TALUS_EVENT_MKDIR:
 		return "Mkdir"
-	case C.HALCYON_EVENT_UNLINK:
+	case C.TALUS_EVENT_UNLINK:
 		return "Unlink"
-	case C.HALCYON_EVENT_KILL:
+	case C.TALUS_EVENT_KILL:
 		return "Kill"
-	case C.HALCYON_EVENT_CHMOD:
+	case C.TALUS_EVENT_CHMOD:
 		return "Chmod"
 	default:
 		return "Unknown"
@@ -244,8 +244,8 @@ func eventKindStr(kind int32) string {
 
 func handleStats(w http.ResponseWriter, r *http.Request) {
 	mu.Lock()
-	var stats C.halcyon_stats_t
-	C.halcyon_monitor_stats(monitor, &stats)
+	var stats C.talus_stats_t
+	C.talus_monitor_stats(monitor, &stats)
 	mu.Unlock()
 
 	data, _ := json.Marshal(StatsResponse{
@@ -260,9 +260,9 @@ func handleStats(w http.ResponseWriter, r *http.Request) {
 
 func handleProcesses(w http.ResponseWriter, r *http.Request) {
 	mu.Lock()
-	stats := make([]C.halcyon_process_stats_t, 512)
+	stats := make([]C.talus_process_stats_t, 512)
 	var count C.uint32_t
-	C.halcyon_monitor_processes(monitor, &stats[0], 512, &count)
+	C.talus_monitor_processes(monitor, &stats[0], 512, &count)
 	mu.Unlock()
 
 	var procs []ProcessInfo
@@ -277,7 +277,7 @@ func handleProcesses(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	if int(count) > 0 {
-		C.halcyon_free_processes(&stats[0], count)
+		C.talus_free_processes(&stats[0], count)
 	}
 
 	data, _ := json.Marshal(procs)
@@ -286,9 +286,9 @@ func handleProcesses(w http.ResponseWriter, r *http.Request) {
 
 func handleFiles(w http.ResponseWriter, r *http.Request) {
 	mu.Lock()
-	files := make([]C.halcyon_file_rank_t, 128)
+	files := make([]C.talus_file_rank_t, 128)
 	var count C.uint32_t
-	C.halcyon_monitor_top_files(monitor, &files[0], 128, &count)
+	C.talus_monitor_top_files(monitor, &files[0], 128, &count)
 	mu.Unlock()
 
 	var ranks []FileRankResponse
@@ -301,7 +301,7 @@ func handleFiles(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	if int(count) > 0 {
-		C.halcyon_free_files(&files[0], count)
+		C.talus_free_files(&files[0], count)
 	}
 
 	data, _ := json.Marshal(ranks)
@@ -323,9 +323,9 @@ func handleSetThreshold(w http.ResponseWriter, r *http.Request) {
 	}
 
 	mu.Lock()
-	C.halcyon_monitor_set_threshold(monitor, C.uint64_t(req.Threshold))
-	var stats C.halcyon_stats_t
-	C.halcyon_monitor_stats(monitor, &stats)
+	C.talus_monitor_set_threshold(monitor, C.uint64_t(req.Threshold))
+	var stats C.talus_stats_t
+	C.talus_monitor_stats(monitor, &stats)
 	mu.Unlock()
 
 	data, _ := json.Marshal(StatsResponse{
@@ -340,24 +340,24 @@ func handleSetThreshold(w http.ResponseWriter, r *http.Request) {
 
 func handleMetrics(w http.ResponseWriter, r *http.Request) {
 	metrics := fmt.Sprintf(
-		"# HELP halcyon_events_total Total eBPF events received\n"+
-			"# TYPE halcyon_events_total counter\n"+
-			"halcyon_events_total %d\n"+
-			"# HELP halcyon_exec_events_total Total execve events\n"+
-			"# TYPE halcyon_exec_events_total counter\n"+
-			"halcyon_exec_events_total %d\n"+
-			"# HELP halcyon_open_events_total Total openat events\n"+
-			"# TYPE halcyon_open_events_total counter\n"+
-			"halcyon_open_events_total %d\n"+
-			"# HELP halcyon_alerts_total Total alerts fired\n"+
-			"# TYPE halcyon_alerts_total counter\n"+
-			"halcyon_alerts_total %d\n"+
-			"# HELP halcyon_lost_events_total Lost events (perf buffer overruns)\n"+
-			"# TYPE halcyon_lost_events_total counter\n"+
-			"halcyon_lost_events_total %d\n"+
-			"# HELP halcyon_ws_connections_total WebSocket connections\n"+
-			"# TYPE halcyon_ws_connections_total counter\n"+
-			"halcyon_ws_connections_total %d\n",
+		"# HELP talus_events_total Total eBPF events received\n"+
+			"# TYPE talus_events_total counter\n"+
+			"talus_events_total %d\n"+
+			"# HELP talus_exec_events_total Total execve events\n"+
+			"# TYPE talus_exec_events_total counter\n"+
+			"talus_exec_events_total %d\n"+
+			"# HELP talus_open_events_total Total openat events\n"+
+			"# TYPE talus_open_events_total counter\n"+
+			"talus_open_events_total %d\n"+
+			"# HELP talus_alerts_total Total alerts fired\n"+
+			"# TYPE talus_alerts_total counter\n"+
+			"talus_alerts_total %d\n"+
+			"# HELP talus_lost_events_total Lost events (perf buffer overruns)\n"+
+			"# TYPE talus_lost_events_total counter\n"+
+			"talus_lost_events_total %d\n"+
+			"# HELP talus_ws_connections_total WebSocket connections\n"+
+			"# TYPE talus_ws_connections_total counter\n"+
+			"talus_ws_connections_total %d\n",
 		metricsEvents, metricsExec, metricsOpen,
 		metricsAlerts, metricsLost, metricsWS,
 	)
@@ -458,7 +458,7 @@ const dashboardHTML = `<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Halcyon eBPF Monitor</title>
+<title>Talus eBPF Monitor</title>
 <style>
   :root { --bg: #0a0a1a; --panel: #111127; --border: #1e1e3a; --cyan: #00ffff; --green: #00ff64; --red: #ff3232; --yellow: #ffff00; --magenta: #ff00ff; --dim: #505064; }
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -489,7 +489,7 @@ const dashboardHTML = `<!DOCTYPE html>
 </head>
 <body>
 <div class="header">
-  <h1>⚡ HALCYON eBPF MONITOR</h1>
+  <h1>⚡ TALUS eBPF MONITOR</h1>
   <div class="stats" id="stats">loading...</div>
 </div>
 <div class="grid">
@@ -527,7 +527,7 @@ func main() {
 		candidates := []string{
 			"process-monitor-ebpf.bpf.o",
 			"c-ebpf/process_monitor.bpf.o",
-			"/usr/local/lib/halcyon/process-monitor-ebpf",
+			"/usr/local/lib/talus/process-monitor-ebpf",
 		}
 		for _, c := range candidates {
 			if _, err := os.Stat(c); err == nil {
@@ -536,18 +536,18 @@ func main() {
 			}
 		}
 		if bpfPath == "" {
-			fmt.Fprintf(os.Stderr, "Usage: halcyon-web [--bpf PATH] [--addr :8080] [--threshold N]\n")
+			fmt.Fprintf(os.Stderr, "Usage: talus-web [--bpf PATH] [--addr :8080] [--threshold N]\n")
 			os.Exit(1)
 		}
 	}
 
-	log.Printf("[halcyon-web] Loading eBPF object: %s", bpfPath)
+	log.Printf("[talus-web] Loading eBPF object: %s", bpfPath)
 	if err := createMonitor(bpfPath, threshold); err != nil {
-		log.Fatalf("[halcyon-web] Failed to create monitor: %v", err)
+		log.Fatalf("[talus-web] Failed to create monitor: %v", err)
 	}
 	defer destroyMonitor()
 
-	log.Printf("[halcyon-web] Alert threshold: %d/s", threshold)
+	log.Printf("[talus-web] Alert threshold: %d/s", threshold)
 
 	// Start event forwarder
 	startEventForwarder()
@@ -563,21 +563,21 @@ func main() {
 	mux.HandleFunc("/api/v1/threshold", handleSetThreshold)
 	mux.HandleFunc("/metrics", handleMetrics)
 
-	log.Printf("[halcyon-web] Dashboard: http://%s/", strings.TrimPrefix(listenAddr, ":"))
-	log.Printf("[halcyon-web] WebSocket: ws://%s/ws", strings.TrimPrefix(listenAddr, ":"))
-	log.Printf("[halcyon-web] Prometheus: http://%s/metrics", strings.TrimPrefix(listenAddr, ":"))
+	log.Printf("[talus-web] Dashboard: http://%s/", strings.TrimPrefix(listenAddr, ":"))
+	log.Printf("[talus-web] WebSocket: ws://%s/ws", strings.TrimPrefix(listenAddr, ":"))
+	log.Printf("[talus-web] Prometheus: http://%s/metrics", strings.TrimPrefix(listenAddr, ":"))
 
 	// Signal handling
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
 		<-sigCh
-		log.Println("[halcyon-web] Shutting down...")
+		log.Println("[talus-web] Shutting down...")
 		destroyMonitor()
 		os.Exit(0)
 	}()
 
 	if err := http.ListenAndServe(listenAddr, mux); err != nil {
-		log.Fatalf("[halcyon-web] Server error: %v", err)
+		log.Fatalf("[talus-web] Server error: %v", err)
 	}
 }

@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to halcyon-process-monitor will be documented in this file.
+All notable changes to talus-process-monitor will be documented in this file.
 
 ## [0.6.0] - 2026-08-28
 

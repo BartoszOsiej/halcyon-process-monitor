@@ -1,4 +1,4 @@
-Output assets/halcyon-demo.gif
+Output assets/talus-demo.gif
 
 Set FontSize 16
 Set Width 960
