@@ -90,6 +90,7 @@ impl StoragePipeline {
     }
 
     /// Forward an event to all active storage backends.
+    #[allow(unused_variables)]
     pub fn forward_event(&self, event: &StorageEvent) {
         #[cfg(feature = "kafka")]
         if let Some(ref p) = self.kafka {

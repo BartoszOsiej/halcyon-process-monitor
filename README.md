@@ -13,13 +13,14 @@
 ![eBPF](https://img.shields.io/badge/eBPF-Linux%205.8+-FCD900?style=flat-square&logo=linux)
 ![Go](https://img.shields.io/badge/Go-1.22-00ADD8?style=flat-square&logo=go)
 ![Docker](https://img.shields.io/badge/Docker-GHCR-2496ED?style=flat-square&logo=docker)
+![Enterprise](https://img.shields.io/badge/Enterprise-Level%204%2F20-blue?style=flat-square)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/BartoszOsiej/halcyon-process-monitor/badge)](https://scorecard.dev/viewer/?uri=github.com/BartoszOsiej/halcyon-process-monitor)
 
 **eBPF-based endpoint security agent for Linux — detect ransomware behaviour, respond at the kernel edge.**
 
 Halcyon is not a passive monitor. It is a **detect-and-respond** agent that hooks syscalls at the kernel level via eBPF tracepoints, scores per-process file-open rates in real-time, and **terminates** offending processes the instant a heuristic verdict fires. It processes ~500k events/sec through per-CPU perf buffers with zero-copy handoff to a userspace detection engine built in Rust.
 
-> 🇵🇱 [Wersja polska](README.pl.md) · [Architecture](ARCHITECTURE.md)
+> 🇵🇱 [Wersja polska](README.pl.md) · [Architecture](ARCHITECTURE.md) · [📄 Enterprise Report (PDF)](docs/halcyon-enterprise-maturity-report.pdf) · [Enterprise Maturity](MATURITY.md)
 
 ---
 
@@ -509,6 +510,23 @@ docker run --privileged -v /sys/kernel/btf:/sys/kernel/btf halcyon
 # Kubernetes (DaemonSet on every node)
 kubectl apply -f k8s/
 ```
+
+---
+
+## Enterprise Maturity
+
+Halcyon follows a **20-level enterprise maturity model** — from open-source prototype to Fortune 500 ready.
+
+| Level | Area | Status |
+|---|---|---|
+| L0 | Open Source Prototype | ✅ |
+| L1 | Supply Chain Security (cargo-deny, SBOM, gitleaks) | ✅ |
+| L2 | Build Provenance (SLSA, cosign, attestation) | ✅ |
+| L3 | Security Hardening (SAFETY docs, security headers) | ✅ |
+| L4 | Quality Gates (36 tests, clippy clean) | ✅ |
+| L5–L20 | Observability → Compliance → Enterprise | 🔜 |
+
+📄 [Full Enterprise Report (PDF)](docs/halcyon-enterprise-maturity-report.pdf) · [Maturity Model](MATURITY.md)
 
 ---
 

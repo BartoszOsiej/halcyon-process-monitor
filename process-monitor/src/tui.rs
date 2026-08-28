@@ -852,7 +852,7 @@ impl App_ {
     }
 
     fn draw_linechart(&self, f: &mut Frame, area: Rect) {
-        let rate_label = self.rates.back().map(|r| {
+        let rate_label = self.rates.back().map(|_r| {
             format!("EVENT RATE  exec:{:.0}/s  open:{:.0}/s  alert:{:.0}/s",
                 self.smooth_exec, self.smooth_open, self.smooth_alert)
         }).unwrap_or_else(|| "EVENT RATE — waiting...".into());

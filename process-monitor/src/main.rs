@@ -1,3 +1,10 @@
+#![warn(missing_docs)]
+//! Halcyon Process Monitor — eBPF-based endpoint security agent.
+//!
+//! Traces execve, openat, connect, and other syscalls via eBPF tracepoints,
+//! scores per-process file-open rates in real-time, and terminates offending
+//! processes when a heuristic verdict fires.
+
 mod ffi;
 mod monitor;
 mod storage;
@@ -95,6 +102,8 @@ fn main() -> Result<()> {
 
     // Give the diagnose mode a clear, helpful non-root message before
     // Monitor::start would bail with a generic error.
+    // SAFETY: geteuid() is a simple syscall that always succeeds and returns
+    // the effective user ID. No pointer dereference, no fallibility.
     if args.diagnose && unsafe { libc::geteuid() } != 0 {
         eprintln!("run with: sudo process-monitor --diagnose");
         return Ok(());
@@ -246,6 +255,8 @@ fn resolve_bpf_path(explicit: Option<&PathBuf>) -> Result<PathBuf> {
     let uid = std::env::var("SUDO_UID")
         .ok()
         .and_then(|v| v.parse::<u32>().ok())
+        // SAFETY: getuid() is a simple syscall returning the real user ID.
+        // No pointers, no fallibility, always succeeds.
         .unwrap_or_else(|| unsafe { libc::getuid() });
     if let Some(dir) = passwd_dir(uid) {
         homes.push(dir);
@@ -277,7 +288,24 @@ fn resolve_bpf_path(explicit: Option<&PathBuf>) -> Result<PathBuf> {
 ///
 /// Used to find user-local installs when running under `sudo` (where `$HOME`
 /// points at the target user's home, not the invoking user's).
+/// Resolves the home directory for `uid` from the passwd database.
+///
+/// Used to find user-local installs when running under `sudo` (where `$HOME`
+/// points at the target user's home, not the invoking user's).
+///
+/// # Safety
+///
+/// Calls `getpwuid_r` which requires:
+/// - `pwd` is a valid mutable pointer to a `libc::passwd` (zeroed)
+/// - `buf` is a valid mutable buffer of adequate size (4096 bytes)
+/// - `result` is a valid mutable pointer to a pointer
+///
+/// All invariants are satisfied by the local variables above.
+/// On success, `pwd.pw_dir` is dereferenced only after checking it is non-null.
 fn passwd_dir(uid: u32) -> Option<PathBuf> {
+    // SAFETY: getpwuid_r is a POSIX reentrant function. We pass valid pointers
+    // to zeroed structs and a 4096-byte buffer, which is sufficient for passwd
+    // entries. The result pointer is checked for null before dereferencing pw_dir.
     unsafe {
         let mut pwd: libc::passwd = std::mem::zeroed();
         let mut buf = vec![0u8; 4096];
@@ -379,7 +407,18 @@ fn run_diagnose(monitor: &mut Monitor) -> Result<()> {
     Ok(())
 }
 
+/// Install signal handlers for graceful shutdown.
+///
+/// # Safety
+///
+/// `handle_signal` is an `extern "C"` function with the correct signature
+/// for `sighandler_t`. The cast from function pointer to `*const ()` to
+/// `sighandler_t` is the standard pattern for POSIX signal handlers.
+/// No heap memory or references are involved.
 fn install_signal_handler() {
+    // SAFETY: handle_signal is a valid extern "C" function matching the
+    // sighandler_t signature. The function pointer cast is the canonical
+    // POSIX pattern. signal() itself is safe to call at program startup.
     unsafe {
         let handler = handle_signal as *const () as libc::sighandler_t;
         libc::signal(libc::SIGINT, handler);
