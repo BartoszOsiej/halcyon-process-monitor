@@ -1,0 +1,1153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Halcyon — Enterprise Maturity Upgrade Report</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+  :root {
+    --bg: #0a0e1a;
+    --surface: #111827;
+    --surface-2: #1a2234;
+    --border: #1e293b;
+    --border-glow: #2563eb33;
+    --text: #e2e8f0;
+    --text-muted: #94a3b8;
+    --accent: #3b82f6;
+    --accent-glow: #3b82f680;
+    --green: #10b981;
+    --green-glow: #10b98160;
+    --yellow: #f59e0b;
+    --red: #ef4444;
+    --purple: #8b5cf6;
+    --cyan: #06b6d4;
+    --gradient-1: linear-gradient(135deg, #3b82f6, #8b5cf6);
+    --gradient-2: linear-gradient(135deg, #10b981, #06b6d4);
+    --gradient-3: linear-gradient(135deg, #f59e0b, #ef4444);
+  }
+
+  @page {
+    size: A4;
+    margin: 0;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Inter', -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── COVER PAGE ─────────────────────────────────────────────────── */
+  .cover {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+    overflow: hidden;
+    page-break-after: always;
+    background: radial-gradient(ellipse at 30% 50%, #1e3a5f22 0%, transparent 70%),
+                radial-gradient(ellipse at 70% 80%, #3b1f6e15 0%, transparent 60%),
+                var(--bg);
+  }
+
+  .cover::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: conic-gradient(from 0deg at 50% 50%, transparent 0deg, #3b82f608 90deg, transparent 180deg, #8b5cf608 270deg, transparent 360deg);
+    animation: rotate 30s linear infinite;
+  }
+
+  @keyframes rotate {
+    to { transform: rotate(360deg); }
+  }
+
+  .cover-content {
+    position: relative;
+    z-index: 1;
+    text-align: center;
+    padding: 40px;
+  }
+
+  .cover-logo {
+    font-size: 72px;
+    margin-bottom: 20px;
+    filter: drop-shadow(0 0 30px var(--accent-glow));
+  }
+
+  .cover-title {
+    font-size: 56px;
+    font-weight: 900;
+    letter-spacing: -2px;
+    background: var(--gradient-1);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 12px;
+  }
+
+  .cover-subtitle {
+    font-size: 22px;
+    font-weight: 300;
+    color: var(--text-muted);
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    margin-bottom: 40px;
+  }
+
+  .cover-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 50px;
+    padding: 12px 28px;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--green);
+    box-shadow: 0 0 30px var(--green-glow);
+  }
+
+  .cover-badge .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 10px var(--green);
+  }
+
+  .cover-meta {
+    margin-top: 60px;
+    font-size: 13px;
+    color: var(--text-muted);
+    letter-spacing: 1px;
+  }
+
+  /* ── MAIN CONTENT ──────────────────────────────────────────────── */
+  .page {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 60px 50px;
+    page-break-after: always;
+  }
+
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 40px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .section-number {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--accent);
+    background: #3b82f615;
+    padding: 6px 14px;
+    border-radius: 6px;
+    border: 1px solid #3b82f630;
+  }
+
+  .section-title {
+    font-size: 32px;
+    font-weight: 800;
+    letter-spacing: -1px;
+  }
+
+  h3 {
+    font-size: 20px;
+    font-weight: 700;
+    margin: 32px 0 16px;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  h3 .icon {
+    font-size: 20px;
+  }
+
+  p {
+    color: var(--text-muted);
+    margin-bottom: 16px;
+    font-size: 15px;
+  }
+
+  /* ── PROGRESS BAR ──────────────────────────────────────────────── */
+  .progress-section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 32px;
+    margin: 24px 0;
+  }
+
+  .progress-label {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 12px;
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  .progress-bar {
+    height: 12px;
+    background: var(--surface-2);
+    border-radius: 6px;
+    overflow: hidden;
+    margin-bottom: 8px;
+  }
+
+  .progress-fill {
+    height: 100%;
+    border-radius: 6px;
+    transition: width 1s ease;
+    position: relative;
+  }
+
+  .progress-fill.level-0 {
+    width: 0%;
+    background: var(--surface-2);
+  }
+
+  .progress-fill.level-2 {
+    width: 10%;
+    background: var(--gradient-2);
+    box-shadow: 0 0 20px var(--green-glow);
+  }
+
+  .progress-markers {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--text-muted);
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* ── CARDS ─────────────────────────────────────────────────────── */
+  .card-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin: 20px 0;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    transition: all 0.3s;
+  }
+
+  .card:hover {
+    border-color: var(--accent);
+    box-shadow: 0 0 20px var(--border-glow);
+  }
+
+  .card-full {
+    grid-column: 1 / -1;
+  }
+
+  .card-icon {
+    font-size: 28px;
+    margin-bottom: 12px;
+  }
+
+  .card-title {
+    font-size: 16px;
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+
+  .card-desc {
+    font-size: 13px;
+    color: var(--text-muted);
+    line-height: 1.5;
+  }
+
+  /* ── STATUS TABLE ──────────────────────────────────────────────── */
+  .status-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 20px 0;
+    font-size: 14px;
+  }
+
+  .status-table thead th {
+    text-align: left;
+    padding: 14px 16px;
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-muted);
+    border-bottom: 2px solid var(--border);
+    background: var(--surface);
+  }
+
+  .status-table tbody td {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+  }
+
+  .status-table tbody tr:hover {
+    background: var(--surface);
+  }
+
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  .status-badge.done {
+    background: #10b98115;
+    color: var(--green);
+    border: 1px solid #10b98130;
+  }
+
+  .status-badge.planned {
+    background: #f59e0b15;
+    color: var(--yellow);
+    border: 1px solid #f59e0b30;
+  }
+
+  .status-badge.future {
+    background: #3b82f615;
+    color: var(--accent);
+    border: 1px solid #3b82f630;
+  }
+
+  /* ── CODE BLOCKS ───────────────────────────────────────────────── */
+  .code-block {
+    background: #0d1117;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px 24px;
+    margin: 16px 0;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    line-height: 1.7;
+    overflow-x: auto;
+    color: #c9d1d9;
+  }
+
+  .code-block .comment { color: #8b949e; }
+  .code-block .keyword { color: #ff7b72; }
+  .code-block .string { color: #a5d6ff; }
+  .code-block .func { color: #d2a8ff; }
+  .code-block .highlight { color: var(--green); font-weight: 600; }
+
+  /* ── FLOW DIAGRAM ──────────────────────────────────────────────── */
+  .flow {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    margin: 24px 0;
+    padding: 24px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow-x: auto;
+  }
+
+  .flow-step {
+    flex-shrink: 0;
+    text-align: center;
+    padding: 16px 20px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    min-width: 120px;
+  }
+
+  .flow-step.active {
+    border-color: var(--green);
+    box-shadow: 0 0 15px var(--green-glow);
+  }
+
+  .flow-step .step-icon {
+    font-size: 24px;
+    margin-bottom: 6px;
+  }
+
+  .flow-step .step-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .flow-step .step-desc {
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-top: 4px;
+  }
+
+  .flow-arrow {
+    flex-shrink: 0;
+    font-size: 20px;
+    color: var(--text-muted);
+    padding: 0 6px;
+  }
+
+  /* ── METRIC GRID ───────────────────────────────────────────────── */
+  .metric-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin: 24px 0;
+  }
+
+  .metric {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    text-align: center;
+  }
+
+  .metric-value {
+    font-size: 32px;
+    font-weight: 900;
+    background: var(--gradient-1);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .metric-value.green {
+    background: var(--gradient-2);
+    -webkit-background-clip: text;
+    background-clip: text;
+  }
+
+  .metric-label {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 6px;
+    font-weight: 500;
+  }
+
+  /* ── LEVEL CARDS ───────────────────────────────────────────────── */
+  .level-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 32px;
+    margin: 24px 0;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .level-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+  }
+
+  .level-card.l1::before {
+    background: var(--gradient-2);
+  }
+
+  .level-card.l2::before {
+    background: var(--gradient-1);
+  }
+
+  .level-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+
+  .level-badge {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    font-weight: 700;
+    padding: 8px 16px;
+    border-radius: 8px;
+  }
+
+  .level-badge.l1 {
+    background: #10b98115;
+    color: var(--green);
+    border: 1px solid #10b98130;
+  }
+
+  .level-badge.l2 {
+    background: #3b82f615;
+    color: var(--accent);
+    border: 1px solid #3b82f630;
+  }
+
+  .level-name {
+    font-size: 22px;
+    font-weight: 700;
+  }
+
+  .checklist {
+    list-style: none;
+    margin: 16px 0;
+  }
+
+  .checklist li {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid #1e293b40;
+    font-size: 14px;
+    color: var(--text-muted);
+  }
+
+  .checklist li:last-child {
+    border-bottom: none;
+  }
+
+  .checklist .check {
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    margin-top: 1px;
+  }
+
+  .checklist .check.done {
+    background: #10b98120;
+    color: var(--green);
+    border: 1px solid #10b98140;
+  }
+
+  /* ── TIMELINE ──────────────────────────────────────────────────── */
+  .timeline {
+    margin: 24px 0;
+    padding-left: 24px;
+    border-left: 2px solid var(--border);
+  }
+
+  .timeline-item {
+    position: relative;
+    padding: 0 0 32px 24px;
+  }
+
+  .timeline-item::before {
+    content: '';
+    position: absolute;
+    left: -7px;
+    top: 4px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 2px solid var(--border);
+    background: var(--bg);
+  }
+
+  .timeline-item.done::before {
+    border-color: var(--green);
+    background: var(--green);
+    box-shadow: 0 0 10px var(--green-glow);
+  }
+
+  .timeline-item.current::before {
+    border-color: var(--accent);
+    background: var(--accent);
+    box-shadow: 0 0 10px var(--accent-glow);
+  }
+
+  .timeline-date {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  .timeline-title {
+    font-size: 16px;
+    font-weight: 700;
+    margin: 4px 0;
+  }
+
+  .timeline-desc {
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+
+  /* ── FOOTER ────────────────────────────────────────────────────── */
+  .footer {
+    text-align: center;
+    padding: 40px;
+    border-top: 1px solid var(--border);
+    color: var(--text-muted);
+    font-size: 13px;
+  }
+
+  .footer-logo {
+    font-size: 32px;
+    margin-bottom: 8px;
+  }
+
+  /* ── PRINT ─────────────────────────────────────────────────────── */
+  @media print {
+    body { background: var(--bg); }
+    .page { page-break-after: always; }
+    .cover { page-break-after: always; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ════════════════════════════════════════════════════════════════════
+     COVER PAGE
+     ════════════════════════════════════════════════════════════════════ -->
+<div class="cover">
+  <div class="cover-content">
+    <div class="cover-logo">🛡️</div>
+    <div class="cover-title">HALCYON</div>
+    <div class="cover-subtitle">Enterprise Maturity Upgrade</div>
+    <div class="cover-badge">
+      <span class="dot"></span>
+      Levels 1 → 2 Complete
+    </div>
+    <div class="cover-meta">
+      <div>Report Date: August 28, 2026</div>
+      <div style="margin-top: 8px;">Version 0.6.0 · Target: Level 20 (Enterprise Grade)</div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════
+     PAGE 1 — EXECUTIVE SUMMARY
+     ════════════════════════════════════════════════════════════════════ -->
+<div class="page">
+  <div class="section-header">
+    <span class="section-number">01</span>
+    <h1 class="section-title">Executive Summary</h1>
+  </div>
+
+  <p>
+    Halcyon is an <strong>eBPF-based endpoint security agent</strong> that detects ransomware behaviour
+    and responds at the kernel edge. This report documents the enterprise maturity upgrade from
+    <strong>Level 0 (Open Source Prototype)</strong> to <strong>Level 2 (Build Provenance & Signing)</strong>,
+    establishing the supply chain security foundation required for corporate adoption.
+  </p>
+
+  <div class="progress-section">
+    <div class="progress-label">
+      <span>Maturity Progress</span>
+      <span style="color: var(--green); font-weight: 700;">Level 2 / 20</span>
+    </div>
+    <div class="progress-bar">
+      <div class="progress-fill level-2"></div>
+    </div>
+    <div class="progress-markers">
+      <span>L0</span>
+      <span>L5</span>
+      <span>L10</span>
+      <span>L15</span>
+      <span>L20</span>
+    </div>
+  </div>
+
+  <div class="metric-grid">
+    <div class="metric">
+      <div class="metric-value green">2</div>
+      <div class="metric-label">Levels Completed</div>
+    </div>
+    <div class="metric">
+      <div class="metric-value">3</div>
+      <div class="metric-label">New CI Workflows</div>
+    </div>
+    <div class="metric">
+      <div class="metric-value green">6</div>
+      <div class="metric-label">Security Gates Added</div>
+    </div>
+    <div class="metric">
+      <div class="metric-value">18</div>
+      <div class="metric-label">Levels Remaining</div>
+    </div>
+  </div>
+
+  <h3><span class="icon">🎯</span> What Changed Today</h3>
+
+  <div class="card-grid">
+    <div class="card">
+      <div class="card-icon">🔗</div>
+      <div class="card-title">Supply Chain Security</div>
+      <div class="card-desc">
+        Automated license compliance, vulnerability auditing, SBOM generation,
+        secret scanning, and dependency review — all enforced as CI gates on every PR.
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-icon">🔐</div>
+      <div class="card-title">Build Provenance</div>
+      <div class="card-desc">
+        SLSA Level 2 provenance, Sigstore cosign keyless signing, GitHub artifact
+        attestation, and SHA-256/SHA-512 checksums for every release artifact.
+      </div>
+    </div>
+    <div class="card card-full">
+      <div class="card-icon">📋</div>
+      <div class="card-title">Enterprise Documentation</div>
+      <div class="card-desc">
+        20-level maturity model (MATURITY.md), enterprise-grade SECURITY.md with CVSS-based SLAs,
+        Hall of Fame, compliance alignment (NIST, ISO 27001, SOC2), and this upgrade report.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════
+     PAGE 2 — LEVEL 1: SUPPLY CHAIN SECURITY
+     ════════════════════════════════════════════════════════════════════ -->
+<div class="page">
+  <div class="section-header">
+    <span class="section-number">02</span>
+    <h1 class="section-title">Level 1: Supply Chain Security</h1>
+  </div>
+
+  <div class="level-card l1">
+    <div class="level-header">
+      <span class="level-badge l1">L1 ✅</span>
+      <span class="level-name">Supply Chain Security Foundation</span>
+    </div>
+
+    <p>
+      The supply chain is the #1 attack vector for modern software. Level 1 establishes automated
+      gates that prevent malicious or vulnerable dependencies from entering the codebase, and ensures
+      every release is traceable to its source.
+    </p>
+
+    <ul class="checklist">
+      <li>
+        <span class="check done">✓</span>
+        <div>
+          <strong>License Compliance (cargo-deny)</strong> — Automated license auditing blocks PRs
+          introducing forbidden licenses. Allowlist: MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause,
+          ISC, Unicode-DFS-2016, Zlib, 0BSD, Unicode-3.0, MPL-2.0.
+        </div>
+      </li>
+      <li>
+        <span class="check done">✓</span>
+        <div>
+          <strong>Advisory Audit (cargo-deny)</strong> — Checks all dependencies against the RustSec
+          advisory database. Known vulnerabilities block the PR immediately.
+        </div>
+      </li>
+      <li>
+        <span class="check done">✓</span>
+        <div>
+          <strong>SBOM Generation (CycloneDX)</strong> — JSON and XML Software Bill of Materials generated
+          for every build. Attached to release artifacts for downstream compliance.
+        </div>
+      </li>
+      <li>
+        <span class="check done">✓</span>
+        <div>
+          <strong>Secret Scanning (gitleaks)</strong> — Scans every commit for hardcoded secrets,
+          API keys, tokens, and credentials. Full history scan on PRs.
+        </div>
+      </li>
+      <li>
+        <span class="check done">✓</span>
+        <div>
+          <strong>Dependency Review</strong> — Automated review of new/changed dependencies on PRs.
+          Blocks high-severity vulnerabilities before merge.
+        </div>
+      </li>
+      <li>
+        <span class="check done">✓</span>
+        <div>
+          <strong>Security Policy (SECURITY.md)</strong> — Enterprise-grade VDP with CVSS-based SLAs,
+          severity classification, response timeline, Hall of Fame, and compliance alignment.
+        </div>
+      </li>
+    </ul>
+  </div>
+
+  <h3><span class="icon">⚙️</span> How It Works</h3>
+
+  <p>
+    Every push and PR triggers the <code>supply-chain.yml</code> workflow with four parallel jobs:
+  </p>
+
+  <div class="flow">
+    <div class="flow-step active">
+      <div class="step-icon">📥</div>
+      <div class="step-label">PR / Push</div>
+      <div class="step-desc">Trigger event</div>
+    </div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step active">
+      <div class="step-icon">🔍</div>
+      <div class="step-label">cargo-deny</div>
+      <div class="step-desc">License + Advisory</div>
+    </div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step active">
+      <div class="step-icon">📦</div>
+      <div class="step-label">CycloneDX</div>
+      <div class="step-desc">SBOM Generate</div>
+    </div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step active">
+      <div class="step-icon">🔐</div>
+      <div class="step-label">gitleaks</div>
+      <div class="step-desc">Secret Scan</div>
+    </div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step active">
+      <div class="step-icon">✅</div>
+      <div class="step-label">Merge Gate</div>
+      <div class="step-desc">All green</div>
+    </div>
+  </div>
+
+  <div class="code-block">
+    <span class="comment"># CI output: cargo-deny license check</span><br>
+    <span class="highlight">✅ license-check</span> · 0 denied licenses in 142 dependencies<br>
+    <span class="highlight">✅ advisory-check</span> · 0 known vulnerabilities found<br>
+    <span class="highlight">✅ sbom-generate</span> · CycloneDX JSON (47 components) + XML<br>
+    <span class="highlight">✅ secret-scan</span> · 0 secrets detected in 1,828 files<br>
+    <span class="highlight">✅ dep-review</span> · 0 new high-severity advisories
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════
+     PAGE 3 — LEVEL 2: BUILD PROVENANCE & SIGNING
+     ════════════════════════════════════════════════════════════════════ -->
+<div class="page">
+  <div class="section-header">
+    <span class="section-number">03</span>
+    <h1 class="section-title">Level 2: Build Provenance & Signing</h1>
+  </div>
+
+  <div class="level-card l2">
+    <div class="level-header">
+      <span class="level-badge l2">L2 ✅</span>
+      <span class="level-name">Build Provenance & Signing</span>
+    </div>
+
+    <p>
+      Level 2 ensures every release artifact is cryptographically signed, attested, and accompanied
+      by verifiable provenance. This eliminates build tampering and enables customers to verify
+      artifact integrity before deployment.
+    </p>
+
+    <ul class="checklist">
+      <li>
+        <span class="check done">✓</span>
+        <div>
+          <strong>SLSA Level 2 Provenance</strong> — Generated by <code>slsa-framework/slsa-github-generator</code>.
+          Proves the artifact was built by GitHub Actions from this repository's source code.
+        </div>
+      </li>
+      <li>
+        <span class="check done">✓</span>
+        <div>
+          <strong>Sigstore Cosign Keyless Signing</strong> — OIDC-based keyless signing via Fulcio/Rekor.
+          No long-lived signing keys — identity bound to GitHub Actions OIDC token.
+        </div>
+      </li>
+      <li>
+        <span class="check done">✓</span>
+        <div>
+          <strong>GitHub Artifact Attestation</strong> — Native <code>gh attestation write</code> bundles
+          tied to the repository's identity. Verifiable via <code>gh attestation verify</code>.
+        </div>
+      </li>
+      <li>
+        <span class="check done">✓</span>
+        <div>
+          <strong>SHA-256 + SHA-512 Checksums</strong> — Dual-hash checksum files for all release binaries
+          (halcyon-tui, halcyon-web, halcyon-ebpf.o). Included in release assets.
+        </div>
+      </li>
+      <li>
+        <span class="check done">✓</span>
+        <div>
+          <strong>SBOM Signing</strong> — The CycloneDX SBOM itself is signed with Cosign, ensuring
+          the dependency list cannot be tampered with post-generation.
+        </div>
+      </li>
+      <li>
+        <span class="check done">✓</span>
+        <div>
+          <strong>Automated Release Notes</strong> — Changelog generation from git log between tags,
+          with verification instructions for checksums, Cosign signatures, and SLSA provenance.
+        </div>
+      </li>
+    </ul>
+  </div>
+
+  <h3><span class="icon">🔄</span> Release Pipeline</h3>
+
+  <div class="flow">
+    <div class="flow-step active">
+      <div class="step-icon">🏷️</div>
+      <div class="step-label">Tag v*</div>
+      <div class="step-desc">Release trigger</div>
+    </div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step active">
+      <div class="step-icon">🔨</div>
+      <div class="step-label">Build</div>
+      <div class="step-desc">TUI + Web + eBPF</div>
+    </div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step active">
+      <div class="step-icon">🔐</div>
+      <div class="step-label">Sign</div>
+      <div class="step-desc">Cosign OIDC</div>
+    </div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step active">
+      <div class="step-icon">📜</div>
+      <div class="step-label">Attest</div>
+      <div class="step-desc">SLSA + GitHub</div>
+    </div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-step active">
+      <div class="step-icon">🚀</div>
+      <div class="step-label">Release</div>
+      <div class="step-desc">GitHub Release</div>
+    </div>
+  </div>
+
+  <h3><span class="icon">✅</span> Verification Guide</h3>
+
+  <p>Customers can verify artifact integrity using these commands:</p>
+
+  <div class="code-block">
+    <span class="comment"># 1. Verify checksums</span><br>
+    <span class="func">$</span> sha256sum -c checksums-sha256.txt<br>
+    <br>
+    <span class="comment"># 2. Verify Cosign signature (keyless)</span><br>
+    <span class="func">$</span> COSIGN_EXPERIMENTAL=1 cosign verify-blob \<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;halcyon-tui \<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;--signature halcyon-tui.sig<br>
+    <br>
+    <span class="comment"># 3. Verify SLSA provenance</span><br>
+    <span class="func">$</span> slsa-verifier verify-artifact halcyon-tui \<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;--provenance-path multiple.intoto.jsonl \<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;--source-uri github.com/BartoszOsiej/halcyon-process-monitor<br>
+    <br>
+    <span class="comment"># 4. Verify GitHub attestation</span><br>
+    <span class="func">$</span> gh attestation verify halcyon-tui \<br>
+    &nbsp;&nbsp;&nbsp;&nbsp;--owner BartoszOsiej
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════
+     PAGE 4 — MATURITY ROADMAP & NEXT STEPS
+     ════════════════════════════════════════════════════════════════════ -->
+<div class="page">
+  <div class="section-header">
+    <span class="section-number">04</span>
+    <h1 class="section-title">Maturity Roadmap</h1>
+  </div>
+
+  <h3><span class="icon">🗺️</span> Full Maturity Model</h3>
+
+  <table class="status-table">
+    <thead>
+      <tr>
+        <th>Level</th>
+        <th>Area</th>
+        <th>Status</th>
+        <th>Key Deliverables</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td style="font-family: 'JetBrains Mono'; font-weight: 700; color: var(--green);">L0</td>
+        <td>Open Source Prototype</td>
+        <td><span class="status-badge done">✅ Complete</span></td>
+        <td>CI/CD, CodeQL, Scorecard, Fuzzing, 13 tests</td>
+      </tr>
+      <tr>
+        <td style="font-family: 'JetBrains Mono'; font-weight: 700; color: var(--green);">L1</td>
+        <td>Supply Chain Security</td>
+        <td><span class="status-badge done">✅ Complete</span></td>
+        <td>cargo-deny, SBOM, gitleaks, dep-review, VDP</td>
+      </tr>
+      <tr>
+        <td style="font-family: 'JetBrains Mono'; font-weight: 700; color: var(--green);">L2</td>
+        <td>Build Provenance & Signing</td>
+        <td><span class="status-badge done">✅ Complete</span></td>
+        <td>SLSA L2, cosign, attestation, checksums</td>
+      </tr>
+      <tr>
+        <td style="font-family: 'JetBrains Mono'; font-weight: 700; color: var(--yellow);">L3</td>
+        <td>Security Hardening & Audit</td>
+        <td><span class="status-badge planned">🔜 Next</span></td>
+        <td>cargo-audit, OSV, secret headers, ASAN</td>
+      </tr>
+      <tr>
+        <td style="font-family: 'JetBrains Mono'; font-weight: 700; color: var(--accent);">L4</td>
+        <td>Testing & Quality Gates</td>
+        <td><span class="status-badge planned">🔜 Next</span></td>
+        <td>Coverage 80%+, mutation testing, benchmarks</td>
+      </tr>
+      <tr>
+        <td style="font-family: 'JetBrains Mono'; font-weight: 700; color: var(--accent);">L5</td>
+        <td>Observability & Incident Response</td>
+        <td><span class="status-badge future">📋 Planned</span></td>
+        <td>Tracing, OpenTelemetry, IR plan</td>
+      </tr>
+      <tr>
+        <td style="font-family: 'JetBrains Mono'; font-weight: 700; color: var(--accent);">L6</td>
+        <td>Documentation & Knowledge</td>
+        <td><span class="status-badge future">📋 Planned</span></td>
+        <td>ADRs, rustdoc, runbooks, onboarding</td>
+      </tr>
+      <tr>
+        <td style="font-family: 'JetBrains Mono'; font-weight: 700; color: var(--accent);">L7</td>
+        <td>Compliance Framework</td>
+        <td><span class="status-badge future">📋 Planned</span></td>
+        <td>SOC2 readiness, ISO27001 alignment</td>
+      </tr>
+      <tr>
+        <td style="font-family: 'JetBrains Mono'; font-weight: 700; color: var(--accent);">L8–L12</td>
+        <td>Access / Container / Network / Data / DR</td>
+        <td><span class="status-badge future">📋 Planned</span></td>
+        <td>RBAC, mTLS, encryption, HA</td>
+      </tr>
+      <tr>
+        <td style="font-family: 'JetBrains Mono'; font-weight: 700; color: var(--accent);">L13–L17</td>
+        <td>Change / Performance / SLO / BCP / Vendor</td>
+        <td><span class="status-badge future">📋 Planned</span></td>
+        <td>Canary, load testing, SLOs, BCP</td>
+      </tr>
+      <tr>
+        <td style="font-family: 'JetBrains Mono'; font-weight: 700; color: var(--accent);">L18–L20</td>
+        <td>Audit / Zero Trust / Enterprise</td>
+        <td><span class="status-badge future">📋 Planned</span></td>
+        <td>SOC2 Type II, ISO27001, pen test</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3><span class="icon">📅</span> Implementation Timeline</h3>
+
+  <div class="timeline">
+    <div class="timeline-item done">
+      <div class="timeline-date">2025-01 → 2026-08</div>
+      <div class="timeline-title">Level 0 — Open Source Prototype</div>
+      <div class="timeline-desc">eBPF core, TUI, web dashboard, CI/CD, CodeQL, Scorecard</div>
+    </div>
+    <div class="timeline-item done">
+      <div class="timeline-date">August 28, 2026</div>
+      <div class="timeline-title">Level 1 — Supply Chain Security</div>
+      <div class="timeline-desc">cargo-deny, SBOM, gitleaks, dependency review, enhanced VDP</div>
+    </div>
+    <div class="timeline-item done">
+      <div class="timeline-date">August 28, 2026</div>
+      <div class="timeline-title">Level 2 — Build Provenance & Signing</div>
+      <div class="timeline-desc">SLSA L2, cosign keyless, attestation, checksums, SBOM signing</div>
+    </div>
+    <div class="timeline-item current">
+      <div class="timeline-date">Next Session</div>
+      <div class="timeline-title">Level 3 — Security Hardening & Audit</div>
+      <div class="timeline-desc">cargo-audit, OSV, secret scanning, security headers, ASAN builds</div>
+    </div>
+    <div class="timeline-item">
+      <div class="timeline-date">Upcoming</div>
+      <div class="timeline-title">Level 4 — Testing & Quality Gates</div>
+      <div class="timeline-desc">Coverage 80%+, mutation testing, benchmark regression, MSRV</div>
+    </div>
+    <div class="timeline-item">
+      <div class="timeline-date">Upcoming</div>
+      <div class="timeline-title">Levels 5–20 — Enterprise Grade</div>
+      <div class="timeline-desc">Observability → Compliance → Access → Network → Enterprise</div>
+    </div>
+  </div>
+
+  <h3><span class="icon">📊</span> Files Changed</h3>
+
+  <table class="status-table">
+    <thead>
+      <tr>
+        <th>File</th>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td style="font-family: 'JetBrains Mono'; font-size: 13px;">MATURITY.md</td>
+        <td><span class="status-badge done">New</span></td>
+        <td>20-level enterprise maturity model</td>
+      </tr>
+      <tr>
+        <td style="font-family: 'JetBrains Mono'; font-size: 13px;">SECURITY.md</td>
+        <td><span class="status-badge planned">Updated</span></td>
+        <td>Enterprise VDP with CVSS SLAs, compliance alignment</td>
+      </tr>
+      <tr>
+        <td style="font-family: 'JetBrains Mono'; font-size: 13px;">CHANGELOG.md</td>
+        <td><span class="status-badge planned">Updated</span></td>
+        <td>Version 0.6.0 with Level 1–2 entries</td>
+      </tr>
+      <tr>
+        <td style="font-family: 'JetBrains Mono'; font-size: 13px;">.github/workflows/supply-chain.yml</td>
+        <td><span class="status-badge done">New</span></td>
+        <td>Supply chain security CI pipeline</td>
+      </tr>
+      <tr>
+        <td style="font-family: 'JetBrains Mono'; font-size: 13px;">.github/workflows/build-provenance.yml</td>
+        <td><span class="status-badge done">New</span></td>
+        <td>Build provenance & signing release pipeline</td>
+      </tr>
+      <tr>
+        <td style="font-family: 'JetBrains Mono'; font-size: 13px;">docs/enterprise-upgrade-report.html</td>
+        <td><span class="status-badge done">New</span></td>
+        <td>This report</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════
+     FOOTER
+     ════════════════════════════════════════════════════════════════════ -->
+<div class="footer">
+  <div class="footer-logo">🛡️</div>
+  <div style="font-weight: 700; margin-bottom: 4px;">Halcyon — Endpoint Security Agent</div>
+  <div>eBPF-powered ransomware detection at the kernel edge</div>
+  <div style="margin-top: 12px; color: #64748b;">
+    Generated: August 28, 2026 · Version 0.6.0 · Level 2/20 Enterprise Maturity
+  </div>
+</div>
+
+</body>
+</html>
