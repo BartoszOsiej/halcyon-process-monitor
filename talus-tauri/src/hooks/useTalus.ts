@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import type {
-  HalcyonEvent,
+  TalusEvent,
   ProcessInfo,
   FileRank,
   ExtensionCount,
@@ -13,10 +13,10 @@ const MAX_EVENTS = 500;
 const MAX_NET = 200;
 const MAX_RATES = 120;
 
-export interface HalcyonState {
+export interface TalusState {
   connected: boolean;
-  events: HalcyonEvent[];
-  alerts: HalcyonEvent[];
+  events: TalusEvent[];
+  alerts: TalusEvent[];
   processes: ProcessInfo[];
   files: FileRank[];
   extensions: ExtensionCount[];
@@ -33,8 +33,8 @@ const defaultStats: Stats = {
   threshold: 50,
 };
 
-export function useHalcyon(baseUrl: string) {
-  const [state, setState] = useState<HalcyonState>({
+export function useTalus(baseUrl: string) {
+  const [state, setState] = useState<TalusState>({
     connected: false,
     events: [],
     alerts: [],
@@ -73,7 +73,7 @@ export function useHalcyon(baseUrl: string) {
 
     ws.onmessage = (e) => {
       try {
-        const data = JSON.parse(e.data) as HalcyonEvent;
+        const data = JSON.parse(e.data) as TalusEvent;
         setState((prev) => {
           const next = { ...prev };
 

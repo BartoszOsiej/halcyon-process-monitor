@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { useHalcyon } from "./hooks/useHalcyon";
+import { useTalus } from "./hooks/useTalus";
 import { EventsPanel } from "./components/EventsPanel";
 import { ProcessesPanel } from "./components/ProcessesPanel";
 import { NetworkPanel } from "./components/NetworkPanel";
@@ -45,14 +45,14 @@ function useSmoothedRates(
 
 function App() {
   const [host] = useState(DEFAULT_HOST);
-  const state = useHalcyon(host);
+  const state = useTalus(host);
   const smooth = useSmoothedRates(state.rates);
 
   return (
     <div className="app">
       {/* ── Header ──────────────────────────────────────────────────── */}
       <div className="header">
-        <h1>⚡ HALCYON — Endpoint Security Agent</h1>
+        <h1>⚡ TALUS — Endpoint Security Agent</h1>
         <div className="meta">
           <span>
             events: <span className="val">{state.stats.total_events.toLocaleString()}</span>

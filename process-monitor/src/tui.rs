@@ -1,4 +1,4 @@
-//! Halcyon Process Monitor — FrankenTUI dashboard
+//! Talus Process Monitor — FrankenTUI dashboard
 //!
 //! Uses MiniBar, BarChart, LineChart, Canvas, Badge, Sparkline, heatmap_gradient,
 //! and StyledText with color wave effects from ftui-extras.
@@ -169,7 +169,7 @@ struct FileRow { name: String, count: u64, ext: String, entropy: f64 }
 impl App_ {
     fn new(rx: mpsc::Receiver<Snapshot>) -> Self {
         let mut log = LogViewer::new(5000);
-        log.push("[halcyon] eBPF monitor started — press ? for help");
+        log.push("[talus] eBPF monitor started — press ? for help");
         Self {
             log, log_st: LogViewerState::default(),
             _alerts: LogViewer::new(200), _alert_st: LogViewerState::default(),
@@ -465,7 +465,7 @@ impl App_ {
 
 
         // Row 0: Animated color wave title + badges
-        let title = format!("halcyon  eBPF process monitor  {} events  {} lost  up {}",
+        let title = format!("talus  eBPF process monitor  {} events  {} lost  up {}",
             self.total, self.lost, fmt_dur(self.uptime));
         let styled_title = StyledText::new(title)
             .bold()
@@ -995,14 +995,14 @@ impl App_ {
                 .unwrap_or(false)
         });
         if !copied {
-            // Fallback: write to /tmp/halcyon-copy.txt
-            let _ = std::fs::write("/tmp/halcyon-copy.txt", &text);
+            // Fallback: write to /tmp/talus-copy.txt
+            let _ = std::fs::write("/tmp/talus-copy.txt", &text);
         }
     }
 
     fn draw_help(&self, f: &mut Frame, area: Rect) {
         let lines = vec![
-            Line::from_spans(vec![Span::styled(" halcyon — keyboard shortcuts", Style::new().fg(BLUE).attrs(StyleFlags::BOLD))]),
+            Line::from_spans(vec![Span::styled(" talus — keyboard shortcuts", Style::new().fg(BLUE).attrs(StyleFlags::BOLD))]),
             Line::raw(""),
             Line::from_spans(vec![Span::styled(" NAV", Style::new().fg(AMBER).attrs(StyleFlags::BOLD))]),
             Line::raw("   Tab/Shift+Tab   cycle panels"),

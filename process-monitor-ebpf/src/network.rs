@@ -1,4 +1,4 @@
-//! Network eBPF tracepoint programs for Halcyon Process Monitor.
+//! Network eBPF tracepoint programs for Talus Process Monitor.
 //!
 //! IMPORTANT: Avoids ALL code patterns that generate `.text.unlikely` LLVM
 //! cold-path sections. No array indexing, no Result matching on non-trivial types.

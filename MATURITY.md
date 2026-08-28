@@ -1,4 +1,4 @@
-# Halcyon — Enterprise Maturity Model
+# Talus — Enterprise Maturity Model
 
 > Corporate-grade security agent. From open-source prototype to Fortune 500 ready.
 
@@ -336,5 +336,5 @@ Level 20 ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ E
 
 ---
 
-*This document is maintained as part of Halcyon's enterprise maturity program.*
+*This document is maintained as part of Talus's enterprise maturity program.*
 *Updated: 2026-08-28*

@@ -1,8 +1,8 @@
 syntax = "proto3";
 
-package halcyon.v1;
+package talus.v1;
 
-option go_package = "github.com/BartoszOsiej/halcyon-process-monitor/proto;halcyonpb";
+option go_package = "github.com/BartoszOsiej/talus-process-monitor/proto;taluspb";
 option rust_api_module = "crate::proto";
 
 // ── Event types ───────────────────────────────────────────────────────────
@@ -79,7 +79,7 @@ message MonitorStats {
 
 // ── RPC service ───────────────────────────────────────────────────────────
 
-service HalcyonService {
+service TalusService {
     // Returns current monitor statistics.
     rpc GetStats(Empty) returns (MonitorStats);
 

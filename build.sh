@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Halcyon Process Monitor — build script (auto-installs dependencies)
+# Talus Process Monitor — build script (auto-installs dependencies)
 #
 # Usage:
 #   ./build.sh          # Build TUI-only (default, 1.7MB)
@@ -44,7 +44,7 @@ done
 #  DEPENDENCY CHECKS & AUTO-INSTALL
 # ══════════════════════════════════════════════════════════════════════════
 
-echo "=== Halcyon Process Monitor ==="
+echo "=== Talus Process Monitor ==="
 echo ""
 
 # ── Rust ───────────────────────────────────────────────────────────────

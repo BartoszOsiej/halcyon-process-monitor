@@ -1,4 +1,4 @@
-# Security Policy — Halcyon Process Monitor
+# Security Policy — Talus Process Monitor
 
 > Enterprise-grade vulnerability disclosure and security response policy.
 
@@ -14,12 +14,12 @@
 
 ## Scope
 
-This policy covers the **halcyon-process-monitor** repository and all official artifacts:
+This policy covers the **talus-process-monitor** repository and all official artifacts:
 
 - Rust source code (`process-monitor/`, `process-monitor-ebpf/`)
 - C eBPF programs (`c-ebpf/`)
 - Go components (`go-agent/`, `go-web/`)
-- Tauri desktop app (`halcyon-tauri/`)
+- Tauri desktop app (`talus-tauri/`)
 - Docker images published to `ghcr.io`
 - Kubernetes manifests (`k8s/`)
 - Published binaries and release artifacts
@@ -40,8 +40,8 @@ Instead, use one of these **private** channels:
 
 | Channel | Best For | Response Time |
 |---|---|---|
-| **[GitHub Security Advisories](https://github.com/BartoszOsiej/halcyon-process-monitor/security/advisories/new)** | All vulnerabilities | Primary channel |
-| **Email: security@halcyon.dev** | Sensitive/critical issues | Backup channel |
+| **[GitHub Security Advisories](https://github.com/BartoszOsiej/talus-process-monitor/security/advisories/new)** | All vulnerabilities | Primary channel |
+| **Email: security@talus.dev** | Sensitive/critical issues | Backup channel |
 
 ### What to Include
 
@@ -117,7 +117,7 @@ When reporting, please provide:
 ## Security Advisories
 
 Published security advisories are available at:
-- [GitHub Security Advisories](https://github.com/BartoszOsiej/halcyon-process-monitor/security/advisories)
+- [GitHub Security Advisories](https://github.com/BartoszOsiej/talus-process-monitor/security/advisories)
 
 ### Advisory Format
 
@@ -135,9 +135,9 @@ Each advisory includes:
 | Role | Contact |
 |---|---|
 | Security Lead | Bartosz Osiej |
-| Email | security@halcyon.dev |
+| Email | security@talus.dev |
 | GitHub | [@BartoszOsiej](https://github.com/BartoszOsiej) |
-| Advisory Portal | [GitHub Security](https://github.com/BartoszOsiej/halcyon-process-monitor/security) |
+| Advisory Portal | [GitHub Security](https://github.com/BartoszOsiej/talus-process-monitor/security) |
 
 ---
 

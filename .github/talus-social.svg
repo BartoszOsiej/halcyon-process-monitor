@@ -13,7 +13,7 @@
   <rect x="40" y="40" width="1200" height="560" rx="16" fill="none" stroke="url(#accent)" stroke-width="2" opacity="0.3"/>
   
   <text x="640" y="180" font-family="monospace" font-size="80" fill="url(#accent)" text-anchor="middle">🔬</text>
-  <text x="640" y="280" font-family="system-ui, -apple-system, sans-serif" font-size="56" font-weight="bold" fill="#f0f6fc" text-anchor="middle">Halcyon Process Monitor</text>
+  <text x="640" y="280" font-family="system-ui, -apple-system, sans-serif" font-size="56" font-weight="bold" fill="#f0f6fc" text-anchor="middle">Talus Process Monitor</text>
   <text x="640" y="340" font-family="monospace" font-size="28" fill="#8b949e" text-anchor="middle">eBPF · Rust · Aya · ratatui</text>
   
   <rect x="280" y="380" width="200" height="48" rx="24" fill="#1f6feb" opacity="0.2"/>
@@ -28,5 +28,5 @@
   <text x="640" y="480" font-family="monospace" font-size="20" fill="#484f58" text-anchor="middle">crates.io · Docker GHCR · OpenSSF Scorecard</text>
   
   <rect x="280" y="520" width="720" height="2" fill="url(#accent)" opacity="0.5"/>
-  <text x="640" y="560" font-family="system-ui, sans-serif" font-size="18" fill="#484f58" text-anchor="middle">github.com/BartoszOsiej/halcyon-process-monitor</text>
+  <text x="640" y="560" font-family="system-ui, sans-serif" font-size="18" fill="#484f58" text-anchor="middle">github.com/BartoszOsiej/talus-process-monitor</text>
 </svg>

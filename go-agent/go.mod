@@ -1,4 +1,4 @@
-module github.com/BartoszOsiej/halcyon-process-monitor/go-agent
+module github.com/BartoszOsiej/talus-process-monitor/go-agent
 
 go 1.22
 

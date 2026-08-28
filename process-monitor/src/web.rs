@@ -39,37 +39,37 @@ impl AppState {
         let mut registry = Registry::default();
         let events_total = Counter::default();
         registry.register(
-            "halcyon_events_total",
+            "talus_events_total",
             "Total number of eBPF events received",
             events_total.clone(),
         );
         let exec_events_total = Counter::default();
         registry.register(
-            "halcyon_exec_events_total",
+            "talus_exec_events_total",
             "Total number of execve events",
             exec_events_total.clone(),
         );
         let open_events_total = Counter::default();
         registry.register(
-            "halcyon_open_events_total",
+            "talus_open_events_total",
             "Total number of openat events",
             open_events_total.clone(),
         );
         let alerts_total = Counter::default();
         registry.register(
-            "halcyon_alerts_total",
+            "talus_alerts_total",
             "Total number of alerts fired",
             alerts_total.clone(),
         );
         let lost_events_total = Counter::default();
         registry.register(
-            "halcyon_lost_events_total",
+            "talus_lost_events_total",
             "Total number of lost events (perf buffer overruns)",
             lost_events_total.clone(),
         );
         let ws_connections = Counter::default();
         registry.register(
-            "halcyon_ws_connections_total",
+            "talus_ws_connections_total",
             "Total number of WebSocket connections",
             ws_connections.clone(),
         );
@@ -368,7 +368,7 @@ const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Halcyon eBPF Monitor</title>
+<title>Talus eBPF Monitor</title>
 <style>
   :root { --bg: #0a0a1a; --panel: #111127; --border: #1e1e3a; --cyan: #00ffff; --green: #00ff64; --red: #ff3232; --yellow: #ffff00; --magenta: #ff00ff; --dim: #505064; }
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -398,7 +398,7 @@ const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
 </head>
 <body>
 <div class="header">
-  <h1>⚡ HALCYON eBPF MONITOR</h1>
+  <h1>⚡ TALUS eBPF MONITOR</h1>
   <div class="stats" id="stats">loading...</div>
 </div>
 <div class="grid">
@@ -531,10 +531,10 @@ pub async fn start_web_server(
         .layer(tower_http::cors::CorsLayer::permissive())
         .layer(SecurityHeadersLayer);
 
-    eprintln!("[halcyon] web server listening on http://{addr}");
-    eprintln!("[halcyon] dashboard: http://{addr}/");
-    eprintln!("[halcyon] websocket: ws://{addr}/ws");
-    eprintln!("[halcyon] prometheus: http://{addr}/metrics");
+    eprintln!("[talus] web server listening on http://{addr}");
+    eprintln!("[talus] dashboard: http://{addr}/");
+    eprintln!("[talus] websocket: ws://{addr}/ws");
+    eprintln!("[talus] prometheus: http://{addr}/metrics");
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
     axum::serve(listener, app).await?;

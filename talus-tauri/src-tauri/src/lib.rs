@@ -77,13 +77,13 @@ fn start_monitor(
         args.push("--memgraph".into());
     }
 
-    // Find halcyon binary
-    let binary_paths = ["/usr/local/bin/halcyon", "/usr/bin/halcyon"];
+    // Find talus binary
+    let binary_paths = ["/usr/local/bin/talus", "/usr/bin/talus"];
     let binary = binary_paths
         .iter()
         .find(|p| std::path::Path::new(p).exists())
         .copied()
-        .unwrap_or("halcyon");
+        .unwrap_or("talus");
 
     let mut child = Command::new("sudo")
         .arg(binary)
@@ -91,7 +91,7 @@ fn start_monitor(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .map_err(|e| format!("Failed to start halcyon: {e}"))?;
+        .map_err(|e| format!("Failed to start talus: {e}"))?;
 
     let pid = child.id();
     *state.pid.lock().unwrap() = Some(pid);

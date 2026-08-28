@@ -5,7 +5,7 @@
 //
 // Uses rdkafka (librdkafka wrapper) with configurable:
 //   - Broker address (default: localhost:9092)
-//   - Topic name (default: halcyon-events)
+//   - Topic name (default: talus-events)
 //   - Compression (lz4 by default)
 //   - Batch size and linger for throughput tuning
 
@@ -32,7 +32,7 @@ impl Default for KafkaConfig {
     fn default() -> Self {
         Self {
             brokers: "localhost:9092".into(),
-            topic: "halcyon-events".into(),
+            topic: "talus-events".into(),
             compression: "lz4".into(),
             batch_size: 65536,
             linger_ms: 10,

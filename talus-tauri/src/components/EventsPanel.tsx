@@ -1,5 +1,5 @@
 import { memo } from "react";
-import type { HalcyonEvent } from "../types";
+import type { TalusEvent } from "../types";
 
 function kindTag(kind?: string): { tag: string; cls: string } {
   switch (kind) {
@@ -18,7 +18,7 @@ function kindTag(kind?: string): { tag: string; cls: string } {
 export const EventsPanel = memo(function EventsPanel({
   events,
 }: {
-  events: HalcyonEvent[];
+  events: TalusEvent[];
 }) {
   return (
     <div className="panel">

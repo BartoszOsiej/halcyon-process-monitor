@@ -1,9 +1,9 @@
 [workspace]
 
 [package]
-name = "halcyon-desktop"
+name = "talus-desktop"
 version = "0.5.0"
-description = "Halcyon EDR — Desktop Dashboard"
+description = "Talus EDR — Desktop Dashboard"
 authors = ["arch"]
 license = "MIT"
 edition = "2021"

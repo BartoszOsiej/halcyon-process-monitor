@@ -1,4 +1,4 @@
-module github.com/BartoszOsiej/halcyon-process-monitor/go-web
+module github.com/BartoszOsiej/talus-process-monitor/go-web
 
 go 1.22
 
