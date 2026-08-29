@@ -38,7 +38,7 @@ extending or debugging the project.
 │                                                   │ Output::Event/Alert     │
 │                         ┌─────────────────────────┴──────────────────┐       │
 │                         │        Output layer (main thread)          │       │
-│                         │  TUI (ratatui) │ JSON │ Plain │ Diagnose    │       │
+│                         │  TUI (frankentui) │ JSON │ Plain │ Diagnose    │       │
 │                         └────────────────────────────────────────────┘       │
 └───────────────────────────────────────────────────────────────────────────────┘
 ```
