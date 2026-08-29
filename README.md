@@ -1,11 +1,3 @@
-<img src="https://capsule-render.vercel.app/api?type=waving&color=gradient&customColorList=6,11,20&height=130&section=header&text=talus&fontSize=32&animation=fadeIn" width="100%" />
-
-<div align="center">
-
-[![Typing SVG](https://readme-typing-svg.demolab.com/?font=JetBrains+Mono&weight=600&size=18&duration=3000&pause=1200&color=58A6FF&center=true&vCenter=true&width=600&height=45&lines=eBPF+endpoint+security+agent+%E2%80%94+detect+and+respond+at+the+kernel+edge)](https://github.com/BartoszOsiej/talus-process-monitor)
-
-</div>
-
 # 🛡️ Talus — Endpoint Security Agent
 
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
@@ -14,7 +6,6 @@
 ![Go](https://img.shields.io/badge/Go-1.22-00ADD8?style=flat-square&logo=go)
 ![Docker](https://img.shields.io/badge/Docker-GHCR-2496ED?style=flat-square&logo=docker)
 ![Enterprise](https://img.shields.io/badge/Enterprise-Level%204%2F20-blue?style=flat-square)
-[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/BartoszOsiej/talus-process-monitor/badge)](https://scorecard.dev/viewer/?uri=github.com/BartoszOsiej/talus-process-monitor)
 
 **eBPF-based endpoint security agent for Linux — detect ransomware behaviour, respond at the kernel edge.**
 
