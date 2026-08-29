@@ -83,7 +83,7 @@ cargo build --release --features web
 
 | Wariant | Rozmiar | Zależności |
 |---|---|---|
-| `process-monitor-tui` | 1.7MB | aya, ratatui, chrono, crossterm |
+| `process-monitor-tui` | 1.7MB | aya, frankentui (ftui), chrono, crossterm |
 | `process-monitor-web` | 2.5MB | +axum, tokio, tower-http, prometheus-client |
 
 ## Wymagania
@@ -286,7 +286,7 @@ talus-process-monitor/
 │   └── src/
 │       ├── main.rs           # CLI, wybór trybu, obsługa sygnałów
 │       ├── monitor.rs        # Ładowanie eBPF, czytnik perf, ruchome okno
-│       ├── tui.rs            # Ultra-zaawansowany interfejs ratatui
+│       ├── tui.rs            # Ultra-zaawansowany interfejs frankentui (ftui)
 │       ├── web.rs            # Serwer axum (opcjonalny, --features web)
 │       └── ffi.md            # C FFI bindings (libtalus)
 ├── process-monitor-ebpf/     # Strona jądra (#![no_std], aya-ebpf)
