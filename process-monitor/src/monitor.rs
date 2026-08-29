@@ -196,21 +196,40 @@ pub struct Monitor {
 // ── Response: process termination ────────────────────────────────────────
 
 /// Send SIGKILL to a process. Returns true on success.
+///
+/// # Safety
+///
+/// Calls `kill(2)` with SIGKILL. The pid is cast from u32 to i32 which is
+/// safe for all valid PIDs (max value 4194304 on Linux, well within i32 range).
+/// SIGKILL cannot be caught, so the target process will terminate.
 fn kill_process(pid: u32) -> bool {
+    // SAFETY: kill(2) is a POSIX syscall. pid is within i32 range for valid PIDs.
+    // SIGKILL is a valid signal number. No pointer dereference involved.
     let rc = unsafe { libc::kill(pid as i32, libc::SIGKILL) };
     rc == 0
 }
 
 impl Monitor {
+    /// Start the eBPF monitor.
+    ///
+    /// Loads the compiled eBPF object, attaches tracepoints to syscall entries,
+    /// and spawns the reader thread for perf buffer consumption.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if not running as root, if the eBPF object cannot be
+    /// loaded, or if any tracepoint fails to attach.
     pub fn start(bpf_path: &Path, threshold: u64, auto_kill: bool) -> Result<Self> {
+        // SAFETY: geteuid() is a simple syscall returning the effective user ID.
+        // No pointers, no fallibility, always succeeds.
         if unsafe { libc::geteuid() } != 0 {
             bail!("must be run as root: loading eBPF programs requires CAP_BPF / CAP_SYS_ADMIN");
         }
 
-        eprintln!("[halcyon] loading eBPF object: {}", bpf_path.display());
+        eprintln!("[talus] loading eBPF object: {}", bpf_path.display());
         let mut bpf = Ebpf::load_file(bpf_path).context("failed to load eBPF program")?;
         eprintln!(
-            "[halcyon] object parsed OK; programs: {:?}",
+            "[talus] object parsed OK; programs: {:?}",
             bpf.programs().map(|(n, _)| n).collect::<Vec<_>>()
         );
 
@@ -223,7 +242,7 @@ impl Monitor {
         program
             .attach("syscalls", "sys_enter_execve")
             .context("failed to attach execve tracepoint")?;
-        eprintln!("[halcyon] attached tracepoint syscalls/sys_enter_execve");
+        eprintln!("[talus] attached tracepoint syscalls/sys_enter_execve");
 
         let program: &mut TracePoint = bpf
             .program_mut("sys_enter_openat")
@@ -234,7 +253,7 @@ impl Monitor {
         program
             .attach("syscalls", "sys_enter_openat")
             .context("failed to attach openat tracepoint")?;
-        eprintln!("[halcyon] attached tracepoint syscalls/sys_enter_openat");
+        eprintln!("[talus] attached tracepoint syscalls/sys_enter_openat");
 
         // Attach filesystem and signal tracepoints (best-effort: kernel may lack some).
         for (name, category, label) in [
@@ -247,7 +266,7 @@ impl Monitor {
                 let tp: Result<&mut TracePoint, _> = prog.try_into();
                 if let Ok(tp) = tp {
                     if tp.load().is_ok() && tp.attach(category, name).is_ok() {
-                        eprintln!("[halcyon] attached tracepoint {category}/{name} ({label})");
+                        eprintln!("[talus] attached tracepoint {category}/{name} ({label})");
                     }
                 }
             }
@@ -267,17 +286,17 @@ impl Monitor {
                         match tp.load() {
                             Ok(()) => {
                                 match tp.attach("syscalls", name) {
-                                    Ok(_) => eprintln!("[halcyon] attached tracepoint syscalls/{name} ({label})"),
-                                    Err(e) => eprintln!("[halcyon] WARN: loaded {name} but attach failed: {e}"),
+                                    Ok(_) => eprintln!("[talus] attached tracepoint syscalls/{name} ({label})"),
+                                    Err(e) => eprintln!("[talus] WARN: loaded {name} but attach failed: {e}"),
                                 }
                             }
-                            Err(e) => eprintln!("[halcyon] WARN: failed to load {name}: {e}"),
+                            Err(e) => eprintln!("[talus] WARN: failed to load {name}: {e}"),
                         }
                     }
-                    Err(e) => eprintln!("[halcyon] WARN: {name} is not a TracePoint: {e}"),
+                    Err(e) => eprintln!("[talus] WARN: {name} is not a TracePoint: {e}"),
                 }
             } else {
-                eprintln!("[halcyon] WARN: program {name} not found in eBPF object");
+                eprintln!("[talus] WARN: program {name} not found in eBPF object");
             }
         }
 
@@ -600,6 +619,15 @@ fn shannon_entropy(s: &str) -> f64 {
     entropy / 8.0
 }
 
+/// Spawn the perf buffer reader thread.
+///
+/// Opens one `PerfEventArrayBuffer` per online CPU and reads events in a
+/// continuous loop. Events are decoded from raw bytes into `RecordedEvent`
+/// and sent through the MPSC channel to the monitor core.
+///
+/// # Errors
+///
+/// Returns an error if CPU enumeration fails or if the thread cannot be spawned.
 fn spawn_reader(
     mut perf_array: PerfEventArray<MapData>,
     tx: mpsc::Sender<Msg>,
@@ -614,10 +642,10 @@ fn spawn_reader(
         buffers.push(buf);
     }
 
-    eprintln!("[halcyon] opening perf buffers on {} CPUs", buffers.len());
+    eprintln!("[talus] opening perf buffers on {} CPUs", buffers.len());
 
     thread::Builder::new()
-        .name("halcyon-reader".into())
+        .name("talus-reader".into())
         .spawn(move || {
             let mut out = vec![BytesMut::with_capacity(OUT_BUF_CAP); OUT_BUFS];
             loop {
@@ -632,6 +660,11 @@ fn spawn_reader(
                                 return;
                             }
                             for raw in out.iter().take(events.read) {
+                                // SAFETY: The raw bytes come from the perf buffer and were
+                                // written by the kernel-side eBPF program as a ProcessEvent
+                                // (#[repr(C)] fixed-size struct). read_unaligned is used
+                                // because perf buffer alignment is not guaranteed. The struct
+                                // layout matches the kernel-side definition exactly.
                                 let evt = unsafe {
                                     std::ptr::read_unaligned(raw.as_ptr() as *const ProcessEvent)
                                 };
@@ -641,7 +674,7 @@ fn spawn_reader(
                             }
                         }
                         Err(e) => {
-                            eprintln!("[halcyon] perf buffer error: {e}");
+                            eprintln!("[talus] perf buffer error: {e}");
                             idle = true;
                         }
                     }
@@ -1142,5 +1175,269 @@ mod tests {
 
         let tree = monitor.build_process_tree();
         assert_eq!(tree.len(), 2);
+    }
+
+    // ── Level 4: Edge case tests ─────────────────────────────────────────
+
+    #[test]
+    fn extract_extension_edge_cases() {
+        // Double dots
+        assert_eq!(extract_extension("file..txt"), "txt");
+        // Only dots
+        assert_eq!(extract_extension("..."), "");
+        // Single char extension
+        assert_eq!(extract_extension("x.c"), "c");
+        // Very long extension
+        assert_eq!(extract_extension("file.abcdefghijklmnopqrstuvwxyz"), "abcdefghijklmnopqrstuvwxyz");
+        // Dot at start (dotfile)
+        assert_eq!(extract_extension(".gitignore"), "");
+        // No path, just filename
+        assert_eq!(extract_extension("Cargo.toml"), "toml");
+        // Empty string
+        assert_eq!(extract_extension(""), "");
+        // Only extension
+        assert_eq!(extract_extension(".rs"), "");
+    }
+
+    #[test]
+    fn shannon_entropy_uniform_string() {
+        // All same character → entropy = 0
+        assert_eq!(shannon_entropy("aaaaaaaaaa"), 0.0);
+        assert_eq!(shannon_entropy("1111111111"), 0.0);
+    }
+
+    #[test]
+    fn shannon_entropy_high_for_random() {
+        // Mixed characters → entropy > 0.5
+        let e = shannon_entropy("abcdefghij1234567890");
+        assert!(e > 0.5, "expected high entropy, got {e}");
+    }
+
+    #[test]
+    fn shannon_entropy_single_char() {
+        assert_eq!(shannon_entropy("x"), 0.0);
+    }
+
+    #[test]
+    fn cstr_to_string_full_buffer_no_nul() {
+        let buf = [b'a'; EVENT_FILENAME_LEN];
+        let s = cstr_to_string(&buf);
+        assert_eq!(s.len(), EVENT_FILENAME_LEN);
+        assert_eq!(s, "a".repeat(EVENT_FILENAME_LEN));
+    }
+
+    #[test]
+    fn cstr_to_string_empty_buffer() {
+        let buf = [0u8; EVENT_FILENAME_LEN];
+        let s = cstr_to_string(&buf);
+        assert!(s.is_empty());
+    }
+
+    #[test]
+    fn cstr_to_string_single_char() {
+        let mut buf = [0u8; EVENT_FILENAME_LEN];
+        buf[0] = b'x';
+        let s = cstr_to_string(&buf);
+        assert_eq!(s, "x");
+    }
+
+    #[test]
+    fn cstr_to_string_utf8_multibyte() {
+        let mut buf = [0u8; EVENT_FILENAME_LEN];
+        let text = "hello\u{4e16}\u{754c}\u{89c2}";
+        let bytes = text.as_bytes();
+        buf[..bytes.len()].copy_from_slice(bytes);
+        let s = cstr_to_string(&buf);
+        assert_eq!(s, text);
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn handle_event_connect_increments_execs() {
+        let mut monitor = Monitor::dummy();
+        let mut outputs = Vec::new();
+        monitor.handle_event(
+            &RecordedEvent {
+                ts: "00:00:00.000".into(),
+                kind: Kind::Connect,
+                pid: 50,
+                uid: 1000,
+                comm: "curl".into(),
+                file: Some("93.184.216.34:443".into()),
+                extension: None,
+                argv: None,
+                bytes: None,
+            },
+            &mut outputs,
+        );
+        let stats = monitor.stats.get(&50).unwrap();
+        assert_eq!(stats.total_execs, 1, "network events count as execs");
+        assert_eq!(stats.total_opens, 0);
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn open_tracks_file_extension() {
+        let mut monitor = Monitor::dummy();
+        let mut outputs = Vec::new();
+        monitor.handle_event(&open(1, 0, "/tmp/secret.enc"), &mut outputs);
+        monitor.handle_event(&open(1, 0, "/tmp/data.pdf"), &mut outputs);
+        monitor.handle_event(&open(1, 0, "/tmp/backup.tar.gz"), &mut outputs);
+
+        let stats = monitor.stats.get(&1).unwrap();
+        assert_eq!(stats.extensions.get("enc"), Some(&1));
+        assert_eq!(stats.extensions.get("pdf"), Some(&1));
+        assert_eq!(stats.extensions.get("gz"), Some(&1));
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn window_eviction_removes_old_entries() {
+        let mut monitor = Monitor::dummy(); // threshold = 3, WINDOW_SECS = 1
+        let mut outputs = Vec::new();
+        // Add 2 opens
+        monitor.handle_event(&open(1, 0, "/a"), &mut outputs);
+        monitor.handle_event(&open(1, 0, "/b"), &mut outputs);
+        assert_eq!(monitor.stats.get(&1).unwrap().window_opens, 2);
+        // Simulate time passing by manipulating the window directly
+        if let Some(window) = monitor.windows.get_mut(&1) {
+            // Backdate all entries by 2 seconds
+            for ts in window.iter_mut() {
+                *ts -= Duration::from_secs(2);
+            }
+        }
+        // Next open should evict old entries
+        monitor.handle_event(&open(1, 0, "/c"), &mut outputs);
+        // Only the new entry should remain
+        assert_eq!(monitor.stats.get(&1).unwrap().window_opens, 1);
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn threshold_zero_disables_alerts() {
+        let mut monitor = Monitor::dummy();
+        monitor.threshold = 0; // Disable alerts
+        let mut outputs = Vec::new();
+        for _ in 0..100 {
+            monitor.handle_event(&open(1, 0, "/x"), &mut outputs);
+        }
+        let alerts = outputs.iter().filter(|o| matches!(o, Output::Alert(_))).count();
+        assert_eq!(alerts, 0, "threshold=0 should produce no alerts");
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn auto_kill_emits_response_action() {
+        let mut monitor = Monitor::dummy();
+        monitor.auto_kill = true;
+        let mut outputs = Vec::new();
+        for _ in 0..3 {
+            monitor.handle_event(&open(99, 1000, "/tmp/evil"), &mut outputs);
+        }
+        let actions: Vec<_> = outputs.iter().filter(|o| matches!(o, Output::Action(_))).collect();
+        assert_eq!(actions.len(), 1, "auto-kill should emit one ResponseAction");
+        if let Output::Action(act) = &outputs[3] {
+            assert!(act.action.contains("SIGKILL"));
+            assert!(act.action.contains("99"));
+        } else {
+            panic!("expected ResponseAction at index 3");
+        }
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn top_files_empty_monitor() {
+        let monitor = Monitor::dummy();
+        let top = monitor.top_files(10);
+        assert!(top.is_empty());
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn top_files_respects_limit() {
+        let mut monitor = Monitor::dummy();
+        let mut outputs = Vec::new();
+        for i in 0..20 {
+            monitor.handle_event(&open(1, 0, &format!("/tmp/file{i}.txt")), &mut outputs);
+        }
+        let top = monitor.top_files(5);
+        assert_eq!(top.len(), 5);
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn build_process_tree_orphan_pid() {
+        let mut monitor = Monitor::dummy();
+        let mut outputs = Vec::new();
+        // PID with unknown parent (not in pid_to_ppid)
+        monitor.handle_event(
+            &RecordedEvent {
+                ts: "00:00:00.000".into(),
+                kind: Kind::Exec,
+                pid: 500,
+                uid: 0,
+                comm: "orphan".into(),
+                file: None,
+                extension: None,
+                argv: None,
+                bytes: None,
+            },
+            &mut outputs,
+        );
+        let tree = monitor.build_process_tree();
+        assert_eq!(tree.len(), 1, "orphan becomes a root");
+        assert_eq!(tree[0].pid, 500);
+    }
+
+    #[test]
+    fn flatten_empty_tree() {
+        let tree: Vec<ProcessNode> = vec![];
+        let flat = Monitor::flatten_tree(&tree);
+        assert!(flat.is_empty());
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn rate_history_capped_at_120() {
+        let mut monitor = Monitor::dummy();
+        // Simulate 130 ticks by manipulating tick_start
+        for _ in 0..130 {
+            monitor.tick_start = Instant::now() - Duration::from_secs(2);
+            monitor.tick_execs = 10;
+            monitor.poll();
+        }
+        assert!(monitor.rate_history.len() <= 120);
+    }
+
+    #[test]
+    fn extension_counts_empty() {
+        let monitor = Monitor::dummy();
+        assert!(monitor.extension_counts().is_empty());
+    }
+
+    #[test]
+    fn rate_history_empty_initially() {
+        let monitor = Monitor::dummy();
+        assert!(monitor.rate_history().is_empty());
+    }
+
+    #[test]
+    fn stats_sorted_empty() {
+        let monitor = Monitor::dummy();
+        assert!(monitor.stats_sorted().is_empty());
+    }
+
+    #[test]
+    fn uptime_starts_near_zero() {
+        let monitor = Monitor::dummy();
+        let uptime = monitor.uptime();
+        assert!(uptime < Duration::from_secs(1));
+    }
+
+    #[test]
+    fn total_events_starts_at_zero() {
+        let monitor = Monitor::dummy();
+        assert_eq!(monitor.total_events, 0);
+        assert_eq!(monitor.total_lost, 0);
     }
 }

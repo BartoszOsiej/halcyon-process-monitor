@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Halcyon Process Monitor - installer.
+# Talus Process Monitor - installer.
 #
 # Detects the Linux distribution, installs build dependencies with the
 # distribution's own package manager, installs the Rust toolchain if missing
@@ -26,9 +26,9 @@ ASSUME_YES=0
 NO_DEPS=0
 UNINSTALL=0
 PREFIX_USER_BIN="${XDG_BIN_HOME:-$HOME/.local/bin}"
-PREFIX_USER_LIB="$HOME/.local/lib/halcyon"
+PREFIX_USER_LIB="$HOME/.local/lib/talus"
 SYSTEM_BIN=/usr/local/bin
-SYSTEM_LIB=/usr/local/lib/halcyon
+SYSTEM_LIB=/usr/local/lib/talus
 
 usage() {
     cat <<EOF
@@ -37,7 +37,7 @@ Usage: $0 [options]
 Options:
   --system        install to /usr/local (requires root/sudo)
   --prefix DIR    install userspace files under DIR (implies --system layout:
-                  DIR/bin and DIR/lib/halcyon)
+                  DIR/bin and DIR/lib/talus)
   --no-deps       skip installing distribution packages (deps must be present)
   --no-rust       skip installing the Rust toolchain (must be present)
   -y              assume yes to all prompts
@@ -84,7 +84,7 @@ while [ "$#" -gt 0 ]; do
             [ "$#" -ge 2 ] || die "--prefix requires a directory"
             SYSTEM=1
             SYSTEM_BIN="$2/bin"
-            SYSTEM_LIB="$2/lib/halcyon"
+            SYSTEM_LIB="$2/lib/talus"
             shift
             ;;
         --no-deps) NO_DEPS=1 ;;
@@ -234,7 +234,7 @@ if [ "$UNINSTALL" = "1" ]; then
 fi
 
 # ---- main ---------------------------------------------------------------------
-echo "=== Halcyon Process Monitor installer ==="
+echo "=== Talus Process Monitor installer ==="
 echo "Distribution: $DISTRO_NAME ($DISTRO_ID)"
 echo "Package manager: ${PM:-none detected}"
 echo ""

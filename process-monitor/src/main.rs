@@ -1,3 +1,10 @@
+#![warn(missing_docs)]
+//! Talus Process Monitor — eBPF-based endpoint security agent.
+//!
+//! Traces execve, openat, connect, and other syscalls via eBPF tracepoints,
+//! scores per-process file-open rates in real-time, and terminates offending
+//! processes when a heuristic verdict fires.
+
 mod ffi;
 mod monitor;
 mod storage;
@@ -22,7 +29,7 @@ const BPF_CANDIDATES: &[&str] = &[
     "target/bpfel-unknown-none/release/process-monitor-ebpf",
     "target/release/process-monitor-ebpf",
     "process-monitor-ebpf/target/bpfel-unknown-none/release/process-monitor-ebpf",
-    "/usr/local/lib/halcyon/process-monitor-ebpf",
+    "/usr/local/lib/talus/process-monitor-ebpf",
 ];
 #[derive(Parser)]
 #[command(
@@ -95,6 +102,8 @@ fn main() -> Result<()> {
 
     // Give the diagnose mode a clear, helpful non-root message before
     // Monitor::start would bail with a generic error.
+    // SAFETY: geteuid() is a simple syscall that always succeeds and returns
+    // the effective user ID. No pointer dereference, no fallibility.
     if args.diagnose && unsafe { libc::geteuid() } != 0 {
         eprintln!("run with: sudo process-monitor --diagnose");
         return Ok(());
@@ -112,13 +121,13 @@ fn main() -> Result<()> {
 
     let use_tui = args.tui || (!args.json && !args.plain && io::stdout().is_terminal());
 
-    eprintln!("[halcyon] eBPF program: {}", bpf_path.display());
-    eprintln!("[halcyon] alert threshold: {} file opens/s", args.alert_threshold);
+    eprintln!("[talus] eBPF program: {}", bpf_path.display());
+    eprintln!("[talus] alert threshold: {} file opens/s", args.alert_threshold);
     if args.auto_kill {
-        eprintln!("[halcyon] AUTO-KILL: enabled (SIGKILL on alert)");
+        eprintln!("[talus] AUTO-KILL: enabled (SIGKILL on alert)");
     }
     if let Some(ref ext) = args.filter_ext {
-        eprintln!("[halcyon] extension filter: .{ext}");
+        eprintln!("[talus] extension filter: .{ext}");
     }
 
     // ── Storage pipeline ──────────────────────────────────────────────
@@ -133,8 +142,8 @@ fn main() -> Result<()> {
             ..Default::default()
         };
         match storage::kafka::KafkaProducer::start(cfg) {
-            Ok(p) => { eprintln!("[halcyon] Kafka producer → {brokers} topic={topic}"); pipeline.kafka = Some(p); }
-            Err(e) => eprintln!("[halcyon] WARN: Kafka init failed: {e}"),
+            Ok(p) => { eprintln!("[talus] Kafka producer → {brokers} topic={topic}"); pipeline.kafka = Some(p); }
+            Err(e) => eprintln!("[talus] WARN: Kafka init failed: {e}"),
         }
     }
 
@@ -145,8 +154,8 @@ fn main() -> Result<()> {
             ..Default::default()
         };
         match storage::clickhouse::ClickHouseStore::start(cfg) {
-            Ok(s) => { eprintln!("[halcyon] ClickHouse → {url}"); pipeline.clickhouse = Some(s); }
-            Err(e) => eprintln!("[halcyon] WARN: ClickHouse init failed: {e}"),
+            Ok(s) => { eprintln!("[talus] ClickHouse → {url}"); pipeline.clickhouse = Some(s); }
+            Err(e) => eprintln!("[talus] WARN: ClickHouse init failed: {e}"),
         }
     }
 
@@ -157,8 +166,8 @@ fn main() -> Result<()> {
             ..Default::default()
         };
         match storage::memgraph::MemGraphStore::start(cfg) {
-            Ok(s) => { eprintln!("[halcyon] MemGraph → {url}"); pipeline.memgraph = Some(s); }
-            Err(e) => eprintln!("[halcyon] WARN: MemGraph init failed: {e}"),
+            Ok(s) => { eprintln!("[talus] MemGraph → {url}"); pipeline.memgraph = Some(s); }
+            Err(e) => eprintln!("[talus] WARN: MemGraph init failed: {e}"),
         }
     }
 
@@ -178,7 +187,7 @@ fn main() -> Result<()> {
             bail!("--web requires the 'web' feature. Rebuild with: cargo build --features web");
         }
     } else if use_tui {
-        eprintln!("[halcyon] TUI mode (q quit, p pause, c clear, arrows scroll, Tab switch panel)");
+        eprintln!("[talus] TUI mode (q quit, p pause, c clear, arrows scroll, Tab switch panel)");
         tui::run(monitor)?;
     } else if args.json {
         run_json(&mut monitor, &pipeline)?;
@@ -186,7 +195,7 @@ fn main() -> Result<()> {
         run_plain(&mut monitor, &pipeline)?;
     }
 
-    eprintln!("[halcyon] shutdown complete");
+    eprintln!("[talus] shutdown complete");
     Ok(())
 }
 
@@ -220,13 +229,13 @@ fn resolve_bpf_path(explicit: Option<&PathBuf>) -> Result<PathBuf> {
     // 2. Relative to the running binary (checked before user-local installs so a
     //    freshly built tree is preferred over a stale ~/.local copy):
     //    - <root>/target/bpfel-unknown-none/... for <root>/target/release/process-monitor
-    //    - <bin>/../lib/halcyon/...             for ~/.local/bin/process-monitor
+    //    - <bin>/../lib/talus/...             for ~/.local/bin/process-monitor
     if let Ok(exe) = std::env::current_exe() {
         if let Some(dir) = exe.parent() {
             for candidate in [
                 dir.join("../bpfel-unknown-none/bpf/process-monitor-ebpf"),
                 dir.join("../bpfel-unknown-none/release/process-monitor-ebpf"),
-                dir.join("../lib/halcyon/process-monitor-ebpf"),
+                dir.join("../lib/talus/process-monitor-ebpf"),
             ] {
                 if candidate.exists() {
                     return Ok(candidate);
@@ -246,12 +255,14 @@ fn resolve_bpf_path(explicit: Option<&PathBuf>) -> Result<PathBuf> {
     let uid = std::env::var("SUDO_UID")
         .ok()
         .and_then(|v| v.parse::<u32>().ok())
+        // SAFETY: getuid() is a simple syscall returning the real user ID.
+        // No pointers, no fallibility, always succeeds.
         .unwrap_or_else(|| unsafe { libc::getuid() });
     if let Some(dir) = passwd_dir(uid) {
         homes.push(dir);
     }
     for home in homes {
-        let candidate = home.join(".local/lib/halcyon/process-monitor-ebpf");
+        let candidate = home.join(".local/lib/talus/process-monitor-ebpf");
         if candidate.exists() {
             return Ok(candidate);
         }
@@ -277,7 +288,24 @@ fn resolve_bpf_path(explicit: Option<&PathBuf>) -> Result<PathBuf> {
 ///
 /// Used to find user-local installs when running under `sudo` (where `$HOME`
 /// points at the target user's home, not the invoking user's).
+/// Resolves the home directory for `uid` from the passwd database.
+///
+/// Used to find user-local installs when running under `sudo` (where `$HOME`
+/// points at the target user's home, not the invoking user's).
+///
+/// # Safety
+///
+/// Calls `getpwuid_r` which requires:
+/// - `pwd` is a valid mutable pointer to a `libc::passwd` (zeroed)
+/// - `buf` is a valid mutable buffer of adequate size (4096 bytes)
+/// - `result` is a valid mutable pointer to a pointer
+///
+/// All invariants are satisfied by the local variables above.
+/// On success, `pwd.pw_dir` is dereferenced only after checking it is non-null.
 fn passwd_dir(uid: u32) -> Option<PathBuf> {
+    // SAFETY: getpwuid_r is a POSIX reentrant function. We pass valid pointers
+    // to zeroed structs and a 4096-byte buffer, which is sufficient for passwd
+    // entries. The result pointer is checked for null before dereferencing pw_dir.
     unsafe {
         let mut pwd: libc::passwd = std::mem::zeroed();
         let mut buf = vec![0u8; 4096];
@@ -303,7 +331,7 @@ fn passwd_dir(uid: u32) -> Option<PathBuf> {
 /// End-to-end self-diagnostic: verifies the environment, loads + attaches the
 /// eBPF programs, then listens for events for 5 seconds and reports counts.
 fn run_diagnose(monitor: &mut Monitor) -> Result<()> {
-    println!("=== Halcyon Process Monitor diagnostic ===");
+    println!("=== Talus Process Monitor diagnostic ===");
     println!();
     println!("OK: running as root");
 
@@ -374,12 +402,23 @@ fn run_diagnose(monitor: &mut Monitor) -> Result<()> {
         println!("SUCCESS: events are flowing through the eBPF pipeline.");
     } else {
         println!("NO EVENTS RECEIVED within the diagnostic window.");
-        println!("Check the [halcyon] stderr lines above for attach/load errors.");
+        println!("Check the [talus] stderr lines above for attach/load errors.");
     }
     Ok(())
 }
 
+/// Install signal handlers for graceful shutdown.
+///
+/// # Safety
+///
+/// `handle_signal` is an `extern "C"` function with the correct signature
+/// for `sighandler_t`. The cast from function pointer to `*const ()` to
+/// `sighandler_t` is the standard pattern for POSIX signal handlers.
+/// No heap memory or references are involved.
 fn install_signal_handler() {
+    // SAFETY: handle_signal is a valid extern "C" function matching the
+    // sighandler_t signature. The function pointer cast is the canonical
+    // POSIX pattern. signal() itself is safe to call at program startup.
     unsafe {
         let handler = handle_signal as *const () as libc::sighandler_t;
         libc::signal(libc::SIGINT, handler);

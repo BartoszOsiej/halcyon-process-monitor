@@ -1,4 +1,4 @@
-# Halcyon Process Monitor — New Features (v0.4.0-dev)
+# Talus Process Monitor — New Features (v0.4.0-dev)
 
 ## 🖥️ Ultra-Advanced TUI (Default)
 
@@ -118,18 +118,18 @@ Built-in `/metrics` endpoint with OpenMetrics format.
 
 | Metric | Type | Description |
 |---|---|---|
-| `halcyon_events_total` | Counter | Total eBPF events received |
-| `halcyon_exec_events_total` | Counter | Total execve events |
-| `halcyon_open_events_total` | Counter | Total openat events |
-| `halcyon_alerts_total` | Counter | Total alerts fired |
-| `halcyon_lost_events_total` | Counter | Lost events (perf buffer overruns) |
-| `halcyon_ws_connections_total` | Counter | Total WebSocket connections |
+| `talus_events_total` | Counter | Total eBPF events received |
+| `talus_exec_events_total` | Counter | Total execve events |
+| `talus_open_events_total` | Counter | Total openat events |
+| `talus_alerts_total` | Counter | Total alerts fired |
+| `talus_lost_events_total` | Counter | Lost events (perf buffer overruns) |
+| `talus_ws_connections_total` | Counter | Total WebSocket connections |
 
 ### Example Prometheus config
 
 ```yaml
 scrape_configs:
-  - job_name: 'halcyon'
+  - job_name: 'talus'
     static_configs:
       - targets: ['localhost:8080']
     metrics_path: '/metrics'
@@ -164,88 +164,88 @@ New tracepoints for network observability:
 
 ## 🤖 Go Agent
 
-Lightweight CLI that connects to the Halcyon daemon via HTTP/WebSocket.
+Lightweight CLI that connects to the Talus daemon via HTTP/WebSocket.
 
 ### Build
 
 ```bash
 cd go-agent
-go build -o halcyon-agent .
+go build -o talus-agent .
 ```
 
 ### Usage
 
 ```bash
 # Show stats
-./halcyon-agent stats
+./talus-agent stats
 
 # List processes
-./halcyon-agent processes
+./talus-agent processes
 
 # Top files
-./halcyon-agent files
+./talus-agent files
 
 # File extensions
-./halcyon-agent extensions
+./talus-agent extensions
 
 # Process tree
-./halcyon-agent tree
+./talus-agent tree
 
 # Watch live events
-./halcyon-agent watch
+./talus-agent watch
 
 # JSON output
-./halcyon-agent --json stats
+./talus-agent --json stats
 ```
 
 ---
 
-## 🏗️ C FFI Library (libhalcyon)
+## 🏗️ C FFI Library (libtalus)
 
-C-compatible library for integrating Halcyon with other languages (Python, C++, Rust, etc.).
+C-compatible library for integrating Talus with other languages (Python, C++, Rust, etc.).
 
 ### Header
 
 ```c
-#include "halcyon.h"
+#include "talus.h"
 
-halcyon_monitor_t* monitor;
-halcyon_monitor_create("/path/to/bpf.o", 50, &monitor);
+talus_monitor_t* monitor;
+talus_monitor_create("/path/to/bpf.o", 50, &monitor);
 
-halcyon_event_t events[100];
+talus_event_t events[100];
 uint32_t count;
-halcyon_monitor_poll(monitor, events, 100, &count);
+talus_monitor_poll(monitor, events, 100, &count);
 
 for (uint32_t i = 0; i < count; i++) {
     printf("[%d] %s\n", events[i].pid, events[i].comm);
-    halcyon_free_string(events[i].comm);
+    talus_free_string(events[i].comm);
 }
-halcyon_free_events(events, count);
+talus_free_events(events, count);
 
-halcyon_monitor_destroy(monitor);
+talus_monitor_destroy(monitor);
 ```
 
 ### Functions
 
 | Function | Description |
 |---|---|
-| `halcyon_monitor_create()` | Create monitor instance |
-| `halcyon_monitor_destroy()` | Destroy monitor instance |
-| `halcyon_monitor_poll()` | Poll for events |
-| `halcyon_monitor_stats()` | Get statistics |
-| `halcyon_monitor_processes()` | Get tracked processes |
-| `halcyon_monitor_top_files()` | Get top opened files |
-| `halcyon_monitor_set_threshold()` | Update threshold |
-| `halcyon_free_string()` | Free a C string |
-| `halcyon_free_events()` | Free events array |
-| `halcyon_free_processes()` | Free process stats array |
-| `halcyon_free_files()` | Free file ranks array |
+| `talus_monitor_create()` | Create monitor instance |
+| `talus_monitor_destroy()` | Destroy monitor instance |
+| `talus_monitor_poll()` | Poll for events |
+| `talus_monitor_stats()` | Get statistics |
+| `talus_monitor_processes()` | Get tracked processes |
+| `talus_monitor_top_files()` | Get top opened files |
+| `talus_monitor_set_threshold()` | Update threshold |
+| `talus_free_string()` | Free a C string |
+| `talus_free_events()` | Free events array |
+| `talus_free_processes()` | Free process stats array |
+| `talus_free_files()` | Free file ranks array |
 
 ---
 
 ## ☸️ Kubernetes Deployment
 
-DaemonSet for running Halcyon on every node in a Kubernetes cluster.
+DaemonSet for running Talus on every node in a Kubernetes cluster.
 
 ### Deploy
 
@@ -258,7 +258,7 @@ kubectl apply -f k8s/
 
 | Resource | Description |
 |---|---|
-| `DaemonSet` | Runs Halcyon on every node with eBPF access |
+| `DaemonSet` | Runs Talus on every node with eBPF access |
 | `Service` | ClusterIP service for API access |
 | `ConfigMap` | Configuration (threshold, log level, etc.) |
 | `ServiceMonitor` | Prometheus operator integration |
@@ -278,7 +278,7 @@ gRPC service definition for inter-component communication.
 ### Service
 
 ```protobuf
-service HalcyonService {
+service TalusService {
     rpc GetStats(Empty) returns (MonitorStats);
     rpc GetProcesses(Empty) returns (ProcessList);
     rpc GetTopFiles(TopFilesRequest) returns (FileRankList);
@@ -291,13 +291,13 @@ service HalcyonService {
 
 ```bash
 # Rust
-protoc --rust_out=src/proto --grpc_out=src/proto proto/halcyon.proto
+protoc --rust_out=src/proto --grpc_out=src/proto proto/talus.proto
 
 # Go
-protoc --go_out=go-agent --go-grpc_out=go-agent proto/halcyon.proto
+protoc --go_out=go-agent --go-grpc_out=go-agent proto/talus.proto
 
 # Python
-protoc --python_out=python-agent proto/halcyon.proto
+protoc --python_out=python-agent proto/talus.proto
 ```
 
 ---
@@ -309,7 +309,7 @@ protoc --python_out=python-agent proto/halcyon.proto
 │                        KUBERNETES NODE                          │
 │                                                                 │
 │  ┌──────────────────┐     ┌──────────────────────────────────┐ │
-│  │  Halcyon Daemon  │     │         eBPF Kernel Space        │ │
+│  │  Talus Daemon  │     │         eBPF Kernel Space        │ │
 │  │  (Rust)          │     │                                  │ │
 │  │                  │     │  ┌─────────┐  ┌─────────┐       │ │
 │  │  ┌────────────┐  │     │  │ execve  │  │ openat  │       │ │
@@ -351,7 +351,7 @@ protoc --python_out=python-agent proto/halcyon.proto
 # Build everything
 ./build.sh                    # Rust (eBPF + userspace)
 cd go-agent && go build       # Go agent
-gcc -shared -o libhalcyon.so -I c-api ffi.rs  # C library (via Rust)
+gcc -shared -o libtalus.so -I c-api ffi.rs  # C library (via Rust)
 
 # Run with web dashboard
 sudo process-monitor --web 0.0.0.0:8080
@@ -360,7 +360,7 @@ sudo process-monitor --web 0.0.0.0:8080
 kubectl apply -f k8s/
 
 # Use Go agent
-./halcyon-agent watch
+./talus-agent watch
 ```
 
 ---

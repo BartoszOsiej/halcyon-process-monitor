@@ -1,25 +1,26 @@
-<img src="https://capsule-render.vercel.app/api?type=waving&color=gradient&customColorList=6,11,20&height=130&section=header&text=halcyon&fontSize=32&animation=fadeIn" width="100%" />
+<img src="https://capsule-render.vercel.app/api?type=waving&color=gradient&customColorList=6,11,20&height=130&section=header&text=talus&fontSize=32&animation=fadeIn" width="100%" />
 
 <div align="center">
 
-[![Typing SVG](https://readme-typing-svg.demolab.com/?font=JetBrains+Mono&weight=600&size=18&duration=3000&pause=1200&color=58A6FF&center=true&vCenter=true&width=600&height=45&lines=eBPF+endpoint+security+agent+%E2%80%94+detect+and+respond+at+the+kernel+edge)](https://github.com/BartoszOsiej/halcyon-process-monitor)
+[![Typing SVG](https://readme-typing-svg.demolab.com/?font=JetBrains+Mono&weight=600&size=18&duration=3000&pause=1200&color=58A6FF&center=true&vCenter=true&width=600&height=45&lines=eBPF+endpoint+security+agent+%E2%80%94+detect+and+respond+at+the+kernel+edge)](https://github.com/BartoszOsiej/talus-process-monitor)
 
 </div>
 
-# 🛡️ Halcyon — Endpoint Security Agent
+# 🛡️ Talus — Endpoint Security Agent
 
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
 ![Rust](https://img.shields.io/badge/Rust-2021-DEA584?style=flat-square&logo=rust)
 ![eBPF](https://img.shields.io/badge/eBPF-Linux%205.8+-FCD900?style=flat-square&logo=linux)
 ![Go](https://img.shields.io/badge/Go-1.22-00ADD8?style=flat-square&logo=go)
 ![Docker](https://img.shields.io/badge/Docker-GHCR-2496ED?style=flat-square&logo=docker)
-[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/BartoszOsiej/halcyon-process-monitor/badge)](https://scorecard.dev/viewer/?uri=github.com/BartoszOsiej/halcyon-process-monitor)
+![Enterprise](https://img.shields.io/badge/Enterprise-Level%204%2F20-blue?style=flat-square)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/BartoszOsiej/talus-process-monitor/badge)](https://scorecard.dev/viewer/?uri=github.com/BartoszOsiej/talus-process-monitor)
 
 **eBPF-based endpoint security agent for Linux — detect ransomware behaviour, respond at the kernel edge.**
 
-Halcyon is not a passive monitor. It is a **detect-and-respond** agent that hooks syscalls at the kernel level via eBPF tracepoints, scores per-process file-open rates in real-time, and **terminates** offending processes the instant a heuristic verdict fires. It processes ~500k events/sec through per-CPU perf buffers with zero-copy handoff to a userspace detection engine built in Rust.
+Talus is not a passive monitor. It is a **detect-and-respond** agent that hooks syscalls at the kernel level via eBPF tracepoints, scores per-process file-open rates in real-time, and **terminates** offending processes the instant a heuristic verdict fires. It processes ~500k events/sec through per-CPU perf buffers with zero-copy handoff to a userspace detection engine built in Rust.
 
-> 🇵🇱 [Wersja polska](README.pl.md) · [Architecture](ARCHITECTURE.md)
+> 🇵🇱 [Wersja polska](README.pl.md) · [Architecture](ARCHITECTURE.md) · [📄 Enterprise Report (PDF)](docs/talus-enterprise-maturity-report.pdf) · [Enterprise Maturity](MATURITY.md)
 
 ---
 
@@ -64,7 +65,7 @@ Halcyon is not a passive monitor. It is a **detect-and-respond** agent that hook
 
 ## Architecture / Data Flow
 
-Halcyon follows a **pipeline architecture** — kernel ingestion → userspace detection → operator response:
+Talus follows a **pipeline architecture** — kernel ingestion → userspace detection → operator response:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -125,21 +126,21 @@ This maps directly to a **Kafka-style** event pipeline: kernel perf buffer = top
 
 ## Storage & Pipeline
 
-Halcyon supports pluggable storage backends for event persistence and downstream analytics:
+Talus supports pluggable storage backends for event persistence and downstream analytics:
 
 ```bash
 # Stream events to Kafka
-sudo halcyon --kafka-brokers localhost:9092 --kafka-topic halcyon-events
+sudo talus --kafka-brokers localhost:9092 --kafka-topic talus-events
 
 # Store events in ClickHouse for analytics
-sudo halcyon --clickhouse http://localhost:8123
+sudo talus --clickhouse http://localhost:8123
 
 # Build process relationship graph in MemGraph
-sudo halcyon --memgraph http://localhost:7474
+sudo talus --memgraph http://localhost:7474
 
 # Combine all backends
-sudo halcyon \
-  --kafka-brokers localhost:9092 --kafka-topic halcyon-events \
+sudo talus \
+  --kafka-brokers localhost:9092 --kafka-topic talus-events \
   --clickhouse http://localhost:8123 \
   --memgraph http://localhost:7474
 ```
@@ -151,14 +152,14 @@ Events are sent to a configurable topic with `lz4` compression and partitioned b
 | Config | Default | Description |
 |---|---|---|
 | `--kafka-brokers` | — | Broker address (e.g. `localhost:9092`) |
-| `--kafka-topic` | `halcyon-events` | Topic name |
+| `--kafka-topic` | `talus-events` | Topic name |
 
 ### ClickHouse
 
 Events are batch-inserted into a `MergeTree` table partitioned by date:
 
 ```sql
-CREATE TABLE halcyon.events (
+CREATE TABLE talus.events (
     ts DateTime64(3),
     kind LowCardinality(String),
     pid UInt32, uid UInt32,
@@ -191,7 +192,7 @@ RETURN p.pid, p.comm, collect(f.path), collect(n.addr)
 
 ## Network Visibility
 
-Halcyon traces network syscalls at the kernel level — not just file operations. This provides **full egress visibility** for detecting data exfiltration, C2 communication, and lateral movement.
+Talus traces network syscalls at the kernel level — not just file operations. This provides **full egress visibility** for detecting data exfiltration, C2 communication, and lateral movement.
 
 | Syscall | Event Type | What's Captured | How |
 |---|---|---|---|
@@ -246,7 +247,7 @@ sudo process-monitor --filter-ext enc
 
 ### Response: automated termination
 
-With `--auto-kill`, Halcyon sends `SIGKILL` to the offending process immediately on verdict:
+With `--auto-kill`, Talus sends `SIGKILL` to the offending process immediately on verdict:
 
 ```bash
 # EDR mode: detect + respond
@@ -422,11 +423,11 @@ sudo process-monitor --web 0.0.0.0:8080
 
 ## Operator View (TUI + Web + Desktop)
 
-Halcyon provides three operator interfaces:
+Talus provides three operator interfaces:
 
 - **TUI** — 7-panel terminal interface for local investigation. Cyberpunk aesthetic, process trees, heatmaps, sparklines. Runs anywhere, no browser needed.
 - **Web Dashboard** — browser-based UI with WebSocket live stream, REST API for integration, and Prometheus metrics for Grafana/monitoring stacks.
-- **Desktop App (Tauri + React)** — native desktop GUI built with Tauri 2 + React 19 + Recharts. Connects to the halcyon backend via WebSocket and REST API. See [`halcyon-tauri/`](halcyon-tauri/) for source.
+- **Desktop App (Tauri + React)** — native desktop GUI built with Tauri 2 + React 19 + Recharts. Connects to the talus backend via WebSocket and REST API. See [`talus-tauri/`](talus-tauri/) for source.
 
 All three consume the same detection engine — the agent is **headless-capable** and can run as a background daemon with JSON output piped to external SIEM/storage.
 
@@ -435,14 +436,14 @@ All three consume the same detection engine — the agent is **headless-capable*
 ## Project Structure
 
 ```
-halcyon-process-monitor/
+talus-process-monitor/
 ├── process-monitor/          # Userspace: detection engine + TUI + web + FFI
 │   └── src/
 │       ├── main.rs           # CLI, mode selection, signal handling
 │       ├── monitor.rs        # eBPF loading, perf reader, detection, response
 │       ├── tui.rs            # 7-panel frankentui (ftui) cyberpunk interface
 │       ├── web.rs            # axum web server (--features web)
-│       ├── ffi.rs            # C FFI bindings (libhalcyon)
+│       ├── ffi.rs            # C FFI bindings (libtalus)
 │       └── storage/          # Kafka / ClickHouse / MemGraph backends
 ├── process-monitor-ebpf/     # Kernel side (#![no_std], aya-ebpf)
 │   └── src/
@@ -454,8 +455,8 @@ halcyon-process-monitor/
 ├── c-ebpf/                   # Standalone C eBPF programs (ebpf.c, process_monitor.bpf.c)
 ├── go-agent/                 # Go CLI agent (HTTP/WebSocket client)
 ├── go-web/                   # Go web frontend (main.go)
-├── c-api/                    # C header for libhalcyon
-├── halcyon-tauri/            # Tauri desktop dashboard (React + Rust)
+├── c-api/                    # C header for libtalus
+├── talus-tauri/            # Tauri desktop dashboard (React + Rust)
 ├── k8s/                      # Kubernetes manifests (DaemonSet, Service)
 ├── proto/                    # Protobuf schema (gRPC)
 ├── fuzz/                     # Fuzzing harness
@@ -474,7 +475,7 @@ halcyon-process-monitor/
 
 ## Tested Live on Linux
 
-Halcyon has been **deployed and tested on real hardware** running Linux:
+Talus has been **deployed and tested on real hardware** running Linux:
 
 ```bash
 # Verify eBPF tracepoints exist
@@ -485,12 +486,12 @@ sudo process-monitor --diagnose
 
 # Watch live events in another terminal
 ls -la /tmp
-# → Halcyon shows: 14:09:16 OPEN [29645] bash → /tmp
+# → Talus shows: 14:09:16 OPEN [29645] bash → /tmp
 
 # Test auto-kill
 sudo process-monitor --alert-threshold 3 --auto-kill
 # In another terminal: for i in $(seq 1 100); do touch /tmp/f$i; done
-# → Halcyon kills the process after 3 opens in 1s
+# → Talus kills the process after 3 opens in 1s
 
 # Verify with bpftool
 bpftool prog list      # shows attached tracepoints
@@ -503,12 +504,29 @@ bpftool map dump name events  # shows perf event array
 
 ```bash
 # Docker
-docker build -t halcyon .
-docker run --privileged -v /sys/kernel/btf:/sys/kernel/btf halcyon
+docker build -t talus .
+docker run --privileged -v /sys/kernel/btf:/sys/kernel/btf talus
 
 # Kubernetes (DaemonSet on every node)
 kubectl apply -f k8s/
 ```
+
+---
+
+## Enterprise Maturity
+
+Talus follows a **20-level enterprise maturity model** — from open-source prototype to Fortune 500 ready.
+
+| Level | Area | Status |
+|---|---|---|
+| L0 | Open Source Prototype | ✅ |
+| L1 | Supply Chain Security (cargo-deny, SBOM, gitleaks) | ✅ |
+| L2 | Build Provenance (SLSA, cosign, attestation) | ✅ |
+| L3 | Security Hardening (SAFETY docs, security headers) | ✅ |
+| L4 | Quality Gates (36 tests, clippy clean) | ✅ |
+| L5–L20 | Observability → Compliance → Enterprise | 🔜 |
+
+📄 [Full Enterprise Report (PDF)](docs/talus-enterprise-maturity-report.pdf) · [Maturity Model](MATURITY.md)
 
 ---
 
@@ -520,4 +538,4 @@ MIT
 
 ## 📺 Demo
 
-![halcyon Demo](assets/halcyon-demo.gif)
+![talus Demo](assets/talus-demo.gif)

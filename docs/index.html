@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Halcyon — eBPF Process Monitor</title>
+<title>Talus — eBPF Process Monitor</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -142,11 +142,12 @@ footer .heart{color:var(--red);animation:heartbeat 1.5s infinite}
 <!-- Hero -->
 <section class="hero">
 <div class="hero-content reveal">
-  <div class="badge"><span class="dot"></span>eBPF · Rust · Linux Kernel 5.8+</div>
-  <h1>Halcyon<br><span>Process Monitor</span></h1>
+  <div class="badge"><span class="dot"></span>eBPF · Rust · Linux 5.8+ · Level 4/20 Enterprise</div>
+  <h1>Talus<br><span>Process Monitor</span></h1>
   <p class="subtitle">Real-time kernel-level process, file-operation, and network telemetry for Linux. Zero overhead. Zero agents. Just eBPF.</p>
   <div class="cta-group">
-    <a href="https://github.com/BartoszOsiej/halcyon-process-monitor" class="btn btn-primary">View on GitHub</a>
+    <a href="https://github.com/BartoszOsiej/talus-process-monitor" class="btn btn-primary">View on GitHub</a>
+    <a href="talus-enterprise-maturity-report.pdf" class="btn btn-secondary">📄 Enterprise Report (PDF)</a>
     <a href="https://crates.io/crates/process-monitor" class="btn btn-secondary">Install from crates.io →</a>
   </div>
 </div>
@@ -156,7 +157,7 @@ footer .heart{color:var(--red);animation:heartbeat 1.5s infinite}
 <div class="terminal reveal">
   <div class="terminal-header">
     <div class="terminal-dot r"></div><div class="terminal-dot y"></div><div class="terminal-dot g"></div>
-    <span class="terminal-title">halcyon — live kernel tracing</span>
+    <span class="terminal-title">talus — live kernel tracing</span>
   </div>
   <div class="terminal-body" id="terminal">
 <span class="t-muted">[14:32:01.003]</span> <span class="t-green">exec</span>   <span class="t-cyan">bash</span>            pid=<span class="t-yellow">12847</span>  uid=<span class="t-yellow">1000</span>  cmd="make -j8"
@@ -211,8 +212,8 @@ footer .heart{color:var(--red);animation:heartbeat 1.5s infinite}
 <div class="stats reveal">
   <div class="stat"><div class="number">~0%</div><div class="label">CPU overhead (idle)</div></div>
   <div class="stat"><div class="number">&lt;1μs</div><div class="label">Event latency</div></div>
-  <div class="stat"><div class="number">7</div><div class="label">TUI panels</div></div>
-  <div class="stat"><div class="number">6</div><div class="label">Syscalls traced</div></div>
+  <div class="stat"><div class="number">36</div><div class="label">Tests passing</div></div>
+  <div class="stat"><div class="number">4/20</div><div class="label">Enterprise level</div></div>
 </div>
 
 <!-- Architecture -->
@@ -239,20 +240,51 @@ footer .heart{color:var(--red);animation:heartbeat 1.5s infinite}
 <span class="cmd">$</span> cargo install process-monitor
 
 <span class="comment"># Or clone and build</span>
-<span class="cmd">$</span> git clone https://github.com/BartoszOsiej/halcyon-process-monitor
+<span class="cmd">$</span> git clone https://github.com/BartoszOsiej/talus-process-monitor
 
 <span class="comment"># Run (requires root for eBPF)</span>
 <span class="cmd">$</span> sudo ./target/release/process-monitor
-<span class="output">🔬 Halcyon Process Monitor v0.1.0</span>
+<span class="output">🔬 Talus Process Monitor v0.1.0</span>
 <span class="output">   eBPF programs loaded. Tracing syscalls...</span>
 
 <span class="comment"># Docker</span>
-<span class="cmd">$</span> docker run --privileged -it ghcr.io/bartoszosiej/halcyon:latest
+<span class="cmd">$</span> docker run --privileged -it ghcr.io/bartoszosiej/talus:latest
+  </div>
+</section>
+
+<!-- Enterprise Maturity -->
+<section class="section">
+  <h2 class="reveal">Enterprise Ready</h2>
+  <p class="sub reveal">Level 4 of 20 towards full enterprise maturity. Supply chain security, build provenance, code hardening, and quality gates — all automated.</p>
+  <div class="grid">
+    <div class="card reveal reveal-delay-1">
+      <div class="card-icon g">🔗</div>
+      <h3>Supply Chain Security</h3>
+      <p>cargo-deny license & advisory gates, CycloneDX SBOM, gitleaks secret scanning, dependency review on every PR.</p>
+    </div>
+    <div class="card reveal reveal-delay-2">
+      <div class="card-icon c">🔐</div>
+      <h3>Build Provenance</h3>
+      <p>SLSA Level 2 provenance, Sigstore cosign keyless signing, GitHub artifact attestation, SHA-256/512 checksums.</p>
+    </div>
+    <div class="card reveal reveal-delay-3">
+      <div class="card-icon y">🛡️</div>
+      <h3>Security Hardening</h3>
+      <p>SAFETY docs on all unsafe blocks, SecurityHeadersLayer (CSP, DENY, nosniff), crate-level lints enforced.</p>
+    </div>
+    <div class="card reveal reveal-delay-1">
+      <div class="card-icon r">🧪</div>
+      <h3>Quality Gates</h3>
+      <p>36 unit tests (+177%), edge cases, monitor invariants, clippy clean with -D warnings.</p>
+    </div>
+  </div>
+  <div style="text-align:center;margin-top:3rem">
+    <a href="talus-enterprise-maturity-report.pdf" class="btn btn-primary">📄 Download Full Enterprise Report (PDF)</a>
   </div>
 </section>
 
 <footer>
-  <p>Built with <span class="heart">♥</span> Rust + eBPF · <a href="https://github.com/BartoszOsiej/halcyon-process-monitor">GitHub</a> · MIT License</p>
+  <p>Built with <span class="heart">♥</span> Rust + eBPF · <a href="https://github.com/BartoszOsiej/talus-process-monitor">GitHub</a> · MIT License</p>
 </footer>
 
 <script>

@@ -65,7 +65,7 @@ var (
 )
 
 func init() {
-	flag.StringVar(&baseURL, "url", "http://localhost:8080", "Halcyon daemon URL")
+	flag.StringVar(&baseURL, "url", "http://localhost:8080", "Talus daemon URL")
 	flag.BoolVar(&jsonOutput, "json", false, "JSON output")
 	flag.BoolVar(&watchMode, "watch", false, "Watch mode (WebSocket)")
 }
@@ -74,7 +74,7 @@ func main() {
 	flag.Parse()
 
 	if flag.NArg() == 0 {
-		fmt.Fprintf(os.Stderr, "Usage: halcyon-agent <command> [options]\n\nCommands:\n  stats       Show global statistics\n  processes   List tracked processes\n  files       Show top opened files\n  extensions  Show file extension frequency\n  watch       Watch events in real-time (WebSocket)\n  tree        Show process tree\n  version     Show version\n\nOptions:\n")
+		fmt.Fprintf(os.Stderr, "Usage: talus-agent <command> [options]\n\nCommands:\n  stats       Show global statistics\n  processes   List tracked processes\n  files       Show top opened files\n  extensions  Show file extension frequency\n  watch       Watch events in real-time (WebSocket)\n  tree        Show process tree\n  version     Show version\n\nOptions:\n")
 		flag.PrintDefaults()
 		os.Exit(1)
 	}
@@ -94,7 +94,7 @@ func main() {
 	case "tree":
 		cmdTree()
 	case "version":
-		fmt.Println("halcyon-agent v0.3.0")
+		fmt.Println("talus-agent v0.3.0")
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command: %s\n", cmd)
 		os.Exit(1)
@@ -104,7 +104,7 @@ func main() {
 func getJSON(path string, target interface{}) error {
 	resp, err := http.Get(baseURL + path)
 	if err != nil {
-		return fmt.Errorf("connection failed: %w (is halcyon daemon running?)", err)
+		return fmt.Errorf("connection failed: %w (is talus daemon running?)", err)
 	}
 	defer resp.Body.Close()
 
@@ -135,7 +135,7 @@ func cmdStats() {
 	if jsonOutput {
 		json.NewEncoder(os.Stdout).Encode(stats)
 	} else {
-		fmt.Printf("📊 Halcyon eBPF Monitor\n")
+		fmt.Printf("📊 Talus eBPF Monitor\n")
 		fmt.Printf("  Events:   %d\n", stats.TotalEvents)
 		fmt.Printf("  Lost:     %d\n", stats.TotalLost)
 		fmt.Printf("  Uptime:   %ds\n", stats.UptimeSecs)
@@ -268,7 +268,7 @@ func cmdWatch() {
 	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "WebSocket connection failed: %v\n", err)
-		fmt.Fprintf(os.Stderr, "Is halcyon daemon running with --web flag?\n")
+		fmt.Fprintf(os.Stderr, "Is talus daemon running with --web flag?\n")
 		os.Exit(1)
 	}
 	defer conn.Close()
