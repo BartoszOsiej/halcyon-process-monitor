@@ -1,6 +1,7 @@
 # platform
 .DS_Store
 *.log
+*.pdf
 
 target/
 .idea/

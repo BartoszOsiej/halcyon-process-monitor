@@ -1,4 +1,4 @@
-//! Filesystem and signal eBPF tracepoint programs for Halcyon Process Monitor.
+//! Filesystem and signal eBPF tracepoint programs for Talus Process Monitor.
 //!
 //! Traces mkdir, unlink, rmdir, kill, and chmod syscalls — high-signal
 //! events for security monitoring (file tampering, process killing).

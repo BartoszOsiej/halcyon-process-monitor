@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ╔══════════════════════════════════════════════════════════════════════╗
-# ║  HALCYON — Graphical Installer                                     ║
+# ║  TALUS — Graphical Installer                                     ║
 # ║  eBPF Endpoint Security Agent for Linux                             ║
 # ║  Beautiful zenity-based GTK installer                              ║
 # ╚══════════════════════════════════════════════════════════════════════╝
@@ -8,12 +8,12 @@ set -euo pipefail
 
 # ── Config ──────────────────────────────────────────────────────────────
 INSTALL_DIR="/usr/local/bin"
-LIB_DIR="/usr/local/lib/halcyon"
+LIB_DIR="/usr/local/lib/talus"
 EBPF_NAME="process-monitor-ebpf"
-BINARY_NAME="halcyon"
+BINARY_NAME="talus"
 SOURCE_DIR="$(cd "$(dirname "$0")" && pwd)"
-BUILD_LOG="/tmp/halcyon-install.log"
-DESKTOP_FILE="/usr/share/applications/halcyon.desktop"
+BUILD_LOG="/tmp/talus-install.log"
+DESKTOP_FILE="/usr/share/applications/talus.desktop"
 
 # ── Colors ──────────────────────────────────────────────────────────────
 RED='\033[0;31m'; GREEN='\033[0;32m'; CYAN='\033[0;36m'
@@ -41,7 +41,7 @@ get_sudo() {
 
     if $HAS_DISPLAY && command -v zenity &>/dev/null; then
         SUDO_PW=$(zenity --password --title="🔒 Root Access Required" \
-            --width=360 --text="Enter your password to install Halcyon:" 2>/dev/null) || {
+            --width=360 --text="Enter your password to install Talus:" 2>/dev/null) || {
             z --error --width=340 --title="❌ Cancelled" \
                 --text="Installation cancelled — root password required." 2>/dev/null
             exit 1
@@ -142,7 +142,7 @@ show_welcome() {
         STATUS_LINES+="  <span foreground='#fab432'>!</span>  BTF not found\n"
     fi
 
-    local MSG="<span size='x-large' foreground='#58A6FF'><b>⚡ Halcyon Installer</b></span>
+    local MSG="<span size='x-large' foreground='#58A6FF'><b>⚡ Talus Installer</b></span>
 
 <span size='large'>eBPF Endpoint Security Agent</span>
 
@@ -151,9 +151,9 @@ show_welcome() {
 ${STATUS_LINES}
 <span foreground='#505064'>$(date '+%Y-%m-%d %H:%M')</span>"
 
-    z --info --title="⚡ Halcyon Installer" --width=520 --height=400 \
+    z --info --title="⚡ Talus Installer" --width=520 --height=400 \
         --text="$MSG" --ok-label="Install ⚡" 2>/dev/null || {
-        echo -e "\n${BOLD}${CYAN}⚡ Halcyon Installer${NC}"
+        echo -e "\n${BOLD}${CYAN}⚡ Talus Installer${NC}"
         echo -e "$STATUS_LINES" | sed 's/<[^>]*>//g'
         read -p "Press Enter to continue..."
     }
@@ -173,7 +173,7 @@ build_if_needed() {
     fi
 
     # Need to build — check dependencies first
-    echo -e "${BOLD}${CYAN}🔨 Building Halcyon from source...${NC}"
+    echo -e "${BOLD}${CYAN}🔨 Building Talus from source...${NC}"
     echo -e "  ${DIM}This uses stable Rust (no nightly needed for userspace)${NC}"
 
     # Check clang
@@ -231,7 +231,7 @@ install_files() {
 
     # Create icon
     echo "$SUDO_PW" | sudo -S mkdir -p /usr/share/icons/hicolor/256x256/apps 2>/dev/null
-    local ICON_SVG="/tmp/halcyon-icon.svg"
+    local ICON_SVG="/tmp/talus-icon.svg"
     cat > "$ICON_SVG" << 'SVGEOF'
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
   <defs>
@@ -252,16 +252,16 @@ install_files() {
 </svg>
 SVGEOF
     if command -v rsvg-convert &>/dev/null; then
-        rsvg-convert -w 256 -h 256 "$ICON_SVG" -o /tmp/halcyon-icon.png 2>/dev/null
-        echo "$SUDO_PW" | sudo -S cp /tmp/halcyon-icon.png /usr/share/icons/hicolor/256x256/apps/halcyon.png 2>/dev/null || true
+        rsvg-convert -w 256 -h 256 "$ICON_SVG" -o /tmp/talus-icon.png 2>/dev/null
+        echo "$SUDO_PW" | sudo -S cp /tmp/talus-icon.png /usr/share/icons/hicolor/256x256/apps/talus.png 2>/dev/null || true
     fi
 
     # Desktop entry
     local DESKTOP_CONTENT="[Desktop Entry]
-Name=Halcyon
+Name=Talus
 Comment=eBPF Endpoint Security Agent
 Exec=sudo $INSTALL_DIR/$BINARY_NAME
-Icon=halcyon
+Icon=talus
 Terminal=true
 Type=Application
 Categories=System;Security;Monitor;
@@ -285,10 +285,10 @@ verify_and_show() {
     local HELP_TEXT
     HELP_TEXT=$("$INSTALL_DIR/$BINARY_NAME" --help 2>/dev/null | head -20 || echo "")
 
-    z --info --title="✅ Halcyon Installed!" --width=560 --height=420 \
+    z --info --title="✅ Talus Installed!" --width=560 --height=420 \
         --text="<span size='x-large' foreground='#00ff64'><b>✅ Installation Complete!</b></span>
 
-<span size='large'>Halcyon ${VER}</span>
+<span size='large'>Talus ${VER}</span>
 
 <span foreground='#8892a8'>Installed files:</span>
 
@@ -298,24 +298,24 @@ verify_and_show() {
 
 <span foreground='#8892a8'>Quick start:</span>
 
-  <span foreground='#00ff64' font='monospace'>sudo halcyon</span>                    TUI mode
-  <span foreground='#00ff64' font='monospace'>sudo halcyon --auto-kill</span>         EDR mode (detect + respond)
-  <span foreground='#00ff64' font='monospace'>sudo halcyon --json | jq .</span>       JSON output
-  <span foreground='#00ff64' font='monospace'>sudo halcyon --web 0.0.0.0:8080</span> Web dashboard
+  <span foreground='#00ff64' font='monospace'>sudo talus</span>                    TUI mode
+  <span foreground='#00ff64' font='monospace'>sudo talus --auto-kill</span>         EDR mode (detect + respond)
+  <span foreground='#00ff64' font='monospace'>sudo talus --json | jq .</span>       JSON output
+  <span foreground='#00ff64' font='monospace'>sudo talus --web 0.0.0.0:8080</span> Web dashboard
 
 <span foreground='#505064'>Build log: $BUILD_LOG</span>" \
         --ok-label="Done ⚡" 2>/dev/null || {
         echo ""
-        echo -e "${BOLD}${GREEN}✅ Halcyon installed successfully!${NC}"
+        echo -e "${BOLD}${GREEN}✅ Talus installed successfully!${NC}"
         echo ""
         echo -e "  ${BOLD}Binary:${NC}  $INSTALL_DIR/$BINARY_NAME ($VER)"
         echo -e "  ${BOLD}eBPF:${NC}    $LIB_DIR/$EBPF_NAME"
         echo ""
         echo -e "  ${CYAN}Quick start:${NC}"
-        echo -e "    sudo halcyon                    # TUI mode"
-        echo -e "    sudo halcyon --auto-kill         # EDR mode"
-        echo -e "    sudo halcyon --json | jq .       # JSON output"
-        echo -e "    sudo halcyon --web 0.0.0.0:8080  # Web dashboard"
+        echo -e "    sudo talus                    # TUI mode"
+        echo -e "    sudo talus --auto-kill         # EDR mode"
+        echo -e "    sudo talus --json | jq .       # JSON output"
+        echo -e "    sudo talus --web 0.0.0.0:8080  # Web dashboard"
         echo ""
     }
 }
@@ -325,7 +325,7 @@ verify_and_show() {
 # ╚══════════════════════════════════════════════════════════════════════╝
 
 main() {
-    echo "=== Halcyon Installer — $(date) ===" > "$BUILD_LOG"
+    echo "=== Talus Installer — $(date) ===" > "$BUILD_LOG"
 
     show_welcome
 

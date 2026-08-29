@@ -7,11 +7,11 @@
 //
 // Uses batch inserts with configurable:
 //   - Connection URL (default: http://localhost:8123)
-//   - Database name (default: halcyon)
+//   - Database name (default: talus)
 //   - Batch size and flush interval
 //
 // Schema (auto-created on startup):
-//   CREATE TABLE IF NOT EXISTS halcyon.events (
+//   CREATE TABLE IF NOT EXISTS talus.events (
 //       ts DateTime64(3),
 //       kind LowCardinality(String),
 //       pid UInt32,
@@ -45,7 +45,7 @@ impl Default for ClickHouseConfig {
     fn default() -> Self {
         Self {
             url: "http://localhost:8123".into(),
-            database: "halcyon".into(),
+            database: "talus".into(),
             batch_size: 1000,
             flush_interval_ms: 1000,
         }

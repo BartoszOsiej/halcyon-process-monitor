@@ -1,6 +1,6 @@
-# Halcyon Process Monitor — Architecture
+# Talus Process Monitor — Architecture
 
-This document describes the internal architecture of Halcyon Process Monitor:
+This document describes the internal architecture of Talus Process Monitor:
 the kernel-side eBPF programs, the userspace event pipeline, the sliding-window
 alerting heuristic, and the output layer. It is intended for developers
 extending or debugging the project.
@@ -30,7 +30,7 @@ extending or debugging the project.
 │                             USERSPACE                                        │
 │                                                                              │
 │   ┌────────────────────┐   MPSC   ┌───────────────────────────────────────┐  │
-│   │ halcyon-reader     │ channel  │ Monitor                               │  │
+│   │ talus-reader     │ channel  │ Monitor                               │  │
 │   │ thread             │─────────►│  • sliding window per PID (1 s)       │  │
 │   │  • open perf buf   │          │  • threshold alerting                 │  │
 │   │  • decode events   │          │  • per-process stats                  │  │
@@ -38,7 +38,7 @@ extending or debugging the project.
 │                                                   │ Output::Event/Alert     │
 │                         ┌─────────────────────────┴──────────────────┐       │
 │                         │        Output layer (main thread)          │       │
-│                         │  TUI (ratatui) │ JSON │ Plain │ Diagnose    │       │
+│                         │  TUI (frankentui) │ JSON │ Plain │ Diagnose    │       │
 │                         └────────────────────────────────────────────┘       │
 └───────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -123,7 +123,7 @@ one reader per online CPU.
    and moved into the reader thread.
 5. **Channel** — an MPSC channel connects the reader thread to the monitor.
 
-### 3.2 Reader thread (`spawn_reader`, named `halcyon-reader`)
+### 3.2 Reader thread (`spawn_reader`, named `talus-reader`)
 
 - Enumerates online CPUs and opens a `PerfEventArrayBuffer` per CPU.
 - Loop: `read_events` on every buffer; batches are decoded into pre-allocated

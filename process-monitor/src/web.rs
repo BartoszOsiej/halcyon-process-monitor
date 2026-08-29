@@ -13,6 +13,9 @@ use prometheus_client::registry::Registry;
 use serde::{Deserialize, Serialize};
 use tokio::sync::{broadcast, Mutex};
 
+use axum::http::{header, HeaderValue, Request, Response};
+use tower::{Layer, Service};
+
 use crate::monitor::{Kind, Monitor, Output};
 
 // ── Shared state ──────────────────────────────────────────────────────────
@@ -36,37 +39,37 @@ impl AppState {
         let mut registry = Registry::default();
         let events_total = Counter::default();
         registry.register(
-            "halcyon_events_total",
+            "talus_events_total",
             "Total number of eBPF events received",
             events_total.clone(),
         );
         let exec_events_total = Counter::default();
         registry.register(
-            "halcyon_exec_events_total",
+            "talus_exec_events_total",
             "Total number of execve events",
             exec_events_total.clone(),
         );
         let open_events_total = Counter::default();
         registry.register(
-            "halcyon_open_events_total",
+            "talus_open_events_total",
             "Total number of openat events",
             open_events_total.clone(),
         );
         let alerts_total = Counter::default();
         registry.register(
-            "halcyon_alerts_total",
+            "talus_alerts_total",
             "Total number of alerts fired",
             alerts_total.clone(),
         );
         let lost_events_total = Counter::default();
         registry.register(
-            "halcyon_lost_events_total",
+            "talus_lost_events_total",
             "Total number of lost events (perf buffer overruns)",
             lost_events_total.clone(),
         );
         let ws_connections = Counter::default();
         registry.register(
-            "halcyon_ws_connections_total",
+            "talus_ws_connections_total",
             "Total number of WebSocket connections",
             ws_connections.clone(),
         );
@@ -365,7 +368,7 @@ const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Halcyon eBPF Monitor</title>
+<title>Talus eBPF Monitor</title>
 <style>
   :root { --bg: #0a0a1a; --panel: #111127; --border: #1e1e3a; --cyan: #00ffff; --green: #00ff64; --red: #ff3232; --yellow: #ffff00; --magenta: #ff00ff; --dim: #505064; }
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -395,7 +398,7 @@ const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
 </head>
 <body>
 <div class="header">
-  <h1>⚡ HALCYON eBPF MONITOR</h1>
+  <h1>⚡ TALUS eBPF MONITOR</h1>
   <div class="stats" id="stats">loading...</div>
 </div>
 <div class="grid">
@@ -424,6 +427,85 @@ setInterval(async()=>{try{const r=await fetch('/api/v1/files');const j=await r.j
 </body>
 </html>"#;
 
+// ── Security Headers Middleware ─────────────────────────────────────────
+
+/// Layer that adds security headers to all HTTP responses.
+///
+/// Headers added:
+/// - `X-Content-Type-Options: nosniff` — prevents MIME type sniffing
+/// - `X-Frame-Options: DENY` — prevents clickjacking
+/// - `X-XSS-Protection: 1; mode=block` — legacy XSS filter
+/// - `Referrer-Policy: strict-origin-when-cross-origin` — limits referrer leakage
+/// - `Permissions-Policy: camera=(), microphone=(), geolocation=()` — disables dangerous APIs
+/// - `Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; ...`
+#[derive(Clone)]
+struct SecurityHeadersLayer;
+
+impl<S> Layer<S> for SecurityHeadersLayer {
+    type Service = SecurityHeadersService<S>;
+    fn layer(&self, inner: S) -> Self::Service {
+        SecurityHeadersService { inner }
+    }
+}
+
+#[derive(Clone)]
+struct SecurityHeadersService<S> {
+    inner: S,
+}
+
+impl<S, ReqBody> Service<Request<ReqBody>> for SecurityHeadersService<S>
+where
+    S: Service<Request<ReqBody>, Response = Response<axum::body::Body>> + Clone + Send + 'static,
+    S::Future: Send + 'static,
+    ReqBody: Send + 'static,
+{
+    type Response = Response<axum::body::Body>;
+    type Error = S::Error;
+    type Future = std::pin::Pin<Box<dyn std::future::Future<Output = Result<Self::Response, Self::Error>> + Send>>;
+
+    fn poll_ready(
+        &mut self,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), Self::Error>> {
+        self.inner.poll_ready(cx)
+    }
+
+    fn call(&mut self, req: Request<ReqBody>) -> Self::Future {
+        let fut = self.inner.call(req);
+        Box::pin(async move {
+            let mut response = fut.await?;
+            let headers = response.headers_mut();
+
+            headers.insert(
+                header::HeaderName::from_static("x-content-type-options"),
+                HeaderValue::from_static("nosniff"),
+            );
+            headers.insert(
+                header::HeaderName::from_static("x-frame-options"),
+                HeaderValue::from_static("DENY"),
+            );
+            headers.insert(
+                header::HeaderName::from_static("x-xss-protection"),
+                HeaderValue::from_static("1; mode=block"),
+            );
+            headers.insert(
+                header::HeaderName::from_static("referrer-policy"),
+                HeaderValue::from_static("strict-origin-when-cross-origin"),
+            );
+            headers.insert(
+                header::HeaderName::from_static("permissions-policy"),
+                HeaderValue::from_static("camera=(), microphone=(), geolocation=()"),
+            );
+            headers.insert(
+                header::CONTENT_SECURITY_POLICY,
+                HeaderValue::from_static("default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ws: wss:"),
+            );
+
+            Ok(response)
+        })
+    }
+}
+
 // ── Public entry point ────────────────────────────────────────────────────
 
 pub async fn start_web_server(
@@ -446,12 +528,13 @@ pub async fn start_web_server(
         .route("/api/v1/threshold", post(set_threshold))
         .route("/metrics", get(metrics_handler))
         .with_state(state)
-        .layer(tower_http::cors::CorsLayer::permissive());
+        .layer(tower_http::cors::CorsLayer::permissive())
+        .layer(SecurityHeadersLayer);
 
-    eprintln!("[halcyon] web server listening on http://{addr}");
-    eprintln!("[halcyon] dashboard: http://{addr}/");
-    eprintln!("[halcyon] websocket: ws://{addr}/ws");
-    eprintln!("[halcyon] prometheus: http://{addr}/metrics");
+    eprintln!("[talus] web server listening on http://{addr}");
+    eprintln!("[talus] dashboard: http://{addr}/");
+    eprintln!("[talus] websocket: ws://{addr}/ws");
+    eprintln!("[talus] prometheus: http://{addr}/metrics");
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
     axum::serve(listener, app).await?;
