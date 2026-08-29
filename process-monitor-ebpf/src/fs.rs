@@ -212,7 +212,7 @@ pub fn sys_enter_kill(ctx: TracePointContext) -> u32 {
             }
 
             // Write signal name using pointer arithmetic
-            pos = unsafe { write_sig_ptr(argv_ptr, pos, sig) };
+            _ = unsafe { write_sig_ptr(argv_ptr, pos, sig) };
         }
     }
 

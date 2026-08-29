@@ -5,12 +5,11 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use anyhow::{bail, Context, Result};
-use aya::maps::perf::PerfEventArrayBuffer;
+use aya::maps::perf::{PerfEvent, PerfEventArrayBuffer};
 use aya::maps::{MapData, PerfEventArray};
 use aya::programs::TracePoint;
 use aya::util::online_cpus;
 use aya::Ebpf;
-use bytes::BytesMut;
 use chrono::Local;
 
 pub const EVENT_EXECVE: u8 = 0;
@@ -28,8 +27,7 @@ const EVENT_COMM_LEN: usize = 16;
 const EVENT_FILENAME_LEN: usize = 64;
 const EVENT_ARGV_LEN: usize = 128;
 const WINDOW_SECS: u64 = 1;
-const OUT_BUFS: usize = 128;
-const OUT_BUF_CAP: usize = 4096;
+
 
 // ── eBPF event record (must match kernel-side #[repr(C)]) ────────────────
 
@@ -647,37 +645,49 @@ fn spawn_reader(
     thread::Builder::new()
         .name("talus-reader".into())
         .spawn(move || {
-            let mut out = vec![BytesMut::with_capacity(OUT_BUF_CAP); OUT_BUFS];
             loop {
                 let mut idle = true;
                 for buf in buffers.iter_mut() {
-                    match buf.read_events(&mut out) {
-                        Ok(events) => {
-                            if events.read > 0 {
-                                idle = false;
-                            }
-                            if events.lost > 0 && tx.send(Msg::Lost(events.lost as u64)).is_err() {
-                                return;
-                            }
-                            for raw in out.iter().take(events.read) {
-                                // SAFETY: The raw bytes come from the perf buffer and were
-                                // written by the kernel-side eBPF program as a ProcessEvent
-                                // (#[repr(C)] fixed-size struct). read_unaligned is used
-                                // because perf buffer alignment is not guaranteed. The struct
-                                // layout matches the kernel-side definition exactly.
-                                let evt = unsafe {
-                                    std::ptr::read_unaligned(raw.as_ptr() as *const ProcessEvent)
-                                };
-                                if tx.send(Msg::Event(to_recorded(&evt))).is_err() {
-                                    return;
+                    buf.for_each(|event| {
+                        idle = false;
+                        match event {
+                            PerfEvent::Sample { head, tail } => {
+                                // The sample payload may span the ring boundary;
+                                // concatenate head + tail into a contiguous buffer.
+                                let total_len = head.len() + tail.len();
+                                if total_len >= size_of::<ProcessEvent>() {
+                                    // SAFETY: The raw bytes come from the perf buffer and were
+                                    // written by the kernel-side eBPF program as a ProcessEvent
+                                    // (#[repr(C)] fixed-size struct). read_unaligned is used
+                                    // because perf buffer alignment is not guaranteed. The struct
+                                    // layout matches the kernel-side definition exactly.
+                                    if total_len == head.len() {
+                                        // Contiguous: no wrapping
+                                        let evt = unsafe {
+                                            std::ptr::read_unaligned(
+                                                head.as_ptr() as *const ProcessEvent,
+                                            )
+                                        };
+                                        let _ = tx.send(Msg::Event(to_recorded(&evt)));
+                                    } else {
+                                        // Wrapped: copy into a temporary buffer
+                                        let mut buf = vec![0u8; total_len];
+                                        buf[..head.len()].copy_from_slice(head);
+                                        buf[head.len()..].copy_from_slice(tail);
+                                        let evt = unsafe {
+                                            std::ptr::read_unaligned(
+                                                buf.as_ptr() as *const ProcessEvent,
+                                            )
+                                        };
+                                        let _ = tx.send(Msg::Event(to_recorded(&evt)));
+                                    }
                                 }
                             }
+                            PerfEvent::Lost { count } => {
+                                let _ = tx.send(Msg::Lost(count));
+                            }
                         }
-                        Err(e) => {
-                            eprintln!("[talus] perf buffer error: {e}");
-                            idle = true;
-                        }
-                    }
+                    });
                 }
                 if idle {
                     thread::sleep(Duration::from_millis(1));

@@ -343,37 +343,41 @@ dependencies = [
 
 [[package]]
 name = "aya"
-version = "0.13.1"
+version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d18bc4e506fbb85ab7392ed993a7db4d1a452c71b75a246af4a80ab8c9d2dd50"
+checksum = "66e644424fada9fff4fdc63848db1732fb69b626e8328202ef55c03df1f4d939"
 dependencies = [
  "assert_matches",
  "aya-obj",
  "bitflags 2.13.1",
- "bytes",
+ "hashbrown 0.17.1",
  "libc",
  "log",
  "object",
  "once_cell",
- "thiserror 1.0.69",
+ "scopeguard",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
 name = "aya-build"
-version = "0.1.3"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "59bc42f3c5ddacc34eca28a420b47e3cbb3f0f484137cb2bf1ad2153d0eae52a"
+checksum = "609b414caa508f04d2dbbc9481ad6869f43ab9ab1dc9abd237fca27c0818f663"
 dependencies = [
  "anyhow",
  "cargo_metadata",
+ "rustc_version",
+ "which",
 ]
 
 [[package]]
 name = "aya-ebpf"
-version = "0.1.1"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d8dbaf5409a1a0982e5c9bdc0f499a55fe5ead39fe9c846012053faf0d404f73"
+checksum = "eace5970943931fea46a8cbdca208a8f6a9e0413d85a5a6c4e168f0b909570bc"
 dependencies = [
+ "aya-build",
  "aya-ebpf-bindings",
  "aya-ebpf-cty",
  "aya-ebpf-macros",
@@ -382,9 +386,9 @@ dependencies = [
 
 [[package]]
 name = "aya-ebpf-bindings"
-version = "0.1.2"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "71ee8e6a617f040d8da7565ec4010aea75e33cda4662f64c019c66ee97d17889"
+checksum = "cf1f19286ebbda6673099b68d049034838f08e4939cef66c998a8d3e62825d76"
 dependencies = [
  "aya-build",
  "aya-ebpf-cty",
@@ -392,18 +396,18 @@ dependencies = [
 
 [[package]]
 name = "aya-ebpf-cty"
-version = "0.2.3"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e6f33396742e7fd0f519c1e0de5141d84e1a8df69146a557c08cc222b0ceace4"
+checksum = "0884264bc8a51a49fed03df8feada3a21d703cf501dae33c28bdba5d2313ef33"
 dependencies = [
  "aya-build",
 ]
 
 [[package]]
 name = "aya-ebpf-macros"
-version = "0.1.2"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "96fd02363736177e7e91d6c95d7effbca07be87502c7b5b32fc194aed8b177a0"
+checksum = "23e3a7f86e914df106dd00f9d757bc93f7d5c93380c51eead23d8d2ccd15a87a"
 dependencies = [
  "proc-macro2",
  "proc-macro2-diagnostics",
@@ -413,16 +417,14 @@ dependencies = [
 
 [[package]]
 name = "aya-obj"
-version = "0.2.1"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c51b96c5a8ed8705b40d655273bc4212cbbf38d4e3be2788f36306f154523ec7"
+checksum = "8c76b9c75d9cdc155ff8f6a06d61e873f67bf47be8cfa92a3b5aaea43f4b4077"
 dependencies = [
  "bytes",
- "core-error",
- "hashbrown 0.15.5",
  "log",
  "object",
- "thiserror 1.0.69",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -728,12 +730,24 @@ dependencies = [
 
 [[package]]
 name = "chrono-tz"
-version = "0.5.3"
+version = "0.8.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2554a3155fec064362507487171dcc4edc3df60cb10f3a1fb10ed8094822b120"
+checksum = "d59ae0466b83e838b81a54256c39d5d7c20b9d7daa10510a242d9b75abd5936e"
 dependencies = [
  "chrono",
+ "chrono-tz-build",
+ "phf",
+]
+
+[[package]]
+name = "chrono-tz-build"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "433e39f13c9a060046954e0592a8d0a4bcb1040125cbf91cb8ee58964cfb350f"
+dependencies = [
  "parse-zoneinfo",
+ "phf",
+ "phf_codegen",
 ]
 
 [[package]]
@@ -816,9 +830,9 @@ checksum = "c8d4a3bb8b1e0c1050499d1815f5ab16d04f0959b233085fb31653fbfc9d98f9"
 
 [[package]]
 name = "clickhouse-rs"
-version = "1.0.0-alpha.1"
+version = "1.1.0-alpha.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "41edeaeac73a2f3c39357e5dd42a08c2d41fbc5b85c35a76879dc10d87128010"
+checksum = "802fe62a5480415bcdbb5217b3ea029d748c9a3ce3b884767cf58888e33e7f65"
 dependencies = [
  "byteorder",
  "chrono",
@@ -826,6 +840,7 @@ dependencies = [
  "clickhouse-rs-cityhash-sys",
  "combine",
  "crossbeam",
+ "either",
  "futures-core",
  "futures-sink",
  "futures-util",
@@ -833,11 +848,12 @@ dependencies = [
  "lazy_static",
  "log",
  "lz4",
+ "percent-encoding",
  "pin-project",
  "thiserror 1.0.69",
  "tokio",
  "url",
- "uuid 0.8.2",
+ "uuid",
 ]
 
 [[package]]
@@ -887,12 +903,11 @@ checksum = "1d07550c9036bf2ae0c684c4297d503f838287c83c53686d05370d0e139ae570"
 
 [[package]]
 name = "colored"
-version = "2.2.0"
+version = "3.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "117725a109d387c937a1533ce01b450cbde6b88abceea8473c4d7a85853cda3c"
+checksum = "faf9468729b8cbcea668e36183cb69d317348c2e08e994829fb56ebfdfbaac34"
 dependencies = [
- "lazy_static",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -953,15 +968,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "633458d4ef8c78b72454de2d54fd6ab2e60f9e02be22f3c6104cdc8a4e0fceb9"
 dependencies = [
  "unicode-segmentation",
-]
-
-[[package]]
-name = "core-error"
-version = "0.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "efcdb2972eb64230b4c50646d8498ff73f5128d196a90c7236eec4cbe8619b8f"
-dependencies = [
- "version_check",
 ]
 
 [[package]]
@@ -1569,12 +1575,6 @@ name = "fnv"
 version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1"
-
-[[package]]
-name = "foldhash"
-version = "0.1.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d9c4f5dac5e15c24eb999c26181a6ca40b39fe946cbe4c263c7209467bc83af2"
 
 [[package]]
 name = "foldhash"
@@ -2187,24 +2187,13 @@ dependencies = [
 
 [[package]]
 name = "hashbrown"
-version = "0.15.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9229cfe53dfd69f0609a49f65461bd93001ea1ef889cd5529dd176593f5338a1"
-dependencies = [
- "allocator-api2",
- "equivalent",
- "foldhash 0.1.5",
-]
-
-[[package]]
-name = "hashbrown"
 version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "841d1cc9bed7f9236f321df977030373f4a4163ae1a7dbfe1a51a2c1a51d9100"
 dependencies = [
  "allocator-api2",
  "equivalent",
- "foldhash 0.2.0",
+ "foldhash",
 ]
 
 [[package]]
@@ -2215,7 +2204,7 @@ checksum = "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
 dependencies = [
  "allocator-api2",
  "equivalent",
- "foldhash 0.2.0",
+ "foldhash",
 ]
 
 [[package]]
@@ -3241,12 +3230,12 @@ dependencies = [
 
 [[package]]
 name = "object"
-version = "0.36.7"
+version = "0.39.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "62948e14d923ea95ea2c7c86c71013138b66525b86bdc08d2dcc262bdb497b87"
+checksum = "2e5a6c098c7a3b6547378093f5cc30bc54fd361ce711e05293a5cc589562739b"
 dependencies = [
  "crc32fast",
- "hashbrown 0.15.5",
+ "hashbrown 0.17.1",
  "indexmap",
  "memchr",
 ]
@@ -3842,13 +3831,13 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tower",
- "tower-http",
+ "tower-http 0.7.0",
  "urlencoding",
 ]
 
 [[package]]
 name = "process-monitor-ebpf"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "aya-ebpf",
  "aya-ebpf-macros",
@@ -3862,9 +3851,9 @@ checksum = "3d595e54a326bc53c1c197b32d295e14b169e3cfeaa8dc82b529f947fba6bcf5"
 
 [[package]]
 name = "prometheus-client"
-version = "0.22.3"
+version = "0.25.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "504ee9ff529add891127c4827eb481bd69dc0ebc72e9a682e187db4caa60c3ca"
+checksum = "ba70bf887030e45213b4a95c9b08d5a450b157f87c1d63661ed0847a12fa2aad"
 dependencies = [
  "dtoa",
  "itoa",
@@ -3874,9 +3863,9 @@ dependencies = [
 
 [[package]]
 name = "prometheus-client-derive-encode"
-version = "0.4.2"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "440f724eba9f6996b75d63681b0a92b06947f1457076d503a4d2e2c8f56442b8"
+checksum = "9adf1691c04c0a5ff46ff8f262b58beb07b0dbb61f96f9f54f6cbd82106ed87f"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4324,7 +4313,7 @@ dependencies = [
  "tokio",
  "tokio-native-tls",
  "tower",
- "tower-http",
+ "tower-http 0.6.11",
  "tower-service",
  "url",
  "wasm-bindgen",
@@ -4355,7 +4344,7 @@ dependencies = [
  "sync_wrapper",
  "tokio",
  "tower",
- "tower-http",
+ "tower-http 0.6.11",
  "tower-service",
  "url",
  "wasm-bindgen",
@@ -5383,6 +5372,24 @@ checksum = "4cfcf7e2740e6fc6d4d688b4ef00650406bb94adf4731e43c096c3a19fe40840"
 dependencies = [
  "bitflags 2.13.1",
  "bytes",
+ "futures-util",
+ "http",
+ "http-body",
+ "pin-project-lite",
+ "tower",
+ "tower-layer",
+ "tower-service",
+ "url",
+]
+
+[[package]]
+name = "tower-http"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b11f75e912b0c2be01b63d8cf8057b8c3f97cf34abb3d431a3a4c8675498e233"
+dependencies = [
+ "bitflags 2.13.1",
+ "bytes",
  "futures-core",
  "futures-util",
  "http",
@@ -5396,10 +5403,8 @@ dependencies = [
  "pin-project-lite",
  "tokio",
  "tokio-util",
- "tower",
  "tower-layer",
  "tower-service",
- "url",
 ]
 
 [[package]]
@@ -5755,12 +5760,6 @@ checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
 
 [[package]]
 name = "uuid"
-version = "0.8.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bc5cf98d8186244414c848017f0e2676b3fcb46807f6668a97dfe67359a3c4b7"
-
-[[package]]
-name = "uuid"
 version = "1.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2cefc03fd367c0c6d4305de1b312cf00248c4114f4a0418ce6a6af769e3b0bd9"
@@ -5981,7 +5980,7 @@ dependencies = [
  "mac_address",
  "sha2 0.10.9",
  "thiserror 1.0.69",
- "uuid 1.24.1",
+ "uuid",
 ]
 
 [[package]]
@@ -6190,6 +6189,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "which"
+version = "8.0.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bae2f2b2b816647a1cab1acc91f5bd20812d53cb344382635ec2181940c8034f"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "winapi"
 version = "0.3.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6337,15 +6345,6 @@ name = "windows-sys"
 version = "0.52.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "282be5f36a8ce781fad8c8ae18fa3f9beff57ec1b52cb3de0789201425d9a33d"
-dependencies = [
- "windows-targets",
-]
-
-[[package]]
-name = "windows-sys"
-version = "0.59.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e38bc4d79ed67fd075bcc251a1c39b32a1776bbe92e5bef1f0bf1f8c531853b"
 dependencies = [
  "windows-targets",
 ]

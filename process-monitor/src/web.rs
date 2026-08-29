@@ -349,6 +349,7 @@ fn spawn_event_forwarder(state: AppState) {
                                 opens: al.opens,
                             });
                         }
+                        Output::Action(_) => {}
                     }
                 }
             }
