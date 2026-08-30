@@ -5,7 +5,7 @@ metadata:
   namespace: observability
   labels:
     app.kubernetes.io/name: talus-ebpf-monitor
-    app.kubernetes.io/version: "0.3.0"
+    app.kubernetes.io/version: "0.7.0"
     app.kubernetes.io/component: eBPF-monitor
 spec:
   selector:
@@ -51,6 +51,15 @@ spec:
               add:
                 - CAP_BPF
                 - CAP_SYS_ADMIN
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+            runAsNonRoot: false
+          env:
+            - name: TALUS_ALARM_WEBHOOK
+              value: ""
+            - name: TALUS_LICENSE_SERVER
+              value: "https://license.talus.io"
           resources:
             requests:
               cpu: 50m
@@ -67,6 +76,9 @@ spec:
               readOnly: true
             - name: proc
               mountPath: /proc
+              readOnly: true
+            - name: license
+              mountPath: /etc/talus
               readOnly: true
           livenessProbe:
             httpGet:
@@ -93,4 +105,8 @@ spec:
           hostPath:
             path: /proc
             type: Directory
+        - name: license
+          secret:
+            secretName: talus-license
+            optional: true
       priorityClassName: system-cluster-critical

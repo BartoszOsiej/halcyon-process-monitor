@@ -16,10 +16,11 @@ members = [
 # bpfel-unknown-none and cannot be built/tested for the host; build.sh
 # invokes it explicitly with --manifest-path and -Z build-std.
 default-members = ["process-monitor"]
+exclude = ["license-keygen"]
 resolver = "2"
 
 [workspace.package]
-version = "0.4.0"
+version = "0.7.0"
 edition = "2021"
 license = "MIT"
 

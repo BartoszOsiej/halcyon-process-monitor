@@ -21,7 +21,7 @@ extern "C" {
 /* ── Version ────────────────────────────────────────────────────────────── */
 
 #define TALUS_VERSION_MAJOR 0
-#define TALUS_VERSION_MINOR 3
+#define TALUS_VERSION_MINOR 7
 #define TALUS_VERSION_PATCH 0
 
 /**
@@ -219,6 +219,34 @@ void talus_free_processes(talus_process_stats_t* stats, uint32_t count);
  * Frees an array of file ranks.
  */
 void talus_free_files(talus_file_rank_t* files, uint32_t count);
+
+/* ── License API ───────────────────────────────────────────────────────── */
+
+/**
+ * Returns the current license tier as a string.
+ * Possible values: "community", "enterprise", "trial"
+ * The returned string must be freed with talus_free_string().
+ */
+char* talus_license_tier(void);
+
+/**
+ * Checks if the current license allows a specific feature.
+ *
+ * @param feature   Feature name (e.g., "auto_kill", "web", "kafka").
+ * @return 1 if allowed, 0 if not.
+ */
+int talus_license_allows(const char* feature);
+
+/**
+ * Returns 1 if a valid enterprise license is active.
+ */
+int talus_license_is_enterprise(void);
+
+/**
+ * Returns the license status as a JSON string.
+ * The returned string must be freed with talus_free_string().
+ */
+char* talus_license_status(void);
 
 /* ── Convenience macros ─────────────────────────────────────────────────── */
 

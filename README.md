@@ -32,6 +32,7 @@ Talus is not a passive monitor. It is a **detect-and-respond** agent that hooks 
 - [Project Structure](#project-structure)
 - [Tested Live on Linux](#tested-live-on-linux)
 - [Docker / Kubernetes](#docker--kubernetes)
+- [Security & Hardening](#security--hardening)
 - [License](#license)
 
 ---
@@ -513,17 +514,154 @@ Talus follows a **20-level enterprise maturity model** — from open-source prot
 | L0 | Open Source Prototype | ✅ |
 | L1 | Supply Chain Security (cargo-deny, SBOM, gitleaks) | ✅ |
 | L2 | Build Provenance (SLSA, cosign, attestation) | ✅ |
-| L3 | Security Hardening (SAFETY docs, security headers) | ✅ |
-| L4 | Quality Gates (36 tests, clippy clean) | ✅ |
-| L5–L20 | Observability → Compliance → Enterprise | 🔜 |
+| L3 | Security Hardening (seccomp, caps, Landlock, audit) | ✅ |
+| L4 | Quality Gates (78 tests, clippy clean) | ✅ |
+| L5 | Agent Sandbox (seccomp-BPF, capability drop, Landlock) | ✅ |
+| L6 | Signed Audit Log (hash chain, SOC2 compliance) | ✅ |
+| L7 | Web Security (TLS, API auth, restricted CORS) | ✅ |
+| L8–L20 | Observability → Compliance → Enterprise | 🔜 |
 
 📄 [Full Enterprise Report (PDF)](docs/talus-enterprise-maturity-report.pdf) · [Maturity Model](MATURITY.md)
 
 ---
 
-## License
+## Security & Hardening
 
-MIT
+Talus is a security agent — it must be secure itself. Enterprise edition includes:
+
+### Agent Self-Sandboxing (`sandbox.rs`)
+
+| Layer | Mechanism | What it does |
+|-------|-----------|-------------|
+| **Capability dropping** | `prctl(PR_CAPBSET_DROP)` | Drops from root to 3 caps: `CAP_BPF`, `CAP_PERFMON`, `CAP_NET_ADMIN` |
+| **seccomp-BPF** | Whitelist syscall filter | Allows only ~75 syscalls needed for event loop; blocks `ptrace`, `bpf`, `execve`, `fork`, `open_by_handle_at`, `mount`, `init_module` |
+| **Landlock LSM** | Kernel ≥5.13 filesystem restrictions | Read-only access to `/sys/kernel/debug`, `/proc`, `~/.config/talus`, BPF object path only |
+
+```bash
+[sandbox] dropped 37 capabilities, kept: CAP_BPF, CAP_PERFMON, CAP_NET_ADMIN
+[sandbox] seccomp-BPF filter installed (75 allowed syscalls)
+[sandbox] Landlock FS restrictions applied
+[sandbox] hardening applied ✓
+```
+
+### Signed Audit Log (`audit.rs`)
+
+Every license operation is recorded in a **tamper-proof hash chain** (SOC2/ISO27001 compliance):
+
+```
+Each entry = SHA-256(HMAC(machine_key, prev_hash + timestamp + event + license_id + detail))
+```
+
+| Event | When |
+|-------|------|
+| `ACTIVATED` | License key activated |
+| `DEACTIVATED` | License deactivated |
+| `EXPIRED` | License expired |
+| `MISMATCH` | Machine fingerprint mismatch |
+| `TRANSFER` | License transferred to another machine |
+
+```bash
+talus license audit-log          # Show last 20 entries
+talus license verify-audit       # Verify hash chain integrity
+```
+
+### License Security (`license.rs`)
+
+| Feature | Implementation |
+|---------|---------------|
+| **Ed25519 signing** | License keys signed with Ed25519 keypair |
+| **Machine fingerprint** | License bound to hardware (CPU, motherboard, MAC) |
+| **Encryption at rest** | XOR encryption with machine-derived key |
+| **File permissions** | `0600` on `license.dat`, `0700` on config dir |
+| **Rate limiting** | Max 5 activation attempts per 5 minutes |
+| **Binary integrity** | XOR checksum detects key substitution |
+| **Config HMAC** | HMAC on `license.dat` + `.trial.dat` detects tampering |
+| **Offline grace** | 30-day grace period without internet |
+| **Downgrade protection** | Cannot downgrade from Enterprise |
+
+### Web Dashboard Security (`web.rs`)
+
+| Feature | Implementation |
+|---------|---------------|
+| **TLS (rustls)** | Self-signed cert, HTTPS only |
+| **API token auth** | `Authorization: Bearer <token>` or `X-API-Token: <token>` |
+| **Restricted CORS** | Only `https://localhost` allowed |
+| **Auth on all endpoints** | `TALUS_WEB_AUTH=1` env var enables auth on GET/POST |
+
+### Watchdog (`watchdog.rs`)
+
+Fail-closed heartbeat monitoring — if the eBPF pipeline crashes:
+
+```bash
+[watchdog] ⚠ ALARM: no heartbeat for 10s — eBPF pipeline may be unresponsive
+[watchdog] ✓ heartbeat restored — pipeline recovered
+```
+
+Webhook alarm via `TALUS_ALARM_WEBHOOK` env var.
+
+---
+
+## Licensing & Pricing
+
+Talus is available in two editions:
+
+| Feature | Community (Free) | Enterprise |
+|---------|:---:|:---:|
+| eBPF process monitoring | ✅ | ✅ |
+| TUI dashboard (7 panels) | ✅ | ✅ |
+| JSON / plain text output | ✅ | ✅ |
+| Ransomware detection alerts | ✅ | ✅ |
+| Auto-kill (EDR response) | ❌ | ✅ |
+| Web dashboard & REST API | ❌ | ✅ |
+| WebSocket live stream | ❌ | ✅ |
+| Prometheus /metrics | ❌ | ✅ |
+| Kafka event streaming | ❌ | ✅ |
+| ClickHouse analytics | ❌ | ✅ |
+| MemGraph process graphs | ❌ | ✅ |
+| C FFI library | ❌ | ✅ |
+| Agent sandboxing (seccomp/caps/Landlock) | ❌ | ✅ |
+| Signed audit log (hash chain) | ❌ | ✅ |
+| TLS + API auth on dashboard | ❌ | ✅ |
+| Priority support | ❌ | ✅ |
+
+### Quick Start
+
+```bash
+# Community (free, no license needed)
+sudo talus monitor
+
+# Enterprise (requires license)
+talus license activate <YOUR-LICENSE-KEY>
+sudo talus monitor --auto-kill
+```
+
+### License Management
+
+```bash
+talus license show              # View license status
+talus license activate <KEY>    # Activate online
+talus license deactivate        # Deactivate
+export-json         # Export as JSON
+talus license backup license.json       # Backup
+talus license restore license.json      # Restore
+transfer          # Transfer to another machine
+talus license audit-log          # View audit trail
+talus license verify             # Verify validity
+```
+
+### 30-Day Enterprise Trial
+
+Talus includes a **30-day Enterprise trial** on first run. No activation required — all Enterprise features are available during the trial period.
+
+### Getting a License
+
+- 🌐 [talus.io/enterprise](https://talus.io/enterprise) — purchase online
+- 📧 [licensing@talus.io](mailto:licensing@talus.io) — volume licensing
+- 🏢 Enterprise agreements available for teams of 10+
+
+### Source Code License
+
+MIT (see [LICENSE](LICENSE) for details)
 
 ---
 

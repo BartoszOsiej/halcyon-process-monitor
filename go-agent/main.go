@@ -94,7 +94,9 @@ func main() {
 	case "tree":
 		cmdTree()
 	case "version":
-		fmt.Println("talus-agent v0.3.0")
+		fmt.Println("talus-agent v0.7.0")
+	case "license":
+		cmdLicense()
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command: %s\n", cmd)
 		os.Exit(1)
@@ -321,4 +323,67 @@ func printEvent(ev WsEvent) {
 	case "alert":
 		fmt.Printf("%s \033[31m⚠ ALERT\033[0m [%d] %s — %d opens/s\n", ev.Ts, ev.PID, ev.Comm, ev.Opens)
 	}
+}
+
+type LicenseInfo struct {
+	Status         string   `json:"status"`
+	Tier           string   `json:"tier"`
+	LicenseID      string   `json:"license_id"`
+	Organization   string   `json:"organization"`
+	Expired        bool     `json:"expired"`
+	DaysRemaining  *int64   `json:"days_remaining"`
+	Activated      bool     `json:"activated"`
+	MachineBound   bool     `json:"machine_bound"`
+	Features       []string `json:"features"`
+}
+
+func cmdLicense() {
+	var info LicenseInfo
+	if err := getJSON("/api/v1/license", &info); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+
+	if jsonOutput {
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		enc.Encode(info)
+		return
+	}
+
+	// Pretty print
+	tierColor := "\033[33m" // yellow
+	if info.Tier == "enterprise" {
+		tierColor = "\033[32m" // green
+	}
+
+	fmt.Println()
+	fmt.Printf("  \033[36m╔══════════════════════════════════════════════════╗\033[0m\n")
+	fmt.Printf("  \033[36m║\033[0m  ◆ %sTALUS LICENSE\033[0m                              \033[36m║\033[0m\n", tierColor)
+	fmt.Printf("  \033[36m╠══════════════════════════════════════════════════╣\033[0m\n")
+	fmt.Printf("  \033[36m║\033[0m  Tier:         %s%-33s\033[0m \033[36m║\033[0m\n", tierColor, info.Tier)
+	if info.LicenseID != "" {
+		fmt.Printf("  \033[36m║\033[0m  License ID:   %-33s \033[36m║\033[0m\n", info.LicenseID)
+	}
+	if info.Organization != "" {
+		fmt.Printf("  \033[36m║\033[0m  Organization: %-33s \033[36m║\033[0m\n", info.Organization)
+	}
+
+	if info.Expired {
+		fmt.Printf("  \033[36m║\033[0m  Status:       \033[31m✗ EXPIRED\033[0m                        \033[36m║\033[0m\n")
+	} else if info.DaysRemaining != nil && *info.DaysRemaining <= 30 {
+		fmt.Printf("  \033[36m║\033[0m  Status:       \033[33m✓ VALID — %d days remaining\033[0m     \033[36m║\033[0m\n", *info.DaysRemaining)
+	} else {
+		fmt.Printf("  \033[36m║\033[0m  Status:       \033[32m✓ VALID\033[0m                            \033[36m║\033[0m\n")
+	}
+
+	if info.Activated {
+		fmt.Printf("  \033[36m║\033[0m  Activation:   \033[32m✓ activated\033[0m                       \033[36m║\033[0m\n")
+	} else {
+		fmt.Printf("  \033[36m║\033[0m  Activation:   \033[33m✗ not activated\033[0m                   \033[36m║\033[0m\n")
+	}
+
+	fmt.Printf("  \033[36m║\033[0m  Features:     %-33s \033[36m║\033[0m\n", strings.Join(info.Features, ", "))
+	fmt.Printf("  \033[36m╚══════════════════════════════════════════════════╝\033[0m\n")
+	fmt.Println()
 }

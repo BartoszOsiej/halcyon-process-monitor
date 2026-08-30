@@ -2,6 +2,64 @@
 
 All notable changes to talus-process-monitor will be documented in this file.
 
+## [0.7.0] - 2026-08-30
+
+### Enterprise Licensing System
+
+**Commercial License Management** ✅
+- Ed25519 license key signing and verification — cryptographically signed license keys
+- Online activation via HTTP API — machine-bound license activation
+- Feature gating — Community vs Enterprise tier with per-feature enable/disable
+- 30-day Enterprise trial — automatic trial on first run
+- Machine fingerprinting — MAC + hostname + CPU + systemd machine-id
+- License cache — persistent activation state in `~/.config/talus/license.json`
+- License CLI — `talus license activate/deactivate/show/verify/machine-id`
+
+**Keygen CLI (`talus-keygen`)** ✅
+- Ed25519 keypair generation for license signing
+- License key issuance with configurable tier, expiry, features, organization
+- License registry — tracks all issued licenses
+- Public key export for binary embedding
+- License revocation by ID
+
+**CLI Redesign** ✅
+- Proper subcommands: `talus license <cmd>` and `talus monitor [args]`
+- Default to monitor mode when no subcommand given
+- Professional startup banner with license tier display
+- Enterprise license requirement messages for gated features
+
+**Feature Gating** ✅
+- `--auto-kill` requires Enterprise license
+- `--web` requires Enterprise license
+- `--kafka-brokers` requires Enterprise license
+- `--clickhouse` requires Enterprise license
+- `--memgraph` requires Enterprise license
+- Graceful fallback to Community mode without license
+
+**TUI Integration** ✅
+- License tier badge in header (ENTERPRISE/COMMUNITY)
+- License status in status bar
+- Enhanced `talus license show` with colored Unicode box display
+- Days-remaining countdown for expiring licenses
+
+**New Dependencies**
+- `ed25519-dalek` — Ed25519 signature verification
+- `base64` — license key encoding
+- `reqwest` (blocking) — HTTP activation client
+- `dirs` — config directory resolution
+- `hostname` — machine fingerprinting
+
+**New Files**
+- `process-monitor/src/license.rs` — core license module (types, validation, activation, feature gating)
+- `license-keygen/` — standalone keygen CLI tool
+
+### Changed
+- Bumped version to 0.7.0
+- Refactored CLI from flat flags to proper subcommands
+- TUI `run()` now accepts `LicenseState` parameter
+- All Enterprise features gated behind license check
+- Startup banner shows license tier and organization
+
 ## [0.6.0] - 2026-08-28
 
 ### Enterprise Maturity Program

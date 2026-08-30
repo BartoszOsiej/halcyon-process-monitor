@@ -488,3 +488,63 @@ pub unsafe extern "C" fn talus_free_files(files: *mut TalusFileRank, count: u32)
         drop(Vec::from_raw_parts(files, count as usize, count as usize));
     }
 }
+
+// ── License FFI ──────────────────────────────────────────────────────────
+
+/// Returns the current license tier as a C string.
+/// Caller must free with `talus_free_string`.
+///
+/// Possible values: "community", "enterprise", "trial"
+#[unsafe(no_mangle)]
+pub extern "C" fn talus_license_tier() -> *mut c_char {
+    let state = crate::license::init_license();
+    let tier = state.tier_name().to_lowercase();
+    match CString::new(tier) {
+        Ok(s) => s.into_raw(),
+        Err(_) => ptr::null_mut(),
+    }
+}
+
+/// Returns 1 if the current license allows the given feature, 0 otherwise.
+///
+/// # Safety
+/// `feature` must be a valid null-terminated C string.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn talus_license_allows(feature: *const c_char) -> c_int {
+    if feature.is_null() {
+        return 0;
+    }
+    let feature_str = unsafe { CStr::from_ptr(feature) }
+        .to_str()
+        .unwrap_or("");
+    let state = crate::license::init_license();
+    if state.allows(feature_str) { 1 } else { 0 }
+}
+
+/// Returns 1 if a valid enterprise license is active, 0 otherwise.
+#[unsafe(no_mangle)]
+pub extern "C" fn talus_license_is_enterprise() -> c_int {
+    let state = crate::license::init_license();
+    if state.allows("auto_kill") { 1 } else { 0 }
+}
+
+/// Returns the license status as a JSON C string.
+/// Caller must free with `talus_free_string`.
+#[unsafe(no_mangle)]
+pub extern "C" fn talus_license_status() -> *mut c_char {
+    let state = crate::license::init_license();
+    let features_list = state.feature_list();
+    let features: Vec<&str> = features_list.iter().map(|s| s.as_str()).collect();
+    let json = serde_json::json!({
+        "tier": state.tier_name(),
+        "activated": state.is_activated,
+        "features": features,
+    });
+    match serde_json::to_string(&json) {
+        Ok(s) => match CString::new(s) {
+            Ok(cs) => cs.into_raw(),
+            Err(_) => ptr::null_mut(),
+        },
+        Err(_) => ptr::null_mut(),
+    }
+}

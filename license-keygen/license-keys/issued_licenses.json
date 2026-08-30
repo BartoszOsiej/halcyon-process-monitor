@@ -1,0 +1,14 @@
+{
+  "keys": null,
+  "licenses": [
+    {
+      "license_id": "TALUS-0000-6A93-E825",
+      "tier": "enterprise",
+      "organization": "Test Corp",
+      "expires_at": "2027-12-31T00:00:00Z",
+      "issued_at": "2026-08-30T08:21:57Z",
+      "key_string": "eyJleHBpcmVzX2F0IjoiMjAyNy0xMi0zMVQwMDowMDowMFoiLCJmZWF0dXJlcyI6bnVsbCwiaXNzdWVkX2F0IjoiMjAyNi0wOC0zMFQwODoyMTo1N1oiLCJsaWNlbnNlX2lkIjoiVEFMVVMtMDAwMC02QTkzLUU4MjUiLCJtYWNoaW5lX2lkIjpudWxsLCJtYXhfbm9kZXMiOjAsIm9yZ2FuaXphdGlvbiI6IlRlc3QgQ29ycCIsInRpZXIiOiJlbnRlcnByaXNlIn0=.pcyuHYvdga4Z3IIqjkK+rUw3xRN0AuVl488XBoOXmmQp/iNCjaA4LkHn4bVXW+CEJZPJ7u6h19Da4K511lXLBw==",
+      "features": null
+    }
+  ]
+}

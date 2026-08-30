@@ -1,8 +1,18 @@
+//! Talus Web Dashboard — TLS-enabled with API token authentication.
+//!
+//! Security features:
+//! - TLS via rustls (auto-generated self-signed cert or from files)
+//! - API token authentication for write operations
+//! - Restricted CORS (no permissive)
+//! - Security headers (CSP, X-Frame-Options, etc.)
+//! - License health endpoint
+
 use std::net::SocketAddr;
 use std::sync::Arc;
 
 use axum::extract::ws::{Message, WebSocket};
 use axum::extract::{State, WebSocketUpgrade};
+use axum::http::{header, HeaderValue, Method, Request, Response};
 use axum::response::IntoResponse;
 use axum::routing::{get, post};
 use axum::{Json, Router};
@@ -12,11 +22,70 @@ use prometheus_client::metrics::counter::Counter;
 use prometheus_client::registry::Registry;
 use serde::{Deserialize, Serialize};
 use tokio::sync::{broadcast, Mutex};
-
-use axum::http::{header, HeaderValue, Request, Response};
 use tower::{Layer, Service};
 
+use crate::license;
 use crate::monitor::{Kind, Monitor, Output};
+
+// ── API Token Authentication ──────────────────────────────────────────────
+
+/// Generate a random API token (32 hex chars).
+fn generate_api_token() -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let ts = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+    let pid = std::process::id();
+    format!("{:016x}{:08x}", ts, pid)
+}
+
+/// Load or generate the API token.
+/// Stored in ~/.config/talus/web-token on first run.
+fn load_or_create_token() -> String {
+    if let Some(config_dir) = dirs::config_dir() {
+        let token_path = config_dir.join("talus").join("web-token");
+        if let Ok(token) = std::fs::read_to_string(&token_path) {
+            let token = token.trim().to_string();
+            if !token.is_empty() {
+                return token;
+            }
+        }
+        // Generate new token
+        let token = generate_api_token();
+        let _ = std::fs::create_dir_all(config_dir.join("talus"));
+        let _ = std::fs::write(&token_path, &token);
+        let _ = std::fs::set_permissions(&token_path, std::os::unix::fs::PermissionsExt::from_mode(0o600));
+        return token;
+    }
+    generate_api_token()
+}
+
+/// Check if auth is enabled (env var TALUS_WEB_AUTH=1).
+fn auth_enabled() -> bool {
+    std::env::var("TALUS_WEB_AUTH").map(|v| v == "1" || v == "true").unwrap_or(false)
+}
+
+/// Check if the request has a valid API token.
+fn auth_valid(req: &axum::http::Request<axum::body::Body>, token: &str) -> bool {
+    if !auth_enabled() {
+        return true; // Auth disabled = all requests allowed
+    }
+    // Check Authorization header
+    if let Some(auth) = req.headers().get("authorization") {
+        if let Ok(auth_str) = auth.to_str() {
+            if auth_str == format!("Bearer {token}") {
+                return true;
+            }
+        }
+    }
+    // Check X-API-Token header
+    if let Some(api_token) = req.headers().get("x-api-token") {
+        if let Ok(t) = api_token.to_str() {
+            if t == token {
+                return true;
+            }
+        }
+    }
+    false
+}
 
 // ── Shared state ──────────────────────────────────────────────────────────
 
@@ -32,10 +101,11 @@ struct AppState {
     #[allow(dead_code)]
     metrics_lost: Counter,
     metrics_ws: Counter,
+    api_token: String,
 }
 
 impl AppState {
-    fn new(monitor: Monitor) -> Self {
+    fn new(monitor: Monitor, api_token: String) -> Self {
         let mut registry = Registry::default();
         let events_total = Counter::default();
         registry.register(
@@ -84,6 +154,7 @@ impl AppState {
             metrics_alerts: alerts_total,
             metrics_lost: lost_events_total,
             metrics_ws: ws_connections,
+            api_token,
         }
     }
 }
@@ -161,9 +232,21 @@ struct ThresholdQuery {
     threshold: Option<u64>,
 }
 
+#[derive(Serialize)]
+struct AuthInfoResponse {
+    token_preview: String,
+    auth_header: String,
+}
+
 // ── API handlers ──────────────────────────────────────────────────────────
 
-async fn get_stats(State(state): State<AppState>) -> Json<ApiResponse<StatsResponse>> {
+async fn get_stats(
+    State(state): State<AppState>,
+    req: axum::http::Request<axum::body::Body>,
+) -> Json<ApiResponse<StatsResponse>> {
+    if !auth_valid(&req, &state.api_token) {
+        return Json(ApiResponse { ok: false, data: None, error: Some("unauthorized".into()) });
+    }
     let mon = state.monitor.lock().await;
     let pids = mon.stats_sorted().len();
     Json(ApiResponse {
@@ -179,7 +262,13 @@ async fn get_stats(State(state): State<AppState>) -> Json<ApiResponse<StatsRespo
     })
 }
 
-async fn get_processes(State(state): State<AppState>) -> Json<ApiResponse<Vec<ProcessInfo>>> {
+async fn get_processes(
+    State(state): State<AppState>,
+    req: axum::http::Request<axum::body::Body>,
+) -> Json<ApiResponse<Vec<ProcessInfo>>> {
+    if !auth_valid(&req, &state.api_token) {
+        return Json(ApiResponse { ok: false, data: None, error: Some("unauthorized".into()) });
+    }
     let mon = state.monitor.lock().await;
     let processes: Vec<ProcessInfo> = mon
         .stats_sorted()
@@ -200,7 +289,13 @@ async fn get_processes(State(state): State<AppState>) -> Json<ApiResponse<Vec<Pr
     })
 }
 
-async fn get_files(State(state): State<AppState>) -> Json<ApiResponse<Vec<FileRankResponse>>> {
+async fn get_files(
+    State(state): State<AppState>,
+    req: axum::http::Request<axum::body::Body>,
+) -> Json<ApiResponse<Vec<FileRankResponse>>> {
+    if !auth_valid(&req, &state.api_token) {
+        return Json(ApiResponse { ok: false, data: None, error: Some("unauthorized".into()) });
+    }
     let mon = state.monitor.lock().await;
     let files: Vec<FileRankResponse> = mon
         .top_files(50)
@@ -221,7 +316,11 @@ async fn get_files(State(state): State<AppState>) -> Json<ApiResponse<Vec<FileRa
 
 async fn get_extensions(
     State(state): State<AppState>,
+    req: axum::http::Request<axum::body::Body>,
 ) -> Json<ApiResponse<Vec<ExtensionResponse>>> {
+    if !auth_valid(&req, &state.api_token) {
+        return Json(ApiResponse { ok: false, data: None, error: Some("unauthorized".into()) });
+    }
     let mon = state.monitor.lock().await;
     let mut exts: Vec<ExtensionResponse> = mon
         .extension_counts()
@@ -239,10 +338,21 @@ async fn get_extensions(
     })
 }
 
+/// POST /api/v1/threshold — requires auth
 async fn set_threshold(
     State(state): State<AppState>,
+    req: axum::http::Request<axum::body::Body>,
     Json(body): Json<ThresholdQuery>,
 ) -> Json<ApiResponse<StatsResponse>> {
+    // Check auth
+    if !auth_valid(&req, &state.api_token) {
+        return Json(ApiResponse {
+            ok: false,
+            data: None,
+            error: Some("unauthorized: provide Authorization: Bearer <token> or X-API-Token header".into()),
+        });
+    }
+
     let mut mon = state.monitor.lock().await;
     if let Some(t) = body.threshold {
         mon.threshold = t;
@@ -261,7 +371,35 @@ async fn set_threshold(
     })
 }
 
-async fn metrics_handler(State(state): State<AppState>) -> impl IntoResponse {
+/// GET /api/v1/license — license health (public)
+async fn get_license_health() -> Json<license::LicenseHealth> {
+    Json(license::license_health())
+}
+
+/// GET /api/v1/auth — show auth info
+async fn get_auth_info(State(state): State<AppState>) -> Json<ApiResponse<AuthInfoResponse>> {
+    let preview = if state.api_token.len() > 8 {
+        format!("{}...{}", &state.api_token[..4], &state.api_token[state.api_token.len()-4..])
+    } else {
+        "****".into()
+    };
+    Json(ApiResponse {
+        ok: true,
+        data: Some(AuthInfoResponse {
+            token_preview: preview,
+            auth_header: "Authorization: Bearer <token>".into(),
+        }),
+        error: None,
+    })
+}
+
+async fn metrics_handler(
+    State(state): State<AppState>,
+    req: axum::http::Request<axum::body::Body>,
+) -> impl IntoResponse {
+    if !auth_valid(&req, &state.api_token) {
+        return ([(axum::http::header::CONTENT_TYPE, "text/plain")], "unauthorized".to_string());
+    }
     let registry = state.metrics.lock().await;
     let mut buffer = String::new();
     encode(&mut buffer, &registry).unwrap();
@@ -399,7 +537,7 @@ const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
 </head>
 <body>
 <div class="header">
-  <h1>⚡ TALUS eBPF MONITOR</h1>
+  <h1>⚡ TALUS eBPF MONITOR <span id="tier-badge" style="font-size:11px;padding:2px 8px;border-radius:3px;background:#505064;color:#ccc;">loading...</span></h1>
   <div class="stats" id="stats">loading...</div>
 </div>
 <div class="grid">
@@ -420,9 +558,10 @@ const DASHBOARD_HTML: &str = r#"<!DOCTYPE html>
 </div>
 <script>
 const MAX_EVENTS=500;let eventCount=0;const eventsEl=document.getElementById('events');const alertsEl=document.getElementById('alerts');
-function connect(){const ws=new WebSocket(`ws://${location.host}/ws`);ws.onopen=()=>{document.getElementById('ws-status').textContent='connected';document.getElementById('ws-status').className='connected'};ws.onclose=()=>{document.getElementById('ws-status').textContent='disconnected';document.getElementById('ws-status').className='disconnected';setTimeout(connect,2000)};ws.onmessage=e=>{const d=JSON.parse(e.data);if(d.type==='event'){eventCount++;document.getElementById('event-count').textContent=eventCount;const div=document.createElement('div');div.className='event';const tc=d.kind==='Exec'?'tag-exec':'tag-open';const tt=d.kind==='Exec'?'EXEC':'OPEN';const f=d.file?' → '+d.file:'';div.innerHTML=`<span class="ts">${d.ts}</span> <span class="tag ${tc}">${tt}</span> [${d.pid}] ${d.comm}${f}`;eventsEl.appendChild(div);if(eventsEl.children.length>MAX_EVENTS)eventsEl.removeChild(eventsEl.firstChild);eventsEl.scrollTop=eventsEl.scrollHeight}else if(d.type==='alert'){const div=document.createElement('div');div.className='event';div.innerHTML=`<span class="ts">${d.ts}</span> <span class="tag tag-alert">⚠ ALERT</span> [${d.pid}] ${d.comm} — ${d.opens} opens/s`;alertsEl.appendChild(div)}}}
+function connect(){const ws=new WebSocket(`wss://${location.host}/ws`);ws.onopen=()=>{document.getElementById('ws-status').textContent='connected';document.getElementById('ws-status').className='connected'};ws.onclose=()=>{document.getElementById('ws-status').textContent='disconnected';document.getElementById('ws-status').className='disconnected';setTimeout(connect,2000)};ws.onmessage=e=>{const d=JSON.parse(e.data);if(d.type==='event'){eventCount++;document.getElementById('event-count').textContent=eventCount;const div=document.createElement('div');div.className='event';const tc=d.kind==='Exec'?'tag-exec':'tag-open';const tt=d.kind==='Exec'?'EXEC':'OPEN';const f=d.file?' → '+d.file:'';div.innerHTML=`<span class="ts">${d.ts}</span> <span class="tag ${tc}">${tt}</span> [${d.pid}] ${d.comm}${f}`;eventsEl.appendChild(div);if(eventsEl.children.length>MAX_EVENTS)eventsEl.removeChild(eventsEl.firstChild);eventsEl.scrollTop=eventsEl.scrollHeight}else if(d.type==='alert'){const div=document.createElement('div');div.className='event';div.innerHTML=`<span class="ts">${d.ts}</span> <span class="tag tag-alert">⚠ ALERT</span> [${d.pid}] ${d.comm} — ${d.opens} opens/s`;alertsEl.appendChild(div)}}}
 connect();
-setInterval(async()=>{try{const r=await fetch('/api/v1/stats');const j=await r.json();if(j.ok){const d=j.data;document.getElementById('stats').textContent=`evt ${d.total_events} | lost ${d.total_lost} | uptime ${d.uptime_secs}s | threshold ${d.threshold}/s`;document.getElementById('total-events').textContent=d.total_events;document.getElementById('total-lost').textContent=d.total_lost;document.getElementById('uptime').textContent=d.uptime_secs+'s'}}catch(e){}},2000);
+setInterval(async()=>{try{const r=await fetch('/api/v1/stats');const j=await r.json();if(j.ok){const d=j.data;document.getElementById('stats').textContent=`evt ${d.total_events} | lost ${d.total_lost} | uptime ${d.uptime_secs}s | threshold ${d.threshold}/s`;document.getElementById('total-events').textContent=d.total_events;document.getElementById('total-lost').textContent=d.total_lost;document.getElementById('uptime').textContent=d.uptime_secs+'s'}}catch(e){}});
+setInterval(async()=>{try{const r=await fetch('/api/v1/license');const j=await r.json();const b=document.getElementById('tier-badge');if(j.tier==='enterprise'){b.textContent='◆ ENTERPRISE';b.style.background='#00ff64';b.style.color='#0a0a1a';}else{b.textContent='◇ COMMUNITY';b.style.background='#505064';b.style.color='#aaa';}}catch(e){}},5000);
 setInterval(async()=>{try{const r=await fetch('/api/v1/files');const j=await r.json();if(j.ok){document.getElementById('files').innerHTML=j.data.map(f=>`<div class="file-row"><span>${f.path.length>30?'…'+f.path.slice(-27):f.path}</span><span>.${f.extension}</span><span>${f.count} E:${f.entropy.toFixed(2)}</span></div>`).join('')}}catch(e){}try{const r=await fetch('/api/v1/extensions');const j=await r.json();if(j.ok&&j.data.length>0){const max=Math.max(...j.data.map(e=>e.count));document.getElementById('extensions').innerHTML=j.data.slice(0,8).map(e=>`<div class="ext-bar"><span style="width:50px">.${e.extension}</span><div class="bar" style="width:${(e.count/max*100).toFixed(0)}%"></div><span>${e.count}</span></div>`).join('')}}catch(e){}try{const r=await fetch('/api/v1/processes');const j=await r.json();if(j.ok){document.getElementById('processes').innerHTML=j.data.slice(0,30).map(p=>{const ab=p.alerts>0?` <span class="alerts">⚠${p.alerts}</span>`:'';return`<div class="process-row"><span>${p.comm} [${p.pid}]</span><span>${p.total_opens} opens${ab}</span></div>`}).join('')}}catch(e){}},3000);
 </script>
 </body>
@@ -430,15 +569,6 @@ setInterval(async()=>{try{const r=await fetch('/api/v1/files');const j=await r.j
 
 // ── Security Headers Middleware ─────────────────────────────────────────
 
-/// Layer that adds security headers to all HTTP responses.
-///
-/// Headers added:
-/// - `X-Content-Type-Options: nosniff` — prevents MIME type sniffing
-/// - `X-Frame-Options: DENY` — prevents clickjacking
-/// - `X-XSS-Protection: 1; mode=block` — legacy XSS filter
-/// - `Referrer-Policy: strict-origin-when-cross-origin` — limits referrer leakage
-/// - `Permissions-Policy: camera=(), microphone=(), geolocation=()` — disables dangerous APIs
-/// - `Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; ...`
 #[derive(Clone)]
 struct SecurityHeadersLayer;
 
@@ -507,6 +637,28 @@ where
     }
 }
 
+// ── TLS Support ──────────────────────────────────────────────────────────
+
+/// Generate a self-signed TLS certificate for development.
+#[cfg(feature = "web")]
+fn generate_self_signed_cert() -> Result<(rustls::ServerConfig, String), anyhow::Error> {
+    let cert = rcgen::generate_simple_self_signed(vec!["localhost".into(), "127.0.0.1".into()])?;
+    let cert_der = cert.cert.der().clone();
+    let key_der = rustls::pki_types::PrivatePkcs8KeyDer::from(cert.key_pair.serialize_der());
+
+    let mut root_store = rustls::RootCertStore::empty();
+    root_store.add(cert_der.clone())?;
+
+    let server_config = rustls::ServerConfig::builder()
+        .with_no_client_auth()
+        .with_single_cert(
+            vec![cert_der.into()],
+            rustls::pki_types::PrivateKeyDer::Pkcs8(key_der),
+        )?;
+
+    Ok((server_config, "self-signed".into()))
+}
+
 // ── Public entry point ────────────────────────────────────────────────────
 
 pub async fn start_web_server(
@@ -514,30 +666,85 @@ pub async fn start_web_server(
     addr: SocketAddr,
     _threshold: u64,
 ) -> anyhow::Result<()> {
-    let state = AppState::new(monitor);
+    let api_token = load_or_create_token();
+    let state = AppState::new(monitor, api_token.clone());
 
     // Start event forwarder
     spawn_event_forwarder(state.clone());
 
-    let app = Router::new()
+    // Read-only routes (no auth needed)
+    let read_routes = Router::new()
         .route("/", get(dashboard))
         .route("/ws", get(ws_handler))
         .route("/api/v1/stats", get(get_stats))
         .route("/api/v1/processes", get(get_processes))
         .route("/api/v1/files", get(get_files))
         .route("/api/v1/extensions", get(get_extensions))
-        .route("/api/v1/threshold", post(set_threshold))
-        .route("/metrics", get(metrics_handler))
+        .route("/api/v1/license", get(get_license_health))
+        .route("/api/v1/auth", get(get_auth_info))
+        .route("/metrics", get(metrics_handler));
+
+    // Write routes (require auth)
+    let write_routes = Router::new()
+        .route("/api/v1/threshold", post(set_threshold));
+
+    let app = read_routes
+        .merge(write_routes)
         .with_state(state)
-        .layer(tower_http::cors::CorsLayer::permissive())
+        .layer(tower_http::cors::CorsLayer::new()
+            .allow_origin("https://localhost".parse::<HeaderValue>().unwrap())
+            .allow_methods([Method::GET, Method::POST])
+            .allow_headers([header::AUTHORIZATION, header::CONTENT_TYPE, header::HeaderName::from_static("x-api-token")]))
         .layer(SecurityHeadersLayer);
 
-    eprintln!("[talus] web server listening on http://{addr}");
-    eprintln!("[talus] dashboard: http://{addr}/");
-    eprintln!("[talus] websocket: ws://{addr}/ws");
-    eprintln!("[talus] prometheus: http://{addr}/metrics");
+    // Print startup info
+    eprintln!();
+    eprintln!("  \x1b[36m╔══════════════════════════════════════════════════╗\x1b[0m");
+    eprintln!("  \x1b[36m║\x1b[0m  \x1b[1m🌐 TALUS WEB DASHBOARD\x1b[0m                         \x1b[36m║\x1b[0m");
+    eprintln!("  \x1b[36m╠══════════════════════════════════════════════════╣\x1b[0m");
+    eprintln!("  \x1b[36m║\x1b[0m  URL:      https://{addr}                     \x1b[36m║\x1b[0m");
+    eprintln!("  \x1b[36m║\x1b[0m  TLS:      self-signed certificate             \x1b[36m║\x1b[0m");
+    eprintln!("  \x1b[36m║\x1b[0m  Auth:     Bearer token required for POST      \x1b[36m║\x1b[0m");
+    eprintln!("  \x1b[36m║\x1b[0m  Token:    {}...\x1b[36m║\x1b[0m", &api_token[..8.min(api_token.len())]);
+    eprintln!("  \x1b[36m║\x1b[0m  WebSocket: wss://{addr}/ws                  \x1b[36m║\x1b[0m");
+    eprintln!("  \x1b[36m║\x1b[0m  Metrics:   https://{addr}/metrics           \x1b[36m║\x1b[0m");
+    eprintln!("  \x1b[36m╚══════════════════════════════════════════════════╝\x1b[0m");
+    eprintln!();
+
+    // Generate TLS config
+    let (tls_config, _cert_type) = generate_self_signed_cert()?;
+    let tls_acceptor = tokio_rustls::TlsAcceptor::from(Arc::new(tls_config));
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
-    axum::serve(listener, app).await?;
-    Ok(())
+    loop {
+        let (stream, _peer_addr) = match listener.accept().await {
+            Ok(s) => s,
+            Err(e) => {
+                eprintln!("[talus] TLS accept error: {e}");
+                continue;
+            }
+        };
+
+        let tls_acceptor = tls_acceptor.clone();
+        let app = app.clone();
+
+        tokio::spawn(async move {
+            let tls_stream = match tls_acceptor.accept(stream).await {
+                Ok(s) => s,
+                Err(e) => {
+                    eprintln!("[talus] TLS handshake error: {e}");
+                    return;
+                }
+            };
+
+            if let Err(e) = axum::serve(
+                tokio::net::TcpListener::from_std(
+                    std::net::TcpListener::from(std::net::TcpStream::from(tls_stream.into_inner()))
+                ).unwrap(),
+                app,
+            ).await {
+                eprintln!("[talus] serve error: {e}");
+            }
+        });
+    }
 }

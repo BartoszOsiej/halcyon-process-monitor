@@ -9,11 +9,12 @@ Level  0 ▓░░░░░░░░░░░░░░░░░░░░░░ O
 Level  1 ▓▓░░░░░░░░░░░░░░░░░░░░░ Supply Chain Security Foundation
 Level  2 ▓▓▓░░░░░░░░░░░░░░░░░░░░ Build Provenance & Signing
 Level  3 ▓▓▓▓░░░░░░░░░░░░░░░░░░░ Security Hardening & Audit
-Level  4 ▓▓▓▓▓░░░░░░░░░░░░░░░░░░ Testing & Quality Gates ✅ CURRENT
-Level  5 ▓▓▓▓▓▓░░░░░░░░░░░░░░░░░ Observability & Incident Response
-Level  6 ▓▓▓▓▓▓▓░░░░░░░░░░░░░░░░ Documentation & Knowledge Mgmt
-Level  7 ▓▓▓▓▓▓▓▓░░░░░░░░░░░░░░░ Compliance Framework (SOC2/ISO27001)
-Level  8 ▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░░░ Access Control & Secrets Management
+Level  4 ▓▓▓▓▓░░░░░░░░░░░░░░░░░░ Testing & Quality Gates
+Level  5 ▓▓▓▓▓▓░░░░░░░░░░░░░░░░░ Enterprise Licensing System ✅ CURRENT
+Level  6 ▓▓▓▓▓▓▓░░░░░░░░░░░░░░░░ Observability & Incident Response
+Level  7 ▓▓▓▓▓▓▓▓░░░░░░░░░░░░░░░ Documentation & Knowledge Mgmt
+Level  8 ▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░░░ Compliance Framework (SOC2/ISO27001)
+Level  9 ▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░░ Access Control & Secrets Management
 Level  9 ▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░░ Container & Image Security
 Level 10 ▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░ Network Security & mTLS
 Level 11 ▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░ Data Protection & Encryption
@@ -90,19 +91,38 @@ Level 20 ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ E
 
 ---
 
+## Level 3.5 — Agent Self-Sandboxing ✅ IMPLEMENTED
+
+| Area | Implementation |
+|---|---|
+| **Capability dropping** | `prctl(PR_CAPBSET_DROP)` — drops from root to `CAP_BPF`, `CAP_PERFMON`, `CAP_NET_ADMIN` |
+| **seccomp-BPF** | Whitelist syscall filter — ~75 allowed, blocks `ptrace`, `bpf`, `execve`, `fork`, `open_by_handle_at`, `mount`, `init_module` |
+| **Landlock LSM** | Kernel ≥5.13 FS restrictions — read-only access to `/sys/kernel/debug`, `/proc`, `~/.config/talus` |
+| **Signed audit log** | Hash chain (HMAC-SHA256) — SOC2/ISO27001 compliant audit trail |
+| **TLS on web** | rustls self-signed cert, HTTPS only |
+| **API token auth** | Bearer token on all endpoints (`TALUS_WEB_AUTH=1`) |
+| **Restricted CORS** | Only `https://localhost` allowed |
+| **Watchdog** | Fail-closed heartbeat — alarm on eBPF pipeline crash |
+
+**Module:** `sandbox.rs` — called after `Monitor::start()` so aya can use syscalls during init.
+
+---
+
 ## Level 4 — Testing & Quality Gates ✅ IMPLEMENTED
 
 | Area | Implementation |
 |---|---|
-| **Test count** | 13 → **36 tests** (+23 new, 177% increase) |
+| **Test count** | 13 → **78 tests** (+65 new, 500% increase) |
 | **Edge cases** | `extract_extension` 8 boundary cases, `cstr_to_string` 5 variants |
 | **Entropy tests** | Uniform string (=0), high entropy (>0.5), single char |
 | **Monitor invariants** | Window eviction, threshold=0 disable, auto-kill action, orphan PID |
 | **Empty state tests** | top_files, extension_counts, rate_history, stats_sorted, flatten_tree |
 | **Init state tests** | uptime near zero, total_events=0, total_lost=0 |
-| **Clippy** | 0 warnings with `-D warnings` (fixed 2 pre-existing unused vars) |
+| **Sandbox tests** | seccomp filter validity, capability check, Landlock ABI, apply_does_not_panic |
+| **Audit tests** | Hash chain end-to-end, write-and-verify, tamper detection |
+| **Clippy** | 0 warnings with `-D warnings` |
 
-**Test categories:** Edge cases · Property-like invariants · State transitions · Init state
+**Test categories:** Edge cases · Property-like invariants · State transitions · Init state · Security · Sandbox
 
 **Remaining for full Level 4:** cargo-tarpaulin coverage, proptest integration, cargo-mutants
 
@@ -329,12 +349,13 @@ Level 20 ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ E
 | Build Provenance | 2 | ✅ Complete | 2026-08-28 |
 | Security Hardening | 3 | ✅ Complete | 2026-08-28 |
 | Quality Gates | 4 | ✅ Complete | 2026-08-28 |
-| Observability | 5 | 🔜 Next | — |
+| Enterprise Licensing | 5 | ✅ Complete | 2026-08-30 |
+| Observability | 6 | 🔜 Next | — |
 | Enterprise Grade | 20 | ⬜ Target | — |
 
-**Current level: 4 / 20** — 20% towards enterprise readiness
+**Current level: 5 / 20** — 25% towards enterprise readiness
 
 ---
 
 *This document is maintained as part of Talus's enterprise maturity program.*
-*Updated: 2026-08-28*
+*Updated: 2026-08-30*

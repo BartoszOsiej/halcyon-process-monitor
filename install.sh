@@ -290,3 +290,13 @@ fi
 
 echo ""
 echo "To remove later: $0 --uninstall [--system]"
+echo ""
+echo "── License ──────────────────────────────────────────"
+echo "  Talus runs in Community mode by default (free)."
+echo "  Enterprise features require a license:"
+echo ""
+echo "  Check status:   talus license show"
+echo "  Activate:       talus license activate <KEY>"
+echo "  30-day trial:   automatic on first run"
+echo "  More info:      https://talus.io/enterprise"
+echo "──────────────────────────────────────────────────────"

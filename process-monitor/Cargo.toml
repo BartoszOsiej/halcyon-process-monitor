@@ -1,29 +1,37 @@
 [package]
 repository = "https://github.com/BartoszOsiej/talus-process-monitor"
 name = "process-monitor"
-version = "0.5.0"
+version = "0.7.0"
 edition = "2021"
 description = "eBPF-based real-time process and file operation monitor with TUI"
 license = "MIT"
 
 [features]
 default = []
-web = ["dep:axum", "dep:tokio", "dep:tower", "dep:tower-http", "dep:prometheus-client", "dep:futures", "dep:tokio-util", "dep:parking_lot"]
+web = ["dep:axum", "dep:tokio", "dep:tower", "dep:tower-http", "dep:prometheus-client", "dep:futures", "dep:tokio-util", "dep:parking_lot", "dep:rustls", "dep:tokio-rustls", "dep:rcgen"]
 kafka = ["dep:rdkafka", "dep:tokio"]
 clickhouse = ["dep:clickhouse-rs", "dep:tokio", "dep:futures"]
-memgraph = ["dep:reqwest", "dep:tokio"]
+memgraph = ["dep:tokio"]
 
 [dependencies]
 anyhow = "1"
 aya = "0.14.0"
+base64 = "0.22"
 bytes = "1"
 chrono = "0.4"
 clap = { version = "4.6", features = ["derive"] }
 colored = "3.1"
 crossterm = "0.29"
+dirs = "5"
+ed25519-dalek = "2.1"
+hostname = "0.4"
 libc = "0.2"
+reqwest = { version = "0.12", features = ["blocking", "json"] }
 serde_json = "1"
 serde = { version = "1", features = ["derive"] }
+sha2 = "0.10"
+
+hex = "0.4"
 urlencoding = "2"
 
 # FrankenTUI (path dependencies — full kernel)
@@ -47,14 +55,17 @@ futures = { version = "0.3", optional = true }
 tokio-util = { version = "0.7", optional = true }
 parking_lot = { version = "0.12", optional = true }
 
+# TLS for web dashboard
+rustls = { version = "0.23", features = ["ring"], optional = true }
+tokio-rustls = { version = "0.26", optional = true }
+rcgen = { version = "0.13", optional = true }
+
 # Kafka producer (optional, enabled with --features kafka)
 rdkafka = { version = "0.36", features = ["cmake-build"], optional = true }
 
 # ClickHouse storage (optional, enabled with --features clickhouse)
 clickhouse-rs = { version = "1.1.0-alpha.1", optional = true }
 
-# MemGraph client (optional, enabled with --features memgraph)
-reqwest = { version = "0.12", features = ["json"], optional = true }
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }

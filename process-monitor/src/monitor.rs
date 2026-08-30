@@ -691,6 +691,9 @@ fn spawn_reader(
                 }
                 if idle {
                     thread::sleep(Duration::from_millis(1));
+                } else {
+                    // Signal watchdog that eBPF pipeline is alive
+                    crate::watchdog::heartbeat();
                 }
             }
         })

@@ -5,10 +5,14 @@
 //! scores per-process file-open rates in real-time, and terminates offending
 //! processes when a heuristic verdict fires.
 
+mod audit;
 mod ffi;
+mod license;
 mod monitor;
+mod sandbox;
 mod storage;
 mod tui;
+mod watchdog;
 #[cfg(feature = "web")]
 mod web;
 
@@ -19,7 +23,7 @@ use std::thread;
 use std::time::Duration;
 
 use anyhow::{bail, Context, Result};
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use monitor::{Kind, Monitor, Output};
 use serde_json::json;
 
@@ -31,15 +35,75 @@ const BPF_CANDIDATES: &[&str] = &[
     "process-monitor-ebpf/target/bpfel-unknown-none/release/process-monitor-ebpf",
     "/usr/local/lib/talus/process-monitor-ebpf",
 ];
+
 #[derive(Parser)]
 #[command(
-    author,
+    name = "talus",
     version,
-    about = "eBPF-based real-time process and file monitor",
-    long_about = "Traces execve and openat syscalls via eBPF and watches for \
-                  ransomware-style mass file opening. Runs as a TUI by default."
+    about = "eBPF-based endpoint security agent for Linux",
+    long_about = "Talus is a detect-and-respond security agent that hooks syscalls at the\n\
+                  kernel level via eBPF tracepoints, scores per-process file-open rates\n\
+                  in real-time, and terminates offending processes on heuristic verdict.\n\n\
+                  Enterprise features (web dashboard, auto-kill, Kafka, ClickHouse, MemGraph)\n\
+                  require a valid Enterprise license. Run `talus license show` for details."
 )]
-struct Args {
+struct Cli {
+    #[command(subcommand)]
+    command: Option<Commands>,
+}
+
+#[derive(Subcommand)]
+enum Commands {
+    /// License management
+    License {
+        #[command(subcommand)]
+        action: LicenseAction,
+    },
+    /// Run the eBPF monitor (default command)
+    Monitor(MonitorArgs),
+}
+
+#[derive(Subcommand)]
+enum LicenseAction {
+    /// Activate a license key online
+    Activate {
+        /// The license key string (format: <payload>.<signature>)
+        key: String,
+    },
+    /// Deactivate the current license (release machine binding)
+    Deactivate,
+    /// Show license information and status
+    Show,
+    /// Verify the cached license is valid
+    Verify,
+    /// Display the machine fingerprint (for license binding)
+    MachineId,
+    /// Export license as JSON (for integration)
+    ExportJson,
+    /// Transfer license to another machine
+    Transfer,
+    /// Backup license to a file
+    Backup {
+        /// Destination file path
+        dest: String,
+    },
+    /// Restore license from a backup file
+    Restore {
+        /// Source backup file path
+        src: String,
+    },
+    /// Show license audit log
+    AuditLog {
+        /// Number of entries to show (default: 20)
+        #[arg(long, default_value_t = 20)]
+        lines: usize,
+    },
+    /// Verify audit log integrity (hash chain)
+    VerifyAudit,
+}
+
+#[derive(Parser)]
+struct MonitorArgs {
     /// Path to the compiled eBPF program
     #[arg(short, long, value_name = "PATH")]
     bpf: Option<PathBuf>,
@@ -72,15 +136,15 @@ struct Args {
     #[arg(long, default_value_t = 8, value_name = "N")]
     top_files: usize,
 
-    /// Start web server with REST API, WebSocket, and dashboard (requires feature "web")
+    /// Start web server with REST API, WebSocket, and dashboard (requires Enterprise license)
     #[arg(long, value_name = "ADDR", default_value = None)]
     web: Option<String>,
 
-    /// Automatically kill processes that trigger alerts (EDR response mode)
+    /// Automatically kill processes that trigger alerts — EDR response mode (requires Enterprise license)
     #[arg(long)]
     auto_kill: bool,
 
-    /// Kafka broker address (e.g. localhost:9092) — enables Kafka producer
+    /// Kafka broker address (e.g. localhost:9092) — enables Kafka producer (requires Enterprise license)
     #[arg(long, value_name = "BROKERS", requires = "kafka_topic")]
     kafka_brokers: Option<String>,
 
@@ -88,47 +152,263 @@ struct Args {
     #[arg(long, value_name = "TOPIC")]
     kafka_topic: Option<String>,
 
-    /// ClickHouse URL (e.g. http://localhost:8123) — enables ClickHouse storage
+    /// ClickHouse URL (e.g. http://localhost:8123) — enables ClickHouse storage (requires Enterprise license)
     #[arg(long, value_name = "URL")]
     clickhouse: Option<String>,
 
-    /// MemGraph URL (e.g. http://localhost:7474) — enables process graph
+    /// MemGraph URL (e.g. http://localhost:7474) — enables process graph (requires Enterprise license)
     #[arg(long, value_name = "URL")]
     memgraph: Option<String>,
 }
 
 fn main() -> Result<()> {
-    let args = Args::parse();
+    let cli = Cli::parse();
 
+    match cli.command {
+        // ── License subcommand — no root required ─────────────────────
+        Some(Commands::License { action }) => match action {
+            LicenseAction::Activate { key } => {
+                license::activate_license(&key)?;
+                eprintln!();
+                eprintln!("[talus] ✓ License activated. Restart talus to apply.");
+                Ok(())
+            }
+            LicenseAction::Deactivate => {
+                license::deactivate_license()
+            }
+            LicenseAction::Show => {
+                license::show_license_info()
+            }
+            LicenseAction::Verify => {
+                let cache = license::verify_cached_license()?;
+                eprintln!(
+                    "[talus] ✓ License {} is valid ({})",
+                    cache.payload.license_id, cache.payload.tier
+                );
+                if let Some(ref org) = cache.payload.organization {
+                    eprintln!("[talus]   Organization: {org}");
+                }
+                let features: Vec<String> = cache.payload.effective_features().into_iter().collect();
+                eprintln!("[talus]   Features: {}", features.join(", "));
+                Ok(())
+            }
+            LicenseAction::MachineId => {
+                let id = license::generate_machine_id()?;
+                println!("Machine ID: {id}");
+                Ok(())
+            }
+            LicenseAction::ExportJson => {
+                let json = license::export_license_json()?;
+                println!("{json}");
+                Ok(())
+            }
+            LicenseAction::Transfer => {
+                license::transfer_license()
+            }
+            LicenseAction::Backup { dest } => {
+                let cache = license::LicenseCache::load()?
+                    .context("no license found — nothing to backup")?;
+                let path = std::path::PathBuf::from(&dest);
+                cache.backup(&path)?;
+                eprintln!("[talus] ✓ License backed up to: {dest}");
+                Ok(())
+            }
+            LicenseAction::Restore { src } => {
+                let path = std::path::PathBuf::from(&src);
+                let cache = license::LicenseCache::restore(&path)?;
+                eprintln!("[talus] ✓ License restored from: {src}");
+                eprintln!("[talus]   License ID: {}", cache.payload.license_id);
+                eprintln!("[talus]   Tier: {}", cache.payload.tier);
+                Ok(())
+            }
+            LicenseAction::AuditLog { lines } => {
+                let entries = license::read_audit_log(lines);
+                if entries.is_empty() {
+                    println!("No audit log entries found.");
+                } else {
+                    println!("═══════════════════════════════════════════════════");
+                    println!("  LICENSE AUDIT LOG (last {} entries)", entries.len());
+                    println!("═══════════════════════════════════════════════════");
+                    for entry in &entries {
+                        println!("  {entry}");
+                    }
+                    println!("═══════════════════════════════════════════════════");
+                }
+                Ok(())
+            }
+            LicenseAction::VerifyAudit => {
+                match license::verify_audit_log() {
+                    Ok(n) => {
+                        println!("═══════════════════════════════════════════════════");
+                        println!("  AUDIT LOG INTEGRITY CHECK");
+                        println!("═══════════════════════════════════════════════════");
+                        println!("  Status:   ✓ VALID");
+                        println!("  Entries:  {n} verified, 0 corrupted");
+                        println!("  Chain:    intact (hash chain verified)");
+                        println!("═══════════════════════════════════════════════════");
+                        Ok(())
+                    }
+                    Err(e) => {
+                        eprintln!("═══════════════════════════════════════════════════");
+                        eprintln!("  AUDIT LOG INTEGRITY CHECK");
+                        eprintln!("═══════════════════════════════════════════════════");
+                        eprintln!("  Status:   ✗ FAILED");
+                        eprintln!("  Error:    {e}");
+                        eprintln!("═══════════════════════════════════════════════════");
+                        bail!("audit log integrity check failed");
+                    }
+                }
+            }
+        },
+
+        // ── Monitor — default command (requires root) ─────────────────
+        Some(Commands::Monitor(args)) => run_monitor(args),
+        None => run_monitor(MonitorArgs::default()),
+    }
+}
+
+/// Default MonitorArgs when no subcommand is given (empty struct defaults)
+impl Default for MonitorArgs {
+    fn default() -> Self {
+        Self {
+            bpf: None,
+            alert_threshold: 50,
+            json: false,
+            plain: false,
+            tui: false,
+            diagnose: false,
+            filter_ext: None,
+            top_files: 8,
+            web: None,
+            auto_kill: false,
+            kafka_brokers: None,
+            kafka_topic: None,
+            clickhouse: None,
+            memgraph: None,
+        }
+    }
+}
+
+fn run_monitor(args: MonitorArgs) -> Result<()> {
     // Give the diagnose mode a clear, helpful non-root message before
     // Monitor::start would bail with a generic error.
     // SAFETY: geteuid() is a simple syscall that always succeeds and returns
     // the effective user ID. No pointer dereference, no fallibility.
     if args.diagnose && unsafe { libc::geteuid() } != 0 {
-        eprintln!("run with: sudo process-monitor --diagnose");
+        eprintln!("run with: sudo talus monitor --diagnose");
         return Ok(());
     }
 
+    // ── Initialize license state ─────────────────────────────────────
+    let license_state = license::init_license();
+
+    // ── Feature gating based on license ──────────────────────────────
+    if args.auto_kill && !license_state.allows("auto_kill") {
+        eprintln!();
+        eprintln!("╔══════════════════════════════════════════════════════════╗");
+        eprintln!("║  ENTERPRISE LICENSE REQUIRED                            ║");
+        eprintln!("║                                                          ║");
+        eprintln!("║  --auto-kill requires an Enterprise license.             ║");
+        eprintln!("║                                                          ║");
+        eprintln!("║  Upgrade:  talus license activate <KEY>                  ║");
+        eprintln!("║  Status:   talus license show                            ║");
+        eprintln!("╚══════════════════════════════════════════════════════════╝");
+        eprintln!();
+        bail!("--auto-kill requires Enterprise license");
+    }
+    if args.web.is_some() && !license_state.allows("web") {
+        eprintln!();
+        eprintln!("╔══════════════════════════════════════════════════════════╗");
+        eprintln!("║  ENTERPRISE LICENSE REQUIRED                            ║");
+        eprintln!("║                                                          ║");
+        eprintln!("║  --web requires an Enterprise license.                   ║");
+        eprintln!("║                                                          ║");
+        eprintln!("║  Upgrade:  talus license activate <KEY>                  ║");
+        eprintln!("║  Status:   talus license show                            ║");
+        eprintln!("╚══════════════════════════════════════════════════════════╝");
+        eprintln!();
+        bail!("--web requires Enterprise license");
+    }
+    if args.kafka_brokers.is_some() && !license_state.allows("kafka") {
+        eprintln!();
+        eprintln!("╔══════════════════════════════════════════════════════════╗");
+        eprintln!("║  ENTERPRISE LICENSE REQUIRED                            ║");
+        eprintln!("║                                                          ║");
+        eprintln!("║  --kafka-brokers requires an Enterprise license.         ║");
+        eprintln!("║                                                          ║");
+        eprintln!("║  Upgrade:  talus license activate <KEY>                  ║");
+        eprintln!("╚══════════════════════════════════════════════════════════╝");
+        eprintln!();
+        bail!("--kafka-brokers requires Enterprise license");
+    }
+    if args.clickhouse.is_some() && !license_state.allows("clickhouse") {
+        eprintln!();
+        eprintln!("╔══════════════════════════════════════════════════════════╗");
+        eprintln!("║  ENTERPRISE LICENSE REQUIRED                            ║");
+        eprintln!("║                                                          ║");
+        eprintln!("║  --clickhouse requires an Enterprise license.            ║");
+        eprintln!("║                                                          ║");
+        eprintln!("║  Upgrade:  talus license activate <KEY>                  ║");
+        eprintln!("╚══════════════════════════════════════════════════════════╝");
+        eprintln!();
+        bail!("--clickhouse requires Enterprise license");
+    }
+    if args.memgraph.is_some() && !license_state.allows("memgraph") {
+        eprintln!();
+        eprintln!("╔══════════════════════════════════════════════════════════╗");
+        eprintln!("║  ENTERPRISE LICENSE REQUIRED                            ║");
+        eprintln!("║                                                          ║");
+        eprintln!("║  --memgraph requires an Enterprise license.              ║");
+        eprintln!("║                                                          ║");
+        eprintln!("║  Upgrade:  talus license activate <KEY>                  ║");
+        eprintln!("╚══════════════════════════════════════════════════════════╝");
+        eprintln!();
+        bail!("--memgraph requires Enterprise license");
+    }
+
     let bpf_path = resolve_bpf_path(args.bpf.as_ref())?;
-    let mut monitor = Monitor::start(&bpf_path, args.alert_threshold, args.auto_kill).with_context(|| {
-        format!(
-            "failed to initialize the eBPF monitor using '{}'",
-            bpf_path.display()
-        )
-    })?;
+    let mut monitor =
+        Monitor::start(&bpf_path, args.alert_threshold, args.auto_kill).with_context(|| {
+            format!(
+                "failed to initialize the eBPF monitor using '{}'",
+                bpf_path.display()
+            )
+        })?;
+
+    // ── Agent hardening (drop caps, seccomp, Landlock) ──────────────
+    // Applied AFTER Monitor::start so aya can use syscalls during init.
+    sandbox::apply(&bpf_path)?;
 
     install_signal_handler();
 
+    // Spawn fail-closed watchdog
+    let _watchdog = watchdog::spawn_watchdog();
+
     let use_tui = args.tui || (!args.json && !args.plain && io::stdout().is_terminal());
 
-    eprintln!("[talus] eBPF program: {}", bpf_path.display());
-    eprintln!("[talus] alert threshold: {} file opens/s", args.alert_threshold);
+    // ── Startup banner ───────────────────────────────────────────────
+    let banner_color = if license_state.is_activated { "\x1b[32m" } else { "\x1b[33m" };
+    let tier_label = if license_state.is_activated {
+        format!("{}Enterprise{}", banner_color, "\x1b[0m")
+    } else {
+        "\x1b[33mCommunity\x1b[0m".to_string()
+    };
+
+    eprintln!();
+    eprintln!("  \x1b[36m╔══════════════════════════════════════════════════╗\x1b[0m");
+    eprintln!("  \x1b[36m║\x1b[0m  \x1b[1m⚡ TALUS eBPF ENDPOINT SECURITY AGENT\x1b[0m          \x1b[36m║\x1b[0m");
+    eprintln!("  \x1b[36m╠══════════════════════════════════════════════════╣\x1b[0m");
+    eprintln!("  \x1b[36m║\x1b[0m  License:  {:<38} \x1b[36m║\x1b[0m", tier_label);
+    if let Some(ref org) = license_state.organization {
+        eprintln!("  \x1b[36m║\x1b[0m  Org:      {:<38} \x1b[36m║\x1b[0m", org);
+    }
+    eprintln!("  \x1b[36m║\x1b[0m  eBPF:     {:<38} \x1b[36m║\x1b[0m", bpf_path.display());
+    eprintln!("  \x1b[36m║\x1b[0m  Threshold: {:<37} \x1b[36m║\x1b[0m", format!("{} opens/s", args.alert_threshold));
     if args.auto_kill {
-        eprintln!("[talus] AUTO-KILL: enabled (SIGKILL on alert)");
+        eprintln!("  \x1b[36m║\x1b[0m  \x1b[31mMode:     EDR (auto-kill enabled)\x1b[0m              \x1b[36m║\x1b[0m");
     }
-    if let Some(ref ext) = args.filter_ext {
-        eprintln!("[talus] extension filter: .{ext}");
-    }
+    eprintln!("  \x1b[36m╚══════════════════════════════════════════════════╝\x1b[0m");
+    eprintln!();
 
     // ── Storage pipeline ──────────────────────────────────────────────
     #[allow(unused_mut)]
@@ -142,7 +422,10 @@ fn main() -> Result<()> {
             ..Default::default()
         };
         match storage::kafka::KafkaProducer::start(cfg) {
-            Ok(p) => { eprintln!("[talus] Kafka producer → {brokers} topic={topic}"); pipeline.kafka = Some(p); }
+            Ok(p) => {
+                eprintln!("[talus] Kafka producer → {brokers} topic={topic}");
+                pipeline.kafka = Some(p);
+            }
             Err(e) => eprintln!("[talus] WARN: Kafka init failed: {e}"),
         }
     }
@@ -154,7 +437,10 @@ fn main() -> Result<()> {
             ..Default::default()
         };
         match storage::clickhouse::ClickHouseStore::start(cfg) {
-            Ok(s) => { eprintln!("[talus] ClickHouse → {url}"); pipeline.clickhouse = Some(s); }
+            Ok(s) => {
+                eprintln!("[talus] ClickHouse → {url}");
+                pipeline.clickhouse = Some(s);
+            }
             Err(e) => eprintln!("[talus] WARN: ClickHouse init failed: {e}"),
         }
     }
@@ -166,7 +452,10 @@ fn main() -> Result<()> {
             ..Default::default()
         };
         match storage::memgraph::MemGraphStore::start(cfg) {
-            Ok(s) => { eprintln!("[talus] MemGraph → {url}"); pipeline.memgraph = Some(s); }
+            Ok(s) => {
+                eprintln!("[talus] MemGraph → {url}");
+                pipeline.memgraph = Some(s);
+            }
             Err(e) => eprintln!("[talus] WARN: MemGraph init failed: {e}"),
         }
     }
@@ -187,8 +476,8 @@ fn main() -> Result<()> {
             bail!("--web requires the 'web' feature. Rebuild with: cargo build --features web");
         }
     } else if use_tui {
-        eprintln!("[talus] TUI mode (q quit, p pause, c clear, arrows scroll, Tab switch panel)");
-        tui::run(monitor)?;
+        eprintln!("[talus] TUI mode — q quit, p pause, ? help, Tab switch panel");
+        tui::run(monitor, license_state)?;
     } else if args.json {
         run_json(&mut monitor, &pipeline)?;
     } else {
@@ -284,10 +573,6 @@ fn resolve_bpf_path(explicit: Option<&PathBuf>) -> Result<PathBuf> {
     )
 }
 
-/// Resolves the home directory for `uid` from the passwd database.
-///
-/// Used to find user-local installs when running under `sudo` (where `$HOME`
-/// points at the target user's home, not the invoking user's).
 /// Resolves the home directory for `uid` from the passwd database.
 ///
 /// Used to find user-local installs when running under `sudo` (where `$HOME`
@@ -429,8 +714,6 @@ fn install_signal_handler() {
 extern "C" fn handle_signal(_: libc::c_int) {
     QUIT.store(true, Ordering::SeqCst);
 }
-
-
 
 fn run_json(monitor: &mut Monitor, pipeline: &storage::StoragePipeline) -> Result<()> {
     let stdout = io::stdout();

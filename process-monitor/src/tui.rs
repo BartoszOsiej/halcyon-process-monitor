@@ -35,6 +35,7 @@ use ftui_widgets::progress::{MiniBar, MiniBarColors};
 use ftui_widgets::status_line::{StatusItem, StatusLine};
 use ftui_widgets::{StatefulWidget, Widget};
 
+use crate::license::LicenseState;
 use crate::monitor::{FileRank, Monitor, Output, ProcStats, RateSample};
 
 /// Processes that produce too many events to display (polling, IPC, etc.)
@@ -145,6 +146,12 @@ struct App_ {
     total: u64, lost: u64, uptime: u64, alert_count: u64,
     time: f64,
     rx: mpsc::Receiver<Snapshot>,
+    // ── license state ──
+    #[allow(dead_code)]
+    tier: String,
+    #[allow(dead_code)]
+    organization: Option<String>,
+    is_activated: bool,
     // ── anti-spam: rate limit per comm ──
     rate_counters: HashMap<String, (u64, Instant)>,
     rate_limit: u64,
@@ -167,9 +174,17 @@ struct ProcRow { pid: u32, comm: String, opens: u64, alerts: u64 }
 struct FileRow { name: String, count: u64, ext: String, entropy: f64 }
 
 impl App_ {
-    fn new(rx: mpsc::Receiver<Snapshot>) -> Self {
+    fn new(rx: mpsc::Receiver<Snapshot>, license: &LicenseState) -> Self {
         let mut log = LogViewer::new(5000);
-        log.push("[talus] eBPF monitor started — press ? for help");
+        let tier_name = license.tier_name().to_string();
+        let org = license.organization.clone();
+        let activated = license.is_activated;
+        let tier_display = if activated {
+            tier_name.to_string()
+        } else {
+            format!("{tier_name} (free)")
+        };
+        log.push(format!("[talus] eBPF monitor started — license: {tier_display} — press ? for help").as_str());
         Self {
             log, log_st: LogViewerState::default(),
             _alerts: LogViewer::new(200), _alert_st: LogViewerState::default(),
@@ -179,6 +194,9 @@ impl App_ {
             smooth_exec: 0.0, smooth_open: 0.0, smooth_alert: 0.0,
             rates: VecDeque::new(), focused: 0, paused: false, help: false,
             total: 0, lost: 0, uptime: 0, alert_count: 0, time: 0.0, rx,
+            tier: tier_name,
+            organization: org,
+            is_activated: activated,
             rate_counters: HashMap::new(),
             rate_limit: 15,       // max 15 events per comm per 1s
             rate_window: Duration::from_secs(1),
@@ -280,7 +298,6 @@ impl App_ {
         self.total = s.total; self.lost = s.lost; self.uptime = s.uptime;
 
         // Build heatmap: top procs × top exts (using global ext counts)
-        // Filter system processes
         let system_comms = ["systemd", "kthreadd", "rcu_sched", "ksoftirqd", "migration",
             "watchdog", "khungtaskd", "kswapd0", "kcompactd0", "jbd2"];
         let mut procs_for_heat: Vec<&ProcStats> = s.stats.iter()
@@ -302,7 +319,6 @@ impl App_ {
             }).collect();
             self.heatmap_exts = top_exts;
         } else {
-            // Fallback: use global extension counts as single-row heatmap
             self.heatmap = vec![];
             self.heatmap_exts = vec![];
         }
@@ -463,7 +479,6 @@ impl App_ {
     fn draw_header(&self, f: &mut Frame, area: Rect) {
         let row0 = Rect::new(area.x, area.y, area.width, 1);
 
-
         // Row 0: Animated color wave title + badges
         let title = format!("talus  eBPF process monitor  {} events  {} lost  up {}",
             self.total, self.lost, fmt_dur(self.uptime));
@@ -479,9 +494,13 @@ impl App_ {
             .time(self.time);
         styled_title.render(row0, f);
 
-        // Row 1: Status badges
+        // Row 1: Status badges (license tier + eBPF + alerts + lost)
+        let tier_color = if self.is_activated { GREEN } else { AMBER };
+        let tier_badge = if self.is_activated { "ENTERPRISE" } else { "COMMUNITY" };
+
         let lost_label = format!("{} LOST", self.lost);
-        let badges_data: [(&str, PackedRgba); 3] = [
+        let badges_data: [(&str, PackedRgba); 4] = [
+            (tier_badge, tier_color),
             ("eBPF", GREEN),
             ("LIVE", if self.alert_count > 0 { RED } else { GREEN }),
             (&lost_label, if self.lost > 0 { AMBER } else { DIM }),
@@ -744,187 +763,124 @@ impl App_ {
             let label_w = 28.min(inner.width);
             Paragraph::new(Line::from_spans(vec![
                 Span::styled(label, Style::new().fg(rank_c)),
-                Span::styled(format!(" .{:<4}", r.ext), Style::new().fg(ext_c)),
+                Span::styled(format!(" .{:<5}", r.ext), Style::new().fg(ext_c)),
+                Span::styled(format!("H:{:.1}", r.entropy), Style::new().fg(entropy_c)),
             ])).render(Rect::new(inner.x, y, label_w, 1), f);
 
-            let bar_area = Rect::new(inner.x + label_w + 1, y, bar_w as u16, 1);
-            MiniBar::new(value, bar_w as u16)
-                .colors(colors)
-                .show_percent(false)
-                .render(bar_area, f);
-
-            // Entropy indicator after bar
-            let entropy_x = inner.x + label_w + 1 + bar_w as u16 + 1;
-            if entropy_x < inner.right() {
-                Paragraph::new(Line::from_spans(vec![
-                    Span::styled(format!("H:{:.1}", r.entropy), Style::new().fg(entropy_c)),
-                ])).render(Rect::new(entropy_x, y, 6, 1), f);
-            }
+            // MiniBar
+            let bar_area = Rect::new(inner.x + label_w, y, bar_w as u16, 1);
+            MiniBar::new(value, bar_w as u16).colors(colors).show_percent(false).render(bar_area, f);
         }
     }
 
     fn draw_heatmap(&self, f: &mut Frame, area: Rect) {
-        let title = format!(" HEATMAP ({}x{}) ", self.heatmap.len(), self.heatmap_exts.len());
-        let b = self.block(5, &title);
+        let b = self.block(5, " HEATMAP ");
         let inner = b.inner(area); b.render(area, f);
-        if self.collapsed[5] { return; }
-        if inner.width < 8 || inner.height < 4 || self.heatmap.is_empty() {
-            if self.heatmap.is_empty() && inner.height >= 2 {
-                Paragraph::new(Line::from_spans(vec![
-                    Span::styled("  waiting for file open events...", Style::new().fg(DIM)),
-                ])).render(Rect::new(inner.x + 1, inner.y + 1, inner.width - 2, 1), f);
-            }
-            return;
+        if self.collapsed[5] || self.heatmap.is_empty() { return; }
+
+        let rows = inner.height as usize;
+        let ext_count = self.heatmap_exts.len();
+        if ext_count == 0 { return; }
+
+        // Header row: extension labels
+        let cell_w = (inner.width as usize / ext_count).max(4);
+        for (j, ext) in self.heatmap_exts.iter().enumerate() {
+            let x = inner.x + (j * cell_w) as u16;
+            let label = format!(".{:<4}", trunc(ext, 4));
+            Paragraph::new(Line::from_spans(vec![
+                Span::styled(label, Style::new().fg(DIM)),
+            ])).render(Rect::new(x, inner.y, cell_w as u16, 1), f);
         }
 
-        // Layout: top row = ext labels, left col = proc names, rest = canvas heatmap
-        let label_w: u16 = 12;
-        let header_h: u16 = 1;
-        let canvas_area = Rect::new(
-            inner.x + label_w,
-            inner.y + header_h,
-            inner.width.saturating_sub(label_w),
-            inner.height.saturating_sub(header_h),
-        );
+        // Data rows
+        let max_val = self.heatmap.iter()
+            .flat_map(|r| r.ext_counts.iter().map(|(_, c)| *c))
+            .max()
+            .unwrap_or(1)
+            .max(1);
 
-        if canvas_area.width < 2 || canvas_area.height < 2 { return; }
+        for (i, row) in self.heatmap.iter().take(rows.saturating_sub(1)).enumerate() {
+            let y = inner.y + 1 + i as u16;
 
-        // Find max count for normalization
-        let mut max_count: u64 = 1;
-        for row in &self.heatmap {
-            for &(_, cnt) in &row.ext_counts {
-                if cnt > max_count { max_count = cnt; }
-            }
-        }
+            // Process label
+            let label = format!("{:<14}", trunc(&row.label, 14));
+            Paragraph::new(Line::from_spans(vec![
+                Span::styled(label, Style::new().fg(BRIGHT)),
+            ])).render(Rect::new(inner.x, y, 14.min(inner.width), 1), f);
 
-        // Extension labels on top
-        let ext_cols = self.heatmap_exts.len().max(1) as u16;
-        let col_w = canvas_area.width / ext_cols;
-        for (i, ext) in self.heatmap_exts.iter().enumerate() {
-            let x = canvas_area.x + i as u16 * col_w;
-            if x + col_w > canvas_area.right() { break; }
-            let label = format!(".{:<w$}", ext, w = (col_w as usize).saturating_sub(1));
-            Paragraph::new(Line::from_spans(vec![Span::styled(label, Style::new().fg(DIM))]))
-                .render(Rect::new(x, inner.y, col_w, 1), f);
-        }
-
-        // Process names on left
-        let proc_rows = self.heatmap.len().max(1) as u16;
-        let row_h = canvas_area.height / proc_rows;
-        for (i, row) in self.heatmap.iter().enumerate() {
-            let y = canvas_area.y + i as u16 * row_h;
-            if y + row_h > canvas_area.bottom() { break; }
-            let label = trunc(&row.label, label_w as usize);
-            Paragraph::new(Line::from_spans(vec![Span::styled(label, Style::new().fg(FG))]))
-                .render(Rect::new(inner.x, y, label_w, 1), f);
-        }
-
-        // Canvas heatmap with Mode::Block (2x2 subpixels per cell)
-        let mut painter = Painter::for_area(canvas_area, Mode::Block);
-        let (pw, ph) = painter.size();
-
-        for (row_i, row) in self.heatmap.iter().enumerate() {
-            for (col_i, ext) in self.heatmap_exts.iter().enumerate() {
-                let count = row.ext_counts.iter()
-                    .find(|(e, _)| e == ext)
-                    .map(|(_, c)| *c)
-                    .unwrap_or(0);
-                let value = (count as f64 / max_count as f64).clamp(0.0, 1.0);
-                let color = heatmap_gradient(value);
-
-                // Map to canvas pixel coordinates
-                let px_start = (col_i as f64 / self.heatmap_exts.len().max(1) as f64 * pw as f64) as i32;
-                let px_end = ((col_i + 1) as f64 / self.heatmap_exts.len().max(1) as f64 * pw as f64) as i32;
-                let py_start = (row_i as f64 / self.heatmap.len().max(1) as f64 * ph as f64) as i32;
-                let py_end = ((row_i + 1) as f64 / self.heatmap.len().max(1) as f64 * ph as f64) as i32;
-
-                for py in py_start..py_end {
-                    for px in px_start..px_end {
-                        painter.point_colored(px, py, color);
-                    }
+            // Heatmap cells
+            for (j, (_ext, count)) in row.ext_counts.iter().enumerate() {
+                let x = inner.x + 14 + (j * cell_w) as u16;
+                let frac = *count as f64 / max_val as f64;
+                let color = heatmap_gradient(frac);
+                let bar_len = ((cell_w - 1) as f64 * frac) as usize;
+                let bar = "█".repeat(bar_len);
+                if !bar.is_empty() {
+                    Paragraph::new(Line::from_spans(vec![
+                        Span::styled(bar, Style::new().fg(color)),
+                    ])).render(Rect::new(x, y, (cell_w - 1) as u16, 1), f);
                 }
             }
         }
-
-        Canvas::from_painter(&painter)
-            .style(Style::new().fg(FG))
-            .render(canvas_area, f);
     }
 
     fn draw_linechart(&self, f: &mut Frame, area: Rect) {
-        let rate_label = self.rates.back().map(|_r| {
-            format!("EVENT RATE  exec:{:.0}/s  open:{:.0}/s  alert:{:.0}/s",
-                self.smooth_exec, self.smooth_open, self.smooth_alert)
-        }).unwrap_or_else(|| "EVENT RATE — waiting...".into());
-        let b = self.block(6, &rate_label);
-        let inner = b.inner(area); b.render(area, f);
-        if self.collapsed[6] { return; }
-        if inner.width < 10 || inner.height < 3 { return; }
-        if self.rate_chart.len() < 2 { return; }
+        if self.collapsed[6] || area.height < 2 { return; }
 
-        let series = vec![
-            Series::new("exec", &self.rate_chart, BLUE).markers(true),
-            Series::new("open", &self.open_chart, GREEN),
-            Series::new("alert", &self.alert_chart, RED),
-        ];
+        let charts_layout = Flex::horizontal().constraints([
+            Constraint::Percentage(34.0),
+            Constraint::Percentage(33.0),
+            Constraint::Percentage(33.0),
+        ]).split(area);
 
-        let max_y = self.rate_chart.iter().chain(&self.open_chart).chain(&self.alert_chart)
-            .map(|&(_, y)| y).fold(0.0f64, f64::max).max(1.0);
+        // Exec/s chart
+        if self.rate_chart.len() > 2 {
+            let series = vec![Series::new("exec/s", &self.rate_chart, GREEN)];
+            let max_y = self.rate_chart.iter().map(|&(_, y)| y).fold(0.0f64, f64::max).max(1.0);
+            LineChart::new(series)
+                .style(Style::new().fg(GREEN))
+                .y_bounds(0.0, max_y)
+                .render(charts_layout[0], f);
+        }
 
-        LineChart::new(series)
-            .style(Style::new().fg(FG))
-            .x_labels(vec!["-120", "-60", "now"])
-            .y_labels(vec!["0", &format!("{:.0}", max_y / 2.0), &format!("{:.0}", max_y)])
-            .legend(true)
-            .y_bounds(0.0, max_y)
-            .render(inner, f);
+        // Open/s chart
+        if self.open_chart.len() > 2 {
+            let series = vec![Series::new("open/s", &self.open_chart, BLUE)];
+            let max_y = self.open_chart.iter().map(|&(_, y)| y).fold(0.0f64, f64::max).max(1.0);
+            LineChart::new(series)
+                .style(Style::new().fg(BLUE))
+                .y_bounds(0.0, max_y)
+                .render(charts_layout[1], f);
+        }
+
+        // Alert/s chart
+        if self.alert_chart.len() > 2 {
+            let series = vec![Series::new("alert/s", &self.alert_chart, RED)];
+            let max_y = self.alert_chart.iter().map(|&(_, y)| y).fold(0.0f64, f64::max).max(1.0);
+            LineChart::new(series)
+                .style(Style::new().fg(RED))
+                .y_bounds(0.0, max_y)
+                .render(charts_layout[2], f);
+        }
     }
 
     fn draw_search_bar(&self, f: &mut Frame, area: Rect) {
-        let bar_h = 3;
-        let bar_y = area.bottom().saturating_sub(bar_h + 1);
-        let bar = Rect::new(area.x + 4, bar_y, area.width.saturating_sub(8), bar_h);
-        // Dark overlay
-        let bg = PackedRgba::rgb(20, 24, 36);
-        for y in bar.y..bar.bottom() {
-            for x in bar.x..bar.right() {
-                if let Some(cell) = f.buffer.get_mut(x, y) {
-                    cell.bg = bg;
-                    cell.fg = FG;
-                }
-            }
-        }
-        let prompt = format!(" / {}", self.search_buf);
-        let hits = if self.search_hits > 0 {
-            format!("{} matches  ", self.search_hits)
-        } else if !self.search_buf.is_empty() {
-            "no matches  ".to_string()
+        let bar_area = Rect::new(area.x, area.y + area.height.saturating_sub(3), area.width, 1);
+        let hits_text = if self.search_hits > 0 {
+            format!(" {} matches", self.search_hits)
         } else {
-            "type to filter  ".to_string()
+            String::new()
         };
-        let border_color = if self.search_hits > 0 { GREEN } else { AMBER };
-        // Border
-        let border_top = format!("┌{}┐", "─".repeat(bar.width.saturating_sub(2) as usize));
-        let border_bot = format!("└{}┘", "─".repeat(bar.width.saturating_sub(2) as usize));
+        let line = format!(" /{}{}", self.search_buf, hits_text);
         Paragraph::new(Line::from_spans(vec![
-            Span::styled(&border_top, Style::new().fg(border_color)),
-        ])).render(Rect::new(bar.x, bar.y, bar.width, 1), f);
-        Paragraph::new(Line::from_spans(vec![
-            Span::styled(&prompt, Style::new().fg(BLUE).attrs(StyleFlags::BOLD)),
-            Span::styled("│", Style::new().fg(border_color)),
-        ])).render(Rect::new(bar.x + 1, bar.y + 1, bar.width - 2, 1), f);
-        Paragraph::new(Line::from_spans(vec![
-            Span::styled(&hits, Style::new().fg(DIM)),
-            Span::styled("Esc:cancel  Enter:apply", Style::new().fg(DIM)),
-        ])).render(Rect::new(bar.x, bar.y + 2, bar.width, 1), f);
-        Paragraph::new(Line::from_spans(vec![
-            Span::styled(&border_bot, Style::new().fg(border_color)),
-        ])).render(Rect::new(bar.x, bar.bottom() - 1, bar.width, 1), f);
+            Span::styled(line, Style::new().fg(CYAN).attrs(StyleFlags::BOLD)),
+        ])).render(bar_area, f);
     }
 
     fn draw_status(&self, f: &mut Frame, area: Rect) {
         let p = Panel::ALL[self.focused];
-        let left = format!(" {} ", p.name());
+        let tier_display = if self.is_activated { "ENT" } else { "COMM" };
+        let left = format!(" {} | {} ", p.name(), tier_display);
         let center = format!("evt:{}  lost:{}  sup:{}  up:{}  r:limit  y:copy  space:collapse", self.total, self.lost, self.rate_suppressed, fmt_dur(self.uptime));
         let status = StatusLine::new()
             .left(StatusItem::text(&left))
@@ -1049,7 +1005,7 @@ fn ext_color(ext: &str) -> PackedRgba {
 
 // ── Public API ────────────────────────────────────────────────────────────
 
-pub fn run(mut monitor: Monitor) -> anyhow::Result<()> {
+pub fn run(mut monitor: Monitor, license: LicenseState) -> anyhow::Result<()> {
     let (tx, rx) = mpsc::channel::<Snapshot>();
     let mut tick: u64 = 0;
     let h = thread::Builder::new().name("poll".into()).spawn(move || loop {
@@ -1085,7 +1041,7 @@ pub fn run(mut monitor: Monitor) -> anyhow::Result<()> {
         }
         thread::sleep(Duration::from_millis(16));
     })?;
-    let app = App_::new(rx);
+    let app = App_::new(rx, &license);
     let res = App::new(app).screen_mode(ScreenMode::AltScreen).run();
     let _ = h.join();
     res.map_err(|e| anyhow::anyhow!("tui: {}", e))
