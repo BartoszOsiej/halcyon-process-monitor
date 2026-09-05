@@ -58,7 +58,7 @@ parking_lot = { version = "0.12", optional = true }
 # TLS for web dashboard
 rustls = { version = "0.23", features = ["ring"], optional = true }
 tokio-rustls = { version = "0.26", optional = true }
-rcgen = { version = "0.13", optional = true }
+rcgen = { version = "0.14", optional = true }
 
 # Kafka producer (optional, enabled with --features kafka)
 rdkafka = { version = "0.36", features = ["cmake-build"], optional = true }
